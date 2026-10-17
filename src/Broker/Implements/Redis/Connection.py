@@ -1,4 +1,5 @@
 from typing import (
+	Any,
 	Optional,
 	Union,
 )
@@ -11,6 +12,8 @@ from ...Connection import (
 	GetQueue,
 	GetStream,
 	GetConsumer,
+	Declarable,
+	TaskSender,
 )
 from ...Event import EventHandler
 from .Configuration import (
@@ -19,6 +22,7 @@ from .Configuration import (
 )
 from .Consumer import Consumer
 from .Queue import Queue
+from .Subscription import Subscription
 
 __all__ = (
 	'Connection',
@@ -30,6 +34,8 @@ class Connection(
 	GetQueue,
 	GetStream,
 	GetConsumer,
+	Declarable,
+	TaskSender,
 ):
 	def __init__(
 		self,
@@ -70,6 +76,27 @@ class Connection(
 		if self.connection is None:
 			raise RuntimeError('Connect the Redis broker before use')
 		return self.connection
+
+	def declare(
+		self,
+		parameters: Any,
+	) -> None:
+		subscription = Subscription.parse(parameters)
+		self.create_queue(
+			subscription.queue,
+			group=subscription.group,
+		)
+
+	def send(
+		self,
+		body: Any,
+		parameters: Any,
+	) -> str:
+		subscription = Subscription.parse(parameters)
+		return self.queue(
+			subscription.queue,
+			group=subscription.group,
+		).send(body)
 
 	def queue(
 		self,
@@ -145,4 +172,3 @@ class Connection(
 		if self.connection is not None:
 			self.connection.close()
 			self.connection = None
-

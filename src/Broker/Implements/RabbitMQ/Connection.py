@@ -6,6 +6,9 @@ from ...Connection import (
 	GetQueue,
 	GetStream,
 	GetConsumer,
+	Declarable,
+	TaskSender,
+	Requestable,
 )
 
 from .Configuration import Configuration
@@ -14,12 +17,14 @@ from .Exchange import Exchange
 from .Queue import Queue
 from .Stream import Stream
 from .Consumer import Consumer
+from .Subscription import Subscription
 from ...Event import EventHandler
 
 from pika import (
 	BlockingConnection,
 	ConnectionParameters,
 	PlainCredentials,
+	BasicProperties,
 )
 from pika.exceptions import *
 
@@ -29,6 +34,7 @@ from operator import (
 	ne,
 )
 from enum import Enum
+from uuid import uuid4
 
 from typing import (
 	Any,
@@ -97,6 +103,9 @@ class Connection(
 	GetQueue,
 	GetStream,
 	GetConsumer,
+	Declarable,
+	TaskSender,
+	Requestable,
 ):
 	"""Connection of Event Broker for RabbitMQ"""
 	def __init__(self, conf: Configuration):
@@ -111,6 +120,7 @@ class Connection(
 			heartbeat=self.conf.heartbeat
 		)
 		self.connection = None
+		self.publisher = None
 		return
 
 	def __del__(self):
@@ -122,6 +132,88 @@ class Connection(
 			return
 		self.connection = BlockingConnection(parameters=self.parameters)
 		return
+
+	def connected(self):
+		if self.connection is None or not self.connection.is_open:
+			raise RuntimeError('Connect the RabbitMQ connection before use')
+		return self.connection
+
+	def declare(
+		self,
+		parameters: Any,
+	) -> None:
+		subscription = Subscription.parse(parameters)
+		channel = self.connected().channel()
+		try:
+			arguments = {}
+			if subscription.error is not None:
+				channel.queue_declare(
+					subscription.error,
+					durable=True,
+				)
+				arguments = {
+					'x-dead-letter-exchange': '',
+					'x-dead-letter-routing-key': subscription.error,
+				}
+			channel.queue_declare(
+				subscription.queue,
+				durable=True,
+				arguments=arguments,
+			)
+		finally:
+			if channel.is_open:
+				channel.close()
+
+	def send(
+		self,
+		body: Any,
+		parameters: Any,
+	) -> str:
+		subscription = Subscription.parse(parameters)
+		connection = self.connected()
+		channel = self.publisher
+		if channel is None or not channel.is_open:
+			channel = connection.channel()
+			try:
+				channel.confirm_delivery()
+			except Exception:
+				if channel.is_open:
+					channel.close()
+				raise
+			self.publisher = channel
+		id = uuid4().hex
+		channel.basic_publish(
+			exchange='',
+			routing_key=subscription.queue,
+			body=self.conf.encode(body),
+			properties=BasicProperties(
+				message_id=id,
+				headers={},
+				content_type=self.conf.encode.format,
+				content_encoding=self.conf.encode.charset,
+				delivery_mode=2,
+			),
+			mandatory=True,
+		)
+		return id
+
+	def request(
+		self,
+		body: Any,
+		parameters: Any,
+		timeout: float = 5,
+	) -> Any:
+		subscription = Subscription.parse(parameters)
+		self.connected()
+		queue = self.queue(subscription.queue)
+		try:
+			return queue.call(
+				body,
+				timeout=timeout,
+			)
+		finally:
+			if queue.channel.is_open:
+				queue.channel.close()
 
 	def exchange(self, exchange: str) -> Exchange:
 		return Exchange(
@@ -163,6 +255,7 @@ class Connection(
 		if self.connection and self.connection.is_open:
 			self.connection.close()
 			self.connection = None
+		self.publisher = None
 		return
 
 	def create_exchange(
@@ -354,4 +447,3 @@ class Any(Parameters):
 		headers.update(kwargs)
 		super().__init__(**headers)
 		return
-
