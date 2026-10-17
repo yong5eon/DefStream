@@ -11,6 +11,8 @@ from PinkStream.Broker.Implements.Redis import (
 	Subscription,
 )
 from PinkStream.Worker import (
+	declare,
+	send,
 	Run,
 	ThreadPool,
 	Worker,
@@ -59,27 +61,26 @@ class Prepare(WorkerSetup):
 			Connection,
 		):
 			raise TypeError('A Redis connection is required')
-		for run in worker.runs:
-			parameters = Subscription.parse(run.parameters)
-			broker.create_queue(
-				parameters.queue,
-				group=parameters.group,
-			)
-			queue = broker.queue(
-				parameters.queue,
-				group=parameters.group,
+		for run in worker.tasks:
+			declare(
+				task=run,
+				broker=broker,
 			)
 			for index in range(5):
-				queue.send({
-					'a': randint(
-						0,
-						99,
-					),
-					'b': 0 if run is Divide and index == 0 else randint(
-						0,
-						99,
-					),
-				})
+				send(
+					{
+						'a': randint(
+							0,
+							99,
+						),
+						'b': 0 if run is Divide and index == 0 else randint(
+							0,
+							99,
+						),
+					},
+					task=run,
+					broker=broker,
+				)
 		print('Prepared 5 messages per queue')
 
 
