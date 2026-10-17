@@ -18,6 +18,7 @@ from PinkStream.Inspector.Extensions import (
 	HealthCheck,
 	Metrics,
 	Specifications,
+	Console,
 )
 from PinkStream.Worker import (
 	declare,
@@ -74,10 +75,10 @@ class Cleanup(WorkerCleanup):
 if __name__ == '__main__':
 	worker = Worker(
 		Connection(Configuration(
-		host='127.0.0.1',
-		port=5672,
-		username='guest',
-		password='guest',
+			host='127.0.0.1',
+			port=5672,
+			username='guest',
+			password='guest',
 		)),
 		ProcessPool(10),
 		setups=Prepare(),
@@ -85,11 +86,21 @@ if __name__ == '__main__':
 		inspector=Inspector(
 			host='127.0.0.1',
 			port=9999,
-			name='PinkStream.RabbitMQ',
 			exts=(
 				HealthCheck('/status'),
 				Metrics('/metrics'),
 				Specifications('/spec'),
+				Console(
+					'/',
+					broker=lambda: Connection(Configuration(
+						host='127.0.0.1',
+						port=5672,
+						username='guest',
+						password='guest',
+					)),
+					title='PinkStream RabbitMQ Sample',
+					description='A sample PinkStream worker using RabbitMQ as the broker',
+				),
 			),
 		),
 	)

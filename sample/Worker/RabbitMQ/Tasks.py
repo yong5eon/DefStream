@@ -37,6 +37,7 @@ class Add(
 	},
 	on_error=Requeue(),
 	request=Specification(
+		description='Addition request',
 		schema=Object(
 			properties=Properties(
 				a=Integer('First operand'),
@@ -59,6 +60,7 @@ class Add(
 		},
 	),
 	response=Specification(
+		description='Addition response',
 		schema=Integer('Sum'),
 		validator=Validator(IsInteger()),
 		example=30,
@@ -80,6 +82,7 @@ class Divide(
 	),
 	on_error=Reject(),
 	request=Specification(
+		description='Division request',
 		schema=Object(
 			properties=Properties(
 				a=Integer('Dividend'),
@@ -102,6 +105,7 @@ class Divide(
 		},
 	),
 	response=Specification(
+		description='Division response',
 		schema=Number('Quotient'),
 		validator=Validator(IsNumber()),
 		example=5.0,
