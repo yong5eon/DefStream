@@ -3,7 +3,6 @@ from abc import (
 	abstractmethod,
 )
 from collections.abc import Mapping
-from inspect import isabstract
 from logging import getLogger
 from threading import Event as PyEvent
 from typing import (
@@ -25,6 +24,7 @@ from ..Broker import (
 	EventHandler,
 )
 from ..Broker.Event import Event
+from .Message import task_parameters
 from .Pool import (
 	Pool,
 	PoolFull,
@@ -90,7 +90,7 @@ class Worker:
 	):
 		self.broker = broker
 		self.pool = pool
-		self.runs: List[Type[Run]] = []
+		self.tasks: List[Type[Run]] = []
 		self.consumer: Optional[Consumer] = None
 		self.started = False
 		self.stopping = PyEvent()
@@ -105,24 +105,15 @@ class Worker:
 	) -> None:
 		if self.started:
 			raise RuntimeError('Cannot register runs after starting the worker')
-		if not isinstance(
-			run,
-			type,
-		) or not issubclass(
-			run,
-			Run,
-		) or isabstract(run):
-			raise TypeError('A concrete Run class is required')
-		if run.parameters is None:
-			raise ValueError('Run subscription parameters are required')
-		if run in self.runs:
+		task_parameters(run)
+		if run in self.tasks:
 			raise ValueError('Run is already registered')
-		self.runs.append(run)
+		self.tasks.append(run)
 
 	def run(self) -> None:
 		if self.started:
 			raise RuntimeError('Worker can only be started once')
-		if not self.runs:
+		if not self.tasks:
 			raise RuntimeError('Register at least one Run before starting')
 		self.started = True
 		try:
@@ -130,7 +121,7 @@ class Worker:
 			for setup in self.setups:
 				setup(self)
 			self.consumer = self.broker.consumer()
-			for run in self.runs:
+			for run in self.tasks:
 				self.consumer.subs(
 					run.parameters,
 					Handler(

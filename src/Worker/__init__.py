@@ -4,6 +4,11 @@ from .Worker import (
 	WorkerSetup,
 	WorkerCleanup,
 )
+from .Message import (
+	declare,
+	send,
+	request,
+)
 from .Run import (
 	Run,
 	Context,
@@ -22,6 +27,9 @@ from .Pool import (
 
 __all__ = (
 	'Worker',
+	'declare',
+	'send',
+	'request',
 	'WorkerConnection',
 	'WorkerSetup',
 	'WorkerCleanup',
