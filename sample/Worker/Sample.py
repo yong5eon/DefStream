@@ -205,7 +205,7 @@ class Prepare(WorkerSetup):
 			Broker,
 		):
 			raise TypeError('The sample in-memory broker is required')
-		for run in worker.runs:
+		for run in worker.tasks:
 			broker.queue(run.parameters['queue'])
 		queue = broker.queue('add')
 		queue.send({
