@@ -13,6 +13,11 @@ from PinkStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 )
+from PinkStream.Inspector import Inspector
+from PinkStream.Inspector.Extensions import (
+	HealthCheck,
+	Metrics,
+)
 from PinkStream.Worker import (
 	declare,
 	send,
@@ -66,17 +71,25 @@ class Cleanup(WorkerCleanup):
 
 
 if __name__ == '__main__':
-	broker = Connection(Configuration(
+	worker = Worker(
+		Connection(Configuration(
 		host='127.0.0.1',
 		port=5672,
 		username='guest',
 		password='guest',
-	))
-	worker = Worker(
-		broker,
+		)),
 		ProcessPool(10),
 		setups=Prepare(),
 		cleanups=Cleanup(),
+		inspector=Inspector(
+			host='127.0.0.1',
+			port=9999,
+			name='PinkStream.RabbitMQ',
+			exts=(
+				HealthCheck('/status'),
+				Metrics('/metrics'),
+			),
+		),
 	)
 	worker.add(Add)
 	worker.add(Divide)
