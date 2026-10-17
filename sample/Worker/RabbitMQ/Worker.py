@@ -19,6 +19,7 @@ from PinkStream.Inspector.Extensions import (
 	Metrics,
 	Specifications,
 	Console,
+	Dashboard,
 )
 from PinkStream.Worker import (
 	declare,
@@ -89,16 +90,21 @@ if __name__ == '__main__':
 			exts=(
 				HealthCheck('/status'),
 				Metrics('/metrics'),
+				Dashboard(
+					'/dashboard',
+					title='PinkStream using RabbitMQ Sample',
+					description='A sample PinkStream worker using RabbitMQ as the broker',
+				),
 				Specifications('/spec'),
 				Console(
-					'/',
+					'/console',
 					broker=lambda: Connection(Configuration(
 						host='127.0.0.1',
 						port=5672,
 						username='guest',
 						password='guest',
 					)),
-					title='PinkStream RabbitMQ Sample',
+					title='PinkStream using RabbitMQ Sample',
 					description='A sample PinkStream worker using RabbitMQ as the broker',
 				),
 			),

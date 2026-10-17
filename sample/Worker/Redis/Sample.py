@@ -16,6 +16,7 @@ from PinkStream.Inspector.Extensions import (
 	Metrics,
 	Specifications,
 	Console,
+	Dashboard,
 )
 from PinkStream.Worker import (
 	declare,
@@ -111,11 +112,16 @@ def main() -> None:
 			exts=(
 				HealthCheck('/status'),
 				Metrics('/metrics'),
+				Dashboard(
+					'/dashboard',
+					title='PinkStream using Redis Sample',
+					description='A sample PinkStream worker using Redis as the broker',
+				),
 				Specifications('/spec'),
 				Console(
-					'/',
+					'/console',
 					broker=lambda: Connection(Configuration()),
-					title='PinkStream Redis Sample',
+					title='PinkStream using Redis Sample',
 					description='A sample PinkStream worker using Redis as the broker',
 				),
 			),
