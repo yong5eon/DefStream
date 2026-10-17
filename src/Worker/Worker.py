@@ -25,6 +25,7 @@ from ..Broker import (
 )
 from ..Broker.Event import Event
 from .Message import task_parameters
+from ..Inspector import Inspector
 from .Pool import (
 	Pool,
 	PoolFull,
@@ -87,17 +88,20 @@ class Worker:
 		pool: Pool,
 		setups: Optional[Union[WorkerSetup, Sequence[WorkerSetup]]] = None,
 		cleanups: Optional[Union[WorkerCleanup, Sequence[WorkerCleanup]]] = None,
+		inspector: Optional[Inspector] = None,
 	):
 		self.broker = broker
 		self.pool = pool
 		self.tasks: List[Type[Run]] = []
 		self.consumer: Optional[Consumer] = None
 		self.started = False
+		self.running = PyEvent()
 		self.stopping = PyEvent()
 		self.finished = PyEvent()
 		self.pending = 0
 		self.setups = worker_hooks(setups)
 		self.cleanups = worker_hooks(cleanups)
+		self.inspector = inspector
 
 	def add(
 		self,
@@ -117,6 +121,8 @@ class Worker:
 			raise RuntimeError('Register at least one Run before starting')
 		self.started = True
 		try:
+			if self.inspector is not None:
+				self.inspector.start(self)
 			self.broker.connect()
 			for setup in self.setups:
 				setup(self)
@@ -130,8 +136,10 @@ class Worker:
 					),
 				)
 			if not self.stopping.is_set():
+				self.running.set()
 				self.consumer.run()
 		finally:
+			self.running.clear()
 			self.finished.set()
 			if self.pending:
 				logger.error(
@@ -148,7 +156,11 @@ class Worker:
 						if self.consumer is not None:
 							self.consumer.close()
 					finally:
-						self.broker.close()
+						try:
+							self.broker.close()
+						finally:
+							if self.inspector is not None and self.inspector.worker is self:
+								self.inspector.stop()
 
 	def cleanup(self) -> None:
 		run_cleanups(
@@ -188,11 +200,20 @@ class Worker:
 		if consumer is None:
 			self.pending -= 1
 			raise RuntimeError('Worker consumer is not initialized')
+		inspector = self.inspector
+		task = run.__module__ + '.' + run.__qualname__
+		started = inspector.begin(task) if inspector is not None else 0
 
 		def schedule(
 			error: Optional[BaseException] = None,
 			result: Any = None,
 		) -> None:
+			if inspector is not None:
+				inspector.end(
+					task,
+					started,
+					error is None,
+				)
 			if self.finished.is_set():
 				logger.error(
 					'Consumer exited before Run %s delivery could be confirmed',
@@ -214,10 +235,22 @@ class Worker:
 				error_callback=schedule,
 			)
 		except PoolFull:
+			if inspector is not None:
+				inspector.end(
+					task,
+					started,
+					None,
+				)
 			self.pending -= 1
 			event.nack()
 			return
 		except Exception:
+			if inspector is not None:
+				inspector.end(
+					task,
+					started,
+					None,
+				)
 			self.pending -= 1
 			raise
 
