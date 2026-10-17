@@ -293,6 +293,83 @@ localhost:6379 and create/delete only uniquely named test streams.
 
 ## Workers
 
+### Inspector: HTTP health checks and metrics
+
+Inspector uses only the Python standard library: a threaded WSGI HTTP server
+managed by the Worker. It starts before broker connection/setup, and closes
+after pool draining, cleanup and broker closure, including startup failures.
+An occupied HTTP port fails Worker startup explicitly. Inspector is optional;
+workers without one keep their existing behavior.
+
+```python
+from PinkStream.Inspector import Inspector
+from PinkStream.Inspector.Extensions import (
+	HealthCheck,
+	Metrics,
+)
+from PinkStream.Worker import (
+	ThreadPool,
+	Worker,
+)
+
+worker = Worker(
+	connection,
+	ThreadPool(10),
+	inspector=Inspector(
+		host='127.0.0.1',
+		port=9999,
+		name='PinkStream',
+		exts=(
+			HealthCheck('/status'),
+			Metrics('/metrics'),
+		),
+	),
+)
+worker.add(Sample)
+worker.run()
+```
+
+- `GET /status` returns JSON with `name` and `status`. It returns 200 only
+  after subscriptions are ready and the consumer loop answers a thread-safe
+  callback within `timeout` seconds (default 1). Idle workers are healthy.
+  Starting, stopping, stopped and unresponsive workers return 503 while HTTP
+  remains open. A terminated process/server fails the HTTP connection instead.
+  The probe checks consumer-loop responsiveness, not every dependency or a
+  hung individual task; choose a timeout above normal consumer-loop latency.
+  Repeated/concurrent checks share an outstanding probe rather than filling
+  a stalled consumer's callback queue.
+- `GET /metrics` returns Prometheus text format, **200 even when not ready**,
+  so failures and shutdown can still be observed. Metrics include
+  `pinkstream_worker_running`, `pinkstream_worker_uptime_seconds`,
+  `pinkstream_tasks_active`, `pinkstream_tasks_total` (success/failure), and
+  `pinkstream_task_duration_seconds` (summary count/sum). The running gauge
+  describes lifecycle state; use `/status` for the responsiveness probe.
+  Task labels use module-qualified class names; no message body/ID is exposed.
+  Counters describe completed execution attempts, including retries and hooks,
+  not confirmed ACKs or unique messages. Invalid bodies, pool-full requeues and
+  failed submissions do not count as task executions. Duration includes pool
+  wait and hooks. Metrics are local to one Worker process and reset on restart.
+- Paths are explicit extensions; there are no default routes. Both endpoints
+  support HEAD. Unknown paths return 404 and unsupported methods return 405.
+  Additional endpoints can inherit `Extension` and return `Response`, both
+  exported from `PinkStream.Inspector`. Built-in extensions are exported from
+  `PinkStream.Inspector.Extensions`.
+- Inspector is attached to one Worker and cannot be restarted or shared.
+  Task execution remains in the existing ThreadPool/ProcessPool; the HTTP
+  server and metric aggregation stay in the parent process.
+- This is a small operational HTTP interface, not a public web server. No
+  authentication, TLS, AsyncAPI generation, documentation UI or test UI is
+  provided yet. Keep it on loopback or a trusted management network.
+
+The RabbitMQ and Redis Worker samples enable `/status` and `/metrics` on
+`127.0.0.1:9999`; use different ports if running both at once. For Docker,
+use `host='0.0.0.0'` to expose it outside the container (restrict network access).
+A health command inside the container needs no curl dependency:
+
+```dockerfile
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9999/status', timeout=2).close()"
+```
+
 ### Task-directed messages and declarations
 
 `declare`, `send` and `request` are exported from `PinkStream.Worker`. They resolve the
