@@ -16,6 +16,7 @@ from .Run import (
 	RunComplete,
 	RunError,
 )
+from .Specification import Specification
 from .Pool import (
 	Pool,
 	PoolFull,
@@ -34,6 +35,7 @@ __all__ = (
 	'WorkerSetup',
 	'WorkerCleanup',
 	'Run',
+	'Specification',
 	'Pool',
 	'PoolFull',
 	'PoolSetup',

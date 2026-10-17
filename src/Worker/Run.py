@@ -2,6 +2,7 @@ from abc import (
 	ABC,
 	abstractmethod,
 )
+from collections.abc import Mapping
 from typing import (
 	Any,
 	Optional,
@@ -11,6 +12,7 @@ from typing import (
 )
 
 from ..Broker.Event import EventError
+from .Specification import Specification
 
 __all__ = (
 	'Context',
@@ -66,6 +68,8 @@ class Run(ABC):
 	setups: Tuple[RunSetup, ...] = ()
 	completes: Tuple[RunComplete, ...] = ()
 	errors: Tuple[RunError, ...] = ()
+	request: Optional[Specification] = None
+	response: Optional[Specification] = None
 
 	def __init_subclass__(
 		cls,
@@ -75,11 +79,34 @@ class Run(ABC):
 		setups: Optional[Union[RunSetup, Sequence[RunSetup]]] = None,
 		completes: Optional[Union[RunComplete, Sequence[RunComplete]]] = None,
 		errors: Optional[Union[RunError, Sequence[RunError]]] = None,
+		request: Optional[Specification] = None,
+		response: Optional[Specification] = None,
 		**kwargs,
 	):
 		super().__init_subclass__(**kwargs)
 		if parameters is not None:
 			cls.parameters = parameters
+		for name, specification in (
+			(
+				'request',
+				request,
+			),
+			(
+				'response',
+				response,
+			),
+		):
+			if specification is not None:
+				if not isinstance(
+					specification,
+					Specification,
+				):
+					raise TypeError(name + ' must be a Specification')
+				setattr(
+					cls,
+					name,
+					specification,
+				)
 		if on_error is not None:
 			if not callable(on_error):
 				raise TypeError('on_error must be a callable event error policy')
@@ -119,10 +146,25 @@ class Run(ABC):
 		for setup in self.setups:
 			setup(context)
 		try:
+			if self.request is not None:
+				if context.args:
+					raise TypeError('A specified task request requires keyword arguments')
+				body = self.request(context.kwargs)
+				if not isinstance(
+					body,
+					Mapping,
+				) or not all(isinstance(
+					key,
+					str,
+				) for key in body):
+					raise TypeError('A task request must remain a mapping with string keys')
+				context.kwargs = dict(body)
 			result = self.run(
 				*context.args,
 				**context.kwargs,
 			)
+			if self.response is not None:
+				result = self.response(result)
 		except Exception as error:
 			for handler in self.errors:
 				handler(
