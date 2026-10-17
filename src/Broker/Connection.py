@@ -2,8 +2,10 @@
 
 from abc import abstractmethod
 from typing import (
+	Any,
 	Optional,
 	Protocol,
+	runtime_checkable,
 )
 
 from .Consumer import Consumer
@@ -16,6 +18,9 @@ __all__ = (
 	'GetQueue',
 	'GetStream',
 	'GetConsumer',
+	'Declarable',
+	'TaskSender',
+	'Requestable',
 )
 
 
@@ -60,3 +65,33 @@ class GetConsumer(Protocol):
 		self,
 		handler: Optional[EventHandler] = None,
 	) -> Consumer: ...
+
+
+@runtime_checkable
+class Declarable(Protocol):
+	@abstractmethod
+	def declare(
+		self,
+		parameters: Any,
+	) -> None: ...
+
+
+@runtime_checkable
+class TaskSender(Protocol):
+	@abstractmethod
+	def send(
+		self,
+		body: Any,
+		parameters: Any,
+	) -> Any: ...
+
+
+@runtime_checkable
+class Requestable(Protocol):
+	@abstractmethod
+	def request(
+		self,
+		body: Any,
+		parameters: Any,
+		timeout: float = 5,
+	) -> Any: ...

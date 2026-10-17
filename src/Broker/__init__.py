@@ -7,6 +7,9 @@ from .Connection import (
 	GetQueue,
 	GetStream,
 	GetConsumer,
+	Declarable,
+	TaskSender,
+	Requestable,
 )
 from .Protocol import (
 	Sendable,
@@ -29,6 +32,9 @@ __all__ = (
 	'GetQueue',
 	'GetStream',
 	'GetConsumer',
+	'Declarable',
+	'TaskSender',
+	'Requestable',
 	'Sendable',
 	'Callable',
 	'RemoteError',
