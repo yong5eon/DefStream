@@ -381,6 +381,68 @@ A health command inside the container needs no curl dependency:
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9999/status', timeout=2).close()"
 ```
 
+### Live dashboard
+
+Register `Dashboard` together with exactly one `Metrics` extension:
+
+```python
+from PinkStream.Inspector.Extensions import (
+	Dashboard,
+	Metrics,
+)
+
+inspector = Inspector(exts=(
+	Metrics('/metrics'),
+	Dashboard(
+		'/dashboard',
+		title='PinkStream',
+		description='Worker activity',
+	),
+))
+```
+
+Open `/dashboard` for a lightweight, dependency-free status page. Both Worker
+samples register this route. The page reads the existing Metrics collector;
+there is no second collector, broker connection or server-side history.
+`title` defaults to `PinkStream`; optional `description` is the subtitle.
+HTML changes take effect on refresh without restarting.
+
+- Shows worker lifecycle, uptime, in-flight submissions, cumulative success
+  and failure counts, total throughput, and per-task throughput and average time.
+- Select **Last second** or **Last minute** for real server-side 1/60-second
+  completion windows, not a per-second value multiplied by 60. Windows end at
+  the last fully elapsed monotonic second (less than one second behind live
+  totals). The minute window advances every second, not once per calendar minute.
+  Startup windows include only data since startup, without extrapolation.
+  History is available immediately on page load and after reconnect.
+- Selected-window metrics include completed success/failure counts, failure
+  percentage, average and maximum duration, both overall and per task. An empty
+  window shows zero completions and `--` for failure percentage/average/maximum.
+  Oldest in-flight age is measured from submission, including pool wait.
+- Averages use the duration of attempts completed in the selected window,
+  including pool wait and hooks; these are not p95 latency. Retries count
+  as separate attempts; pool-full/rejected submissions do not count as completed.
+  In flight includes submitted work waiting in the pool, not broker queue depth.
+- Lifecycle is not consumer responsiveness. Use `HealthCheck` for health probes.
+  Requests time out after five seconds; failed polls mark totals as stale and
+  clear current rates. Pause/resume is available; hidden tabs stop polling.
+- `GET /dashboard` with `Accept: application/json` returns a detached snapshot
+  (`instance`, `sampled_at`, `uptime`, `running`, `tasks`). Tasks are keyed by
+  module-qualified name with cumulative `active`, `success`, `failure`, `duration`
+  (seconds), `oldest_active` (seconds), and `windows` keyed by `"1"`/`"60"` with
+  `success`, `failure`, `duration`, `max_duration`. `window_end` is the monotonic
+  exclusive end of both windows. Metrics keeps at most 61 one-second buckets per
+  task (including the current incomplete second), not individual completion
+  records. Pending submission timestamps are retained only until completion.
+  Prometheus also exposes `pinkstream_tasks_window` by `window_seconds`/`outcome`,
+  `pinkstream_task_window_duration_seconds_sum`,
+  `pinkstream_task_window_duration_seconds_max`, and
+  `pinkstream_task_oldest_active_seconds`. No p95 is collected.
+  Prometheus and Dashboard use the same lock-protected snapshot.
+- Like Metrics, Dashboard is unauthenticated. Restrict access at the application,
+  network or proxy layer. It shows one Worker only, resets on restart, and is
+  not a replacement for Prometheus/Grafana history or alerting.
+
 ### Request/response specifications
 
 `PinkStream.Descriptor` and `PinkStream.Validator` reuse the local Liquirizia
