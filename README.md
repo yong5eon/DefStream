@@ -318,7 +318,6 @@ worker = Worker(
 	inspector=Inspector(
 		host='127.0.0.1',
 		port=9999,
-		name='PinkStream',
 		exts=(
 			HealthCheck('/status'),
 			Metrics('/metrics'),
@@ -329,9 +328,9 @@ worker.add(Sample)
 worker.run()
 ```
 
-- `GET /status` returns JSON with `name` and `status`. It returns 200 only
+- `GET /status` returns JSON with `status`. It returns 200 only
   after subscriptions are ready and the consumer loop answers a thread-safe
-  callback within `timeout` seconds (default 1). Idle workers are healthy.
+  callback within `HealthCheck(timeout=1)` seconds (default 1). Idle workers are healthy.
   Starting, stopping, stopped and unresponsive workers return 503 while HTTP
   remains open. A terminated process/server fails the HTTP connection instead.
   The probe checks consumer-loop responsiveness, not every dependency or a
@@ -351,15 +350,27 @@ worker.run()
   wait and hooks. Metrics are local to one Worker process and reset on restart.
 - Paths are explicit extensions; there are no default routes. Both endpoints
   support HEAD. Unknown paths return 404 and unsupported methods return 405.
+  Extensions default to GET/HEAD; request-aware extensions can declare `methods`
+  and override `handle(inspector, environ)` without changing existing endpoints.
   Additional endpoints can inherit `Extension` and return `Response`, both
   exported from `PinkStream.Inspector`. Built-in extensions are exported from
   `PinkStream.Inspector.Extensions`.
+- Each extension owns its behavior and state: HealthCheck owns the consumer
+  probe, lock and timeout; Metrics owns counters, execution timing and output.
+  Inspector owns only HTTP serving, Worker attachment, routing and event
+  dispatch. Unregistered extensions do not collect data or create probe state.
+  `Extension.start(inspector)` initializes an extension before HTTP startup.
+  `begin(task)` returns an extension-owned context; `end(task, context, success)`
+  receives it on completion. `success=None` means submission was rejected and
+  must not count as a completed attempt. These hooks execute in the parent
+  process and may run on different threads; extensions must synchronize state.
 - Inspector is attached to one Worker and cannot be restarted or shared.
   Task execution remains in the existing ThreadPool/ProcessPool; the HTTP
   server and metric aggregation stay in the parent process.
 - This is a small operational HTTP interface, not a public web server. No
-  authentication, TLS, documentation UI or test UI is
-  provided yet. Keep it on loopback or a trusted management network.
+  TLS is provided. Health, metrics and Specifications routes are unauthenticated;
+  the optional Console extension supports an optional Bearer token for task data
+  and execution. Keep Inspector on loopback or a trusted management network.
 
 The RabbitMQ and Redis Worker samples enable `/status` and `/metrics` on
 `127.0.0.1:9999`; use different ports if running both at once. For Docker,
@@ -511,11 +522,106 @@ This describes the declared request/reply contract, not broker capabilities:
 declaring an output does not turn Redis into RPC, and ordinary sends do not
 request replies. Dynamic RabbitMQ reply address extraction, correlation and
 transport bindings are not modeled yet. No server credentials are exposed. This extension
-serves JSON only, not a documentation page or interactive task runner.
+serves JSON only; the optional Console extension provides the interactive task UI.
 
 The RabbitMQ Worker sample declares contracts for Add and Divide and serves
 them at `/asyncapi.json`. The Redis sample exposes the same endpoint, with
 unconstrained inputs for tasks that have no contract yet.
+
+### Interactive task console
+
+`Console` provides a self-contained Swagger-style screen: registered tasks,
+descriptions, request/response schemas, editable JSON examples and execution
+results. It has no CDN or JavaScript package dependencies. It is not Swagger UI
+(which consumes OpenAPI); it displays the same generated AsyncAPI contracts.
+Schemas are displayed as expandable field trees with types, required markers,
+descriptions and constraints. Nested objects, array items and composition
+branches are shown separately; the complete raw JSON schema remains available.
+Local schema references are expanded with recursion detection; external
+references are labeled without fetching them. Deep models are limited to
+12 nesting levels in the tree, with the full schema preserved in the raw view.
+The bundled HTML is read on each page request with caching disabled. Editing
+`Console.html` takes effect on browser refresh without restarting the Worker;
+Python code and task contract changes still require a restart.
+
+```python
+from PinkStream.Inspector.Extensions import Console
+from PinkStream.Broker.Implements.RabbitMQ import (
+	Connection,
+	Configuration,
+)
+
+def create_connection() -> Connection:
+	return Connection(Configuration(
+		host='127.0.0.1',
+		port=5672,
+		username='guest',
+		password='guest',
+	))
+
+# Add to Inspector(exts=(...)).
+console = Console(
+	'/console',
+	broker=create_connection,
+	title='PinkStream',
+	description='Task contracts & interactive messaging',
+	timeout=5,
+)
+```
+
+`Console.title` defaults to `PinkStream` and sets both the HTML document title
+and header name without a suffix. Optional `description` is the subtitle;
+omitting it hides the subtitle. Both values are escaped as plain text.
+After loading tasks, the document version is displayed beneath the subtitle.
+Console uses the first registered `Specifications` extension, including its
+version, description and media type settings. Without one, it generates a
+default document with version `1.0.0`.
+Inspector has no `name` option: health responses contain status only, metrics
+have no worker-name label, and Specifications uses `PinkStream` as its info title.
+
+The factory must return a **new, independently owned producer connection**
+on every call, never the Worker's consumer connection or a shared singleton.
+The extension connects for execution and closes in finally, including failed
+connect/publish/RPC. Catalog loading inspects a separate, unconnected producer's
+RPC capability and closes it. It never declares/deletes queues or calls Run
+directly. Validators run on the actual Worker, not again in the HTTP thread.
+
+- Open `/console`. With `token` omitted or `None`, no authentication is required:
+  tasks load automatically and the token controls are hidden. To enable Bearer
+  authentication, pass `token='your-random-token-at-least-16-characters'`,
+  enter it in the page, then choose **Load tasks**. HTML is a public,
+  static shell with no embedded token or task data; when authentication is
+  enabled, task metadata and execution
+  both require `Authorization: Bearer <token>`. Tokens must have at least 16
+  characters; use a randomly generated strong token. The page keeps the token
+  only in memory, never browser storage; Clear token removes it.
+- **Send** invokes the existing task `send` helper and displays the message ID.
+  **RPC** invokes `request` and displays the result. RPC is enabled only when
+  the producer supports Requestable (currently RabbitMQ, not Redis); it does
+  not depend on a response contract. Redis still supports Send.
+- `GET /console` with `Accept: application/json` returns the catalog (authenticated
+  only when a token is configured).
+  `POST /console` accepts JSON
+  `{"task":"Add","mode":"send","body":{"a":10,"b":20}}`;
+  use `"mode":"request"` for RPC. Only registered, unambiguous task names are
+  accepted. Body must be a JSON object; arbitrary queues cannot be selected.
+- Unknown/invalid inputs return 400, unauthorized calls 401, cross-origin
+  requests 403, bodies above 64 KiB 413, non-JSON requests 415, excess concurrent
+  calls 429 (four slots), stopped/not-ready Workers 503, unsupported RPC 501,
+  remote task errors 502 and RPC timeouts 504. Infrastructure failures are
+  logged and return a generic 500 without exposing connection details.
+- Timeouts **do not cancel already delivered work**. Send/RPC are not retried
+  by the UI. These operations can produce real side effects; use test queues
+  and idempotent tasks. Configure broker connection/socket timeouts as well as
+  RPC timeout; metadata `Specification.format` does not change producer codecs.
+- No CORS is enabled. Calls with an Origin must match the HTTP Host. Remote
+  access must use HTTPS through a trusted reverse proxy to protect the token;
+  do not expose the standard-library WSGI server directly to the Internet.
+  Other Inspector extensions remain unauthenticated.
+
+Both Worker samples enable `/console` without a token. Authentication, access
+control, token configuration and secret management are the application's
+responsibility.
 
 ### Task-directed messages and declarations
 
