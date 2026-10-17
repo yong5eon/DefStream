@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{console_title}}</title>
+<style>
+:root { color-scheme: light; font: 14px/1.55 system-ui, -apple-system, sans-serif; color: #263343; background: #f7f8fa; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea, select { font: inherit; }
+button, summary, select { cursor: pointer; }
+button, input, textarea, select, summary { transition: border-color .15s, background-color .15s; }
+:focus-visible { outline: 3px solid #89b8ff; outline-offset: 3px; }
+.topbar { background: #fff; border-bottom: 1px solid #e1e5eb; }
+.topbar-inner, .workspace { max-width: 1440px; margin: 0 auto; padding: 24px 32px; }
+.topbar-inner { display: flex; align-items: center; gap: 16px; }
+h1 { margin: 0; font-size: 22px; letter-spacing: -.6px; line-height: 1.3; overflow-wrap: anywhere; }
+h2 { margin: 0; font-size: 25px; letter-spacing: -.6px; overflow-wrap: anywhere; }
+h3 { margin: 0; font-size: 15px; }
+p { margin: 6px 0 0; }
+.muted { color: #657184; }
+.subtitle { font-size: 13px; }
+.subtitle:empty { display: none; }
+.version { margin-top: 5px; color: #657184; font: 11px/1.6 Consolas, monospace; }
+.badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid #c6dfcf; border-radius: 5px; color: #286f40; background: #f0faf3; font-size: 11px; font-weight: 700; letter-spacing: .6px; }
+.topbar .badge { margin-left: auto; white-space: nowrap; }
+.warning { margin: 0 0 20px; padding: 12px 16px; border: 1px solid #eadbb7; border-radius: 6px; background: #fffcf4; color: #796023; font-size: 12px; }
+.warning strong { margin-right: 8px; }
+.auth { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 16px 20px; margin-bottom: 24px; background: #fff; border: 1px solid #e1e5eb; border-radius: 7px; }
+.auth label { flex-basis: 100%; margin: 0; }
+.auth input { flex: 1 1 240px; max-width: 400px; }
+label { display: block; font-size: 12px; font-weight: 650; margin-bottom: 7px; }
+input, textarea, select { width: 100%; border: 1px solid #cdd5df; border-radius: 5px; color: inherit; background: #fff; }
+input { padding: 9px 12px; }
+input:hover, textarea:hover, select:hover { border-color: #93a4b7; }
+button { padding: 9px 17px; border: 1px solid #cdd5df; border-radius: 5px; font-weight: 650; color: #38485b; background: #fff; }
+button:hover { background: #f0f3f7; border-color: #a5b2c2; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+#notice { flex: 1 1 240px; align-self: center; margin: 0; color: #657184; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.grid { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; align-items: start; }
+.panel { min-width: 0; background: #fff; border: 1px solid #e1e5eb; border-radius: 7px; overflow: hidden; }
+.sidebar { position: sticky; top: 24px; }
+.sidebar-heading { padding: 18px 18px 12px; border-bottom: 1px solid #edf0f4; }
+.sidebar-heading label { margin: 0; font-size: 13px; }
+.sidebar-heading p { font-size: 12px; }
+#tasks { display: block; border: 0; border-radius: 0; padding: 10px; min-height: 280px; font-size: 13px; }
+#tasks option { padding: 11px 12px; border-radius: 4px; margin: 3px 0; color: #000; -webkit-text-fill-color: #000; }
+#tasks option:checked { color: #000; background: #eaf7ee linear-gradient(#eaf7ee, #eaf7ee); font-weight: 650; }
+#tasks option:hover, #tasks option:focus, #tasks:focus option:checked { color: #000; -webkit-text-fill-color: #000; }
+.operation { border-top: 3px solid #49a66a; }
+.operation-header { padding: 24px; background: #f6fbf8; border-bottom: 1px solid #dcebe1; }
+.operation-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+#description:empty { display: none; }
+#description { color: #536374; }
+#queue { margin-top: 14px; font: 12px/1.7 Consolas, monospace; overflow-wrap: anywhere; white-space: pre-line; }
+.section { padding: 24px; }
+.section + .section { border-top: 1px solid #e8ecf1; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.section-heading span { color: #768295; font-size: 11px; letter-spacing: .7px; font-weight: 600; }
+.schemas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+details { min-width: 0; border: 1px solid #e1e5eb; border-radius: 5px; background: #fafbfc; }
+summary { padding: 12px 14px; font-size: 12px; font-weight: 650; }
+details[open] summary { border-bottom: 1px solid #e1e5eb; }
+pre { margin: 0; padding: 16px; font: 12px/1.75 Consolas, "Liberation Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; background: #f7f9fb; }
+details pre { max-height: 320px; border-radius: 0 0 5px 5px; }
+.schema-card { min-width: 0; border: 1px solid #e1e5eb; border-radius: 5px; background: #fff; }
+.schema-card > h4 { margin: 0; padding: 12px 14px; border-bottom: 1px solid #e1e5eb; background: #f7f9fb; font-size: 12px; }
+.schema-model { padding: 4px 14px; }
+.schema-node { padding: 10px 0; min-width: 0; }
+.schema-node + .schema-node { border-top: 1px solid #edf0f4; }
+details.schema-node { border: 0; border-radius: 0; background: transparent; }
+details.schema-node > summary { padding: 0; border: 0; }
+.schema-line { display: inline; font-size: 12px; line-height: 2; overflow-wrap: anywhere; }
+.schema-name { color: #263343; font: 650 12px Consolas, monospace; margin-right: 8px; }
+.schema-type { padding: 2px 6px; margin-right: 7px; border-radius: 4px; background: #edf3ff; color: #345a9a; font: 11px Consolas, monospace; }
+.schema-required { color: #b33b45; font-size: 10px; font-weight: 650; margin-right: 7px; }
+.schema-description { margin-top: 4px; color: #536374; font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.schema-constraints { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.schema-constraint { max-width: 100%; padding: 2px 6px; border: 1px solid #e1e5eb; border-radius: 4px; background: #fafbfc; color: #58677a; font: 10px/1.7 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.schema-children { margin: 8px 0 0 5px; padding-left: 13px; border-left: 2px solid #e8edf3; }
+.schema-empty { padding: 12px 0; color: #657184; font-size: 12px; }
+.schema-raw { margin: 0 14px 14px; }
+.schema-raw summary { color: #657184; font-size: 11px; }
+.editor-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 14px; border: 1px solid #cdd5df; border-bottom: 0; border-radius: 5px 5px 0 0; background: #f7f9fb; }
+.editor-header label { margin: 0; }
+#example { padding: 3px 8px; border-color: transparent; background: transparent; font-size: 11px; }
+textarea { display: block; min-height: 220px; resize: vertical; padding: 16px; border-radius: 0 0 5px 5px; font: 13px/1.8 Consolas, "Liberation Mono", monospace; tab-size: 2; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+#send { min-width: 120px; background: #27834c; border-color: #27834c; color: #fff; }
+#send:hover { background: #216e40; }
+button.rpc { min-width: 120px; background: #edf5ff; border-color: #9abfe9; color: #225c9d; }
+button.rpc:hover { background: #deedff; }
+#rpc-note { margin-top: 12px; font-size: 12px; }
+#result { min-height: 100px; border: 1px solid #dce3eb; border-radius: 5px; }
+.footer { margin-top: 24px; text-align: right; color: #7b8797; font-size: 11px; }
+[hidden] { display: none !important; }
+body[data-auth-required="false"] label[for="token"], body[data-auth-required="false"] #token, body[data-auth-required="false"] #clear { display: none; }
+@media(max-width: 800px) {
+  .topbar-inner, .workspace { padding: 20px 16px; }
+  .grid { grid-template-columns: 1fr; gap: 16px; }
+  .sidebar { position: static; }
+  #tasks { min-height: 0; height: 140px; }
+  .schemas { grid-template-columns: 1fr; }
+  .section, .operation-header { padding: 18px; }
+  .topbar .badge { display: none; }
+  .section-heading span { letter-spacing: 0; }
+}
+</style>
+</head>
+<body data-auth-required="true">
+<header class="topbar"><div class="topbar-inner">
+<div><h1 id="title">{{console_title}}</h1>
+<p class="muted subtitle">{{console_description}}</p>
+<p id="version" class="version" hidden></p></div>
+<span class="badge">ASYNCAPI 3.1</span>
+</div></header>
+<div class="workspace">
+<p class="warning"><strong>Live broker</strong>These actions publish real messages and may have side effects. RPC timeout does not cancel work. Use HTTPS for remote access.</p>
+<section class="auth" aria-label="Connection">
+<label for="token">Bearer token</label>
+<input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Token is kept in memory only">
+<button id="connect" type="button">Load tasks</button>
+<button id="clear" type="button">Clear token</button>
+<p id="notice" role="status" aria-live="polite"></p>
+</section>
+<main id="main" class="grid" hidden>
+<aside class="panel sidebar">
+<div class="sidebar-heading"><label for="tasks">Registered Tasks</label><p class="muted">Select an operation to explore</p></div>
+<select id="tasks" size="12"></select>
+</aside>
+<section class="panel operation" aria-labelledby="task-title">
+<div class="operation-header">
+<div class="operation-heading"><span class="badge">RECEIVE</span><h2 id="task-title"></h2></div>
+<p id="description"></p><p id="queue" class="muted"></p>
+</div>
+<section class="section" aria-labelledby="contracts-title">
+<div class="section-heading"><h3 id="contracts-title">Message contracts</h3><span>SCHEMAS</span></div>
+<div class="schemas">
+<section class="schema-card" aria-labelledby="request-schema-title">
+<h4 id="request-schema-title">Request schema</h4>
+<div id="request-schema" class="schema-model"></div>
+<details class="schema-raw"><summary>Raw JSON schema</summary><pre id="request-schema-raw"></pre></details>
+</section>
+<section class="schema-card" aria-labelledby="response-schema-title">
+<h4 id="response-schema-title">Response schema</h4>
+<div id="response-schema" class="schema-model"></div>
+<details class="schema-raw"><summary>Raw JSON schema</summary><pre id="response-schema-raw"></pre></details>
+</section>
+</div>
+</section>
+<section class="section" aria-labelledby="request-title">
+<div class="section-heading"><h3 id="request-title">Request</h3><span>APPLICATION / JSON</span></div>
+<div class="editor-header">
+<label for="body">Request body (JSON object)</label>
+<button id="example" type="button">Reset example</button>
+</div>
+<textarea id="body" spellcheck="false"></textarea>
+<div class="actions">
+<button id="send" type="button">Send</button>
+<button id="rpc" class="rpc" type="button">RPC</button>
+</div>
+<p id="rpc-note" class="muted"></p>
+</section>
+<section class="section" aria-labelledby="result-title">
+<div class="section-heading"><h3 id="result-title">Result</h3><span>BROKER RESPONSE</span></div>
+<pre id="result" role="status" aria-live="polite">No request sent.</pre>
+</section>
+</section>
+</main>
+<footer class="footer">PinkStream Inspector &middot; Console</footer>
+</div>
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+let catalog = null;
+let current = null;
+let busy = false;
+let loadVersion = 0;
+const endpoint = window.location.pathname;
+const authRequired = document.body.dataset.authRequired === 'true';
+const show = value => JSON.stringify(value, null, 2);
+function resolve(ref) {
+  return ref.$ref.slice(2).split('/').reduce((value, part) => value[part.replace(/~1/g, '/').replace(/~0/g, '~')], catalog.specification);
+}
+function example() {
+  const value = current.request.examples?.[0]?.payload ?? {};
+  el('body').value = show(value);
+}
+function schemaElement(tag, className, text) {
+  const element = document.createElement(tag);
+  element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+function schemaNode(schema, name, required, root, depth = 0, references = []) {
+  const object = schema !== null && typeof schema === 'object' && !Array.isArray(schema);
+  const children = [];
+  const notes = [];
+  let type = object ? schema.type : undefined;
+  if (!type && object) {
+    if (schema.properties || schema.additionalProperties !== undefined) type = 'object';
+    else if (schema.items !== undefined || schema.prefixItems) type = 'array';
+    else if (schema.oneOf) type = 'oneOf';
+    else if (schema.anyOf) type = 'anyOf';
+    else if (schema.allOf) type = 'allOf';
+    else if (schema.$ref) type = 'reference';
+  }
+  if (depth < 12 && object) {
+    const add = (value, label, mandatory = false) => {
+      children.push(schemaNode(value, label, mandatory, root, depth + 1, references));
+    };
+    if (schema.$ref) {
+      if (references.includes(schema.$ref)) notes.push('Recursive reference: ' + schema.$ref);
+      else if (schema.$ref === '#' || schema.$ref.startsWith('#/')) {
+        try {
+          const target = schema.$ref === '#' ? root : schema.$ref.slice(2).split('/').reduce((value, part) => {
+            const key = decodeURIComponent(part).replace(/~1/g, '/').replace(/~0/g, '~');
+            if (value === null || typeof value !== 'object' || !Object.hasOwn(value, key)) throw new Error('Unresolved reference');
+            return value[key];
+          }, root);
+          children.push(schemaNode(target, 'Referenced schema', false, root, depth + 1, [...references, schema.$ref]));
+        } catch (error) { notes.push('Unresolved reference: ' + schema.$ref); }
+      } else notes.push('External reference: ' + schema.$ref);
+    }
+    for (const [key, value] of Object.entries(schema.properties ?? {})) {
+      add(value, key, Array.isArray(schema.required) && schema.required.includes(key));
+    }
+    if (schema.items !== undefined) {
+      if (Array.isArray(schema.items)) schema.items.forEach((value, index) => add(value, 'Item ' + (index + 1)));
+      else add(schema.items, 'items');
+    }
+    (schema.prefixItems ?? []).forEach((value, index) => add(value, 'Item ' + (index + 1)));
+    for (const [keyword, label] of [['allOf', 'All of'], ['oneOf', 'One of'], ['anyOf', 'Any of']]) {
+      (schema[keyword] ?? []).forEach((value, index) => add(value, label + ' / ' + (index + 1)));
+    }
+    for (const keyword of ['not', 'contains', 'if', 'then', 'else']) {
+      if (schema[keyword] !== undefined) add(schema[keyword], keyword);
+    }
+    if (typeof schema.additionalProperties === 'object' && schema.additionalProperties !== null) {
+      add(schema.additionalProperties, '[additional property]');
+    }
+  } else if (object) notes.push('Expand further in Raw JSON schema (display depth limit).');
+  const node = schemaElement(children.length ? 'details' : 'div', 'schema-node');
+  const heading = schemaElement(children.length ? 'summary' : 'div', '');
+  const line = schemaElement('span', 'schema-line');
+  line.append(
+    schemaElement('span', 'schema-name', name),
+    ' ',
+    schemaElement('span', 'schema-type', Array.isArray(type) ? type.join(' | ') : type ?? (schema === false ? 'never' : 'any'))
+  );
+  if (required) line.append(' ', schemaElement('span', 'schema-required', 'required'));
+  heading.append(line);
+  node.append(heading);
+  if (children.length) node.open = depth < 2;
+  if (object && (schema.title || schema.description)) {
+    node.append(schemaElement('div', 'schema-description', [schema.title, schema.description].filter(Boolean).join(' - ')));
+  }
+  if (schema === true || (object && !Object.keys(schema).length)) notes.push('Any value allowed.');
+  if (schema === false) notes.push('No value allowed.');
+  const constraints = schemaElement('div', 'schema-constraints');
+  if (object) {
+    const labels = {
+      format: 'format', enum: 'enum', const: 'const', default: 'default',
+      minimum: 'min', maximum: 'max', exclusiveMinimum: 'exclusive min', exclusiveMaximum: 'exclusive max',
+      multipleOf: 'multiple of', minLength: 'min length', maxLength: 'max length', pattern: 'pattern',
+      minItems: 'min items', maxItems: 'max items', uniqueItems: 'unique items',
+      minProperties: 'min properties', maxProperties: 'max properties',
+      readOnly: 'read only', writeOnly: 'write only', deprecated: 'deprecated', examples: 'examples'
+    };
+    for (const [key, label] of Object.entries(labels)) {
+      if (Object.hasOwn(schema, key)) constraints.append(schemaElement('span', 'schema-constraint', label + ': ' + JSON.stringify(schema[key])));
+    }
+    if (typeof schema.additionalProperties === 'boolean') {
+      constraints.append(schemaElement('span', 'schema-constraint', 'additional properties: ' + (schema.additionalProperties ? 'allowed' : 'not allowed')));
+    }
+  }
+  if (constraints.childNodes.length) node.append(constraints);
+  for (const note of notes) node.append(schemaElement('div', 'schema-description', note));
+  if (children.length) {
+    const group = schemaElement('div', 'schema-children');
+    group.append(...children);
+    node.append(group);
+  }
+  return node;
+}
+function renderSchema(id, schema) {
+  const container = el(id);
+  container.replaceChildren(schema === undefined
+    ? schemaElement('p', 'schema-empty', 'No response contract.')
+    : schemaNode(schema, 'payload', false, schema));
+  el(id + '-raw').textContent = schema === undefined ? 'No response contract.' : show(schema);
+}
+function selectTask() {
+  const operation = catalog.specification.operations[el('tasks').value];
+  const channel = resolve(operation.channel);
+  current = { operation, channel, request: resolve(operation.messages[0]) };
+  el('task-title').textContent = el('tasks').value;
+  el('description').textContent = operation.description ?? '';
+  el('queue').textContent = 'Queue: ' + channel.address + '\nContent-Type: ' + (current.request.contentType ?? catalog.specification.defaultContentType);
+  renderSchema('request-schema', current.request.payload);
+  renderSchema('response-schema', operation.reply ? resolve(operation.reply.messages[0]).payload : undefined);
+  el('rpc').disabled = !catalog.rpc || busy;
+  el('rpc-note').textContent = catalog.rpc ? 'RPC supported. Timeout: ' + catalog.timeout + ' seconds.' : 'This broker does not support RPC. Send is available.';
+  el('result').textContent = 'No request sent.';
+  example();
+}
+async function api(options = {}) {
+  const response = await fetch(endpoint, {
+    ...options,
+    credentials: 'omit',
+    redirect: 'error',
+    headers: { Accept: 'application/json', ...(authRequired ? { Authorization: 'Bearer ' + el('token').value } : {}), ...(options.headers ?? {}) }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + (data.error ?? show(data)));
+  return data;
+}
+el('connect').onclick = async () => {
+  if (busy) return;
+  const version = ++loadVersion;
+  el('connect').disabled = true;
+  el('main').hidden = true;
+  el('notice').textContent = 'Loading...';
+  try {
+    const data = await api();
+    if (version !== loadVersion) return;
+    catalog = data;
+    el('version').textContent = 'Version ' + catalog.specification.info.version;
+    el('version').hidden = false;
+    el('tasks').replaceChildren(...Object.keys(catalog.specification.operations).map(name => {
+      const option = document.createElement('option');
+      option.value = name; option.textContent = name; return option;
+    }));
+    if (!el('tasks').options.length) throw new Error('No tasks registered.');
+    el('tasks').selectedIndex = 0;
+    selectTask();
+    el('main').hidden = false;
+    el('notice').textContent = 'Ready. Requests execute on the real worker.';
+  } catch (error) {
+    if (version === loadVersion) el('notice').textContent = error.message;
+  } finally {
+    if (version === loadVersion) el('connect').disabled = busy;
+  }
+};
+el('clear').onclick = () => { ++loadVersion; el('token').value = ''; catalog = null; current = null; el('main').hidden = true; el('connect').disabled = busy; el('notice').textContent = 'Token cleared.'; };
+el('tasks').onchange = selectTask;
+el('example').onclick = example;
+async function execute(mode) {
+  if (busy) return;
+  try {
+    const body = JSON.parse(el('body').value);
+    if (body === null || Array.isArray(body) || typeof body !== 'object') throw new Error('Body must be a JSON object.');
+    busy = true; el('send').disabled = true; el('rpc').disabled = true; el('tasks').disabled = true; el('connect').disabled = true;
+    el('result').textContent = 'Waiting...';
+    const data = await api({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task: el('tasks').value, mode, body })
+    });
+    el('result').textContent = show(data);
+  } catch (error) { el('result').textContent = error.message; }
+  finally {
+    busy = false; el('send').disabled = false; el('tasks').disabled = false; el('connect').disabled = false;
+    el('rpc').disabled = !catalog?.rpc;
+  }
+}
+el('send').onclick = () => execute('send');
+el('rpc').onclick = () => execute('request');
+if (!authRequired) el('connect').click();
+</script>
+</body>
+</html>

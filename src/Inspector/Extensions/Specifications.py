@@ -63,7 +63,7 @@ class Specifications(Extension):
 		if worker is None:
 			raise RuntimeError('Specifications requires an attached Worker')
 		info = {
-			'title': inspector.name,
+			'title': 'PinkStream',
 			'version': self.version,
 		}
 		if self.description is not None:

@@ -29,6 +29,9 @@ setup(
 	packages=PACKAGES,
 	package_dir=PACKAGE_DIR,
 	include_package_data=False,
+	package_data={
+		'PinkStream.Inspector.Extensions': ['Console.html'],
+	},
 	classifiers=[
 		'Programming Language :: Python :: 3.9',
 		'Programming Language :: Python :: 3.10',

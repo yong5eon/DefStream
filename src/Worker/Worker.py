@@ -202,7 +202,7 @@ class Worker:
 			raise RuntimeError('Worker consumer is not initialized')
 		inspector = self.inspector
 		task = run.__module__ + '.' + run.__qualname__
-		started = inspector.begin(task) if inspector is not None else 0
+		contexts = inspector.begin(task) if inspector is not None else ()
 
 		def schedule(
 			error: Optional[BaseException] = None,
@@ -211,7 +211,7 @@ class Worker:
 			if inspector is not None:
 				inspector.end(
 					task,
-					started,
+					contexts,
 					error is None,
 				)
 			if self.finished.is_set():
@@ -238,7 +238,7 @@ class Worker:
 			if inspector is not None:
 				inspector.end(
 					task,
-					started,
+					contexts,
 					None,
 				)
 			self.pending -= 1
@@ -248,7 +248,7 @@ class Worker:
 			if inspector is not None:
 				inspector.end(
 					task,
-					started,
+					contexts,
 					None,
 				)
 			self.pending -= 1

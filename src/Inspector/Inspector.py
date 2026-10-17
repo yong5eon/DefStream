@@ -1,13 +1,6 @@
-from dataclasses import dataclass
 from logging import getLogger
-from math import isfinite
 from socketserver import ThreadingMixIn
-from threading import (
-	Event,
-	Lock,
-	Thread,
-)
-from time import monotonic
+from threading import Thread
 from typing import (
 	Callable,
 	Dict,
@@ -15,6 +8,7 @@ from typing import (
 	Optional,
 	Sequence,
 	TYPE_CHECKING,
+	Tuple,
 )
 from wsgiref.simple_server import (
 	WSGIRequestHandler,
@@ -33,14 +27,6 @@ __all__ = (
 )
 
 logger = getLogger(__name__)
-
-
-@dataclass
-class TaskMetrics:
-	active: int = 0
-	success: int = 0
-	failure: int = 0
-	duration: float = 0
 
 
 class Server(
@@ -69,29 +55,12 @@ class RequestHandler(WSGIRequestHandler):
 		)
 
 
-def label(
-	value: str,
-) -> str:
-	return value.replace(
-		'\\',
-		'\\\\',
-	).replace(
-		'\n',
-		'\\n',
-	).replace(
-		'"',
-		'\\"',
-	)
-
-
 class Inspector:
 	def __init__(
 		self,
 		host: str = '127.0.0.1',
 		port: int = 9999,
 		exts: Sequence[Extension] = (),
-		name: str = 'PinkStream',
-		timeout: float = 1,
 	):
 		if isinstance(
 			port,
@@ -101,20 +70,8 @@ class Inspector:
 			int,
 		) or not 0 <= port <= 65535:
 			raise ValueError('Inspector port must be between 0 and 65535')
-		if isinstance(
-			timeout,
-			bool,
-		) or not isfinite(timeout) or timeout <= 0:
-			raise ValueError('Inspector probe timeout must be finite and positive')
-		if not isinstance(
-			name,
-			str,
-		) or not name:
-			raise ValueError('Inspector name must be a nonempty string')
 		self.host = host
 		self.port = port
-		self.name = name
-		self.timeout = timeout
 		self.exts: Dict[str, Extension] = {}
 		for ext in exts:
 			if not isinstance(
@@ -128,10 +85,6 @@ class Inspector:
 		self.worker: Optional['Worker'] = None
 		self.server: Optional[WSGIServer] = None
 		self.thread: Optional[Thread] = None
-		self.started_at: Optional[float] = None
-		self.lock = Lock()
-		self.tasks: Dict[str, TaskMetrics] = {}
-		self.probe: Optional[Event] = None
 
 	def start(
 		self,
@@ -140,10 +93,8 @@ class Inspector:
 		if self.worker is not None:
 			raise RuntimeError('Inspector can only be attached and started once')
 		self.worker = worker
-		self.started_at = monotonic()
-		with self.lock:
-			for task in worker.tasks:
-				self.tasks[task.__module__ + '.' + task.__qualname__] = TaskMetrics()
+		for ext in self.exts.values():
+			ext.start(self)
 		server = make_server(
 			self.host,
 			self.port,
@@ -154,7 +105,6 @@ class Inspector:
 		self.server = server
 		thread = Thread(
 			target=self.serve,
-			name=self.name + '-Inspector',
 			daemon=True,
 		)
 		self.thread = thread
@@ -187,89 +137,30 @@ class Inspector:
 			finally:
 				server.server_close()
 
-	def state(self) -> str:
-		worker = self.worker
-		if worker is None:
-			return 'starting'
-		if worker.finished.is_set():
-			return 'stopped'
-		if worker.stopping.is_set():
-			return 'stopping'
-		if not worker.running.is_set():
-			return 'starting'
-		return 'running'
-
-	def healthy(self) -> bool:
-		worker = self.worker
-		if worker is None or not worker.running.is_set() or worker.stopping.is_set() or worker.finished.is_set():
-			return False
-		consumer = worker.consumer
-		if consumer is None:
-			return False
-		with self.lock:
-			if self.probe is None or self.probe.is_set():
-				self.probe = Event()
-				try:
-					consumer.call(self.probe.set)
-				except Exception:
-					self.probe = None
-					logger.exception('Inspector could not schedule the consumer health probe')
-					return False
-			probe = self.probe
-		return probe.wait(self.timeout) and worker.running.is_set() and not worker.stopping.is_set() and not worker.finished.is_set()
-
 	def begin(
 		self,
 		task: str,
-	) -> float:
-		with self.lock:
-			self.tasks[task].active += 1
-		return monotonic()
+	) -> Tuple[Tuple[Extension, object], ...]:
+		return tuple(
+			(
+				ext,
+				ext.begin(task),
+			)
+			for ext in self.exts.values()
+		)
 
 	def end(
 		self,
 		task: str,
-		started: float,
+		contexts: Tuple[Tuple[Extension, object], ...],
 		success: Optional[bool],
 	) -> None:
-		with self.lock:
-			stats = self.tasks[task]
-			stats.active -= 1
-			if success is not None:
-				stats.success += int(success)
-				stats.failure += int(not success)
-				stats.duration += monotonic() - started
-
-	def metrics(self) -> str:
-		worker = self.worker
-		running = worker is not None and worker.running.is_set() and not worker.stopping.is_set() and not worker.finished.is_set()
-		name = 'name="' + label(self.name) + '"'
-		uptime = 0 if self.started_at is None else monotonic() - self.started_at
-		lines = [
-			'# HELP pinkstream_worker_running Worker consumer lifecycle is running; not a heartbeat probe.',
-			'# TYPE pinkstream_worker_running gauge',
-			f'pinkstream_worker_running{{{name}}} {int(running)}',
-			'# HELP pinkstream_worker_uptime_seconds Seconds since Inspector startup.',
-			'# TYPE pinkstream_worker_uptime_seconds gauge',
-			f'pinkstream_worker_uptime_seconds{{{name}}} {uptime}',
-			'# HELP pinkstream_tasks_active Submitted task executions not yet completed.',
-			'# TYPE pinkstream_tasks_active gauge',
-			'# HELP pinkstream_tasks_total Completed execution attempts including retries.',
-			'# TYPE pinkstream_tasks_total counter',
-			'# HELP pinkstream_task_duration_seconds End-to-end execution time including pool wait and hooks.',
-			'# TYPE pinkstream_task_duration_seconds summary',
-		]
-		with self.lock:
-			for task, stats in self.tasks.items():
-				labels = name + ',task="' + label(task) + '"'
-				lines.extend((
-					f'pinkstream_tasks_active{{{labels}}} {stats.active}',
-					f'pinkstream_tasks_total{{{labels},outcome="success"}} {stats.success}',
-					f'pinkstream_tasks_total{{{labels},outcome="failure"}} {stats.failure}',
-					f'pinkstream_task_duration_seconds_count{{{labels}}} {stats.success + stats.failure}',
-					f'pinkstream_task_duration_seconds_sum{{{labels}}} {stats.duration}',
-				))
-		return '\n'.join(lines) + '\n'
+		for ext, context in contexts:
+			ext.end(
+				task,
+				context,
+				success,
+			)
 
 	def __call__(
 		self,
@@ -279,10 +170,12 @@ class Inspector:
 		method = environ['REQUEST_METHOD']
 		environ['wsgi.multithread'] = True
 		headers = []
-		if method not in (
+		ext = self.exts.get(environ['PATH_INFO'])
+		methods = ext.methods if ext is not None else (
 			'GET',
 			'HEAD',
-		):
+		)
+		if method not in methods:
 			response = Response(
 				'405 Method Not Allowed',
 				b'Method not allowed\n',
@@ -290,15 +183,18 @@ class Inspector:
 			)
 			headers.append((
 				'Allow',
-				'GET, HEAD',
+				', '.join(methods),
 			))
 		else:
-			ext = self.exts.get(environ['PATH_INFO'])
-			response = ext(self) if ext is not None else Response(
+			response = ext.handle(
+				self,
+				environ,
+			) if ext is not None else Response(
 				'404 Not Found',
 				b'Not found\n',
 				'text/plain; charset=utf-8',
 			)
+		headers.extend(response.headers)
 		headers.extend((
 			(
 				'Content-Type',
