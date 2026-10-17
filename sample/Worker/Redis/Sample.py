@@ -10,6 +10,11 @@ from PinkStream.Broker.Implements.Redis import (
 	Reject,
 	Subscription,
 )
+from PinkStream.Inspector import Inspector
+from PinkStream.Inspector.Extensions import (
+	HealthCheck,
+	Metrics,
+)
 from PinkStream.Worker import (
 	declare,
 	send,
@@ -98,6 +103,15 @@ def main() -> None:
 		ThreadPool(10),
 		setups=Prepare(),
 		cleanups=Cleanup(),
+		inspector=Inspector(
+			host='127.0.0.1',
+			port=9999,
+			name='PinkStream.Redis',
+			exts=(
+				HealthCheck('/status'),
+				Metrics('/metrics'),
+			),
+		),
 	)
 	worker.add(Add)
 	worker.add(Divide)
