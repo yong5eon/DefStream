@@ -17,6 +17,7 @@ from PinkStream.Inspector import Inspector
 from PinkStream.Inspector.Extensions import (
 	HealthCheck,
 	Metrics,
+	Specifications,
 )
 from PinkStream.Worker import (
 	declare,
@@ -88,6 +89,7 @@ if __name__ == '__main__':
 			exts=(
 				HealthCheck('/status'),
 				Metrics('/metrics'),
+				Specifications('/spec'),
 			),
 		),
 	)
