@@ -1,11 +1,17 @@
 from random import randint
 from sys import stderr
 
+from Tasks import (
+	Add,
+	Divide,
+)
+
 from PinkStream.Broker import RemoteError
 from PinkStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 )
+from PinkStream.Worker import request
 
 
 if __name__ == '__main__':
@@ -17,7 +23,7 @@ if __name__ == '__main__':
 	))
 	try:
 		broker.connect()
-		result = broker.queue('add').call(
+		result = request(
 			{
 				'a': randint(
 					1,
@@ -28,10 +34,12 @@ if __name__ == '__main__':
 					100,
 				),
 			},
+			task=Add,
+			broker=broker,
 			timeout=5,
 		)
 		print(f'RPC add result: {result}')
-		result = broker.queue('divide').call(
+		result = request(
 			{
 				'a': randint(
 					1,
@@ -42,11 +50,13 @@ if __name__ == '__main__':
 					100,
 				),
 			},
+			task=Divide,
+			broker=broker,
 			timeout=5,
 		)
 		print(f'RPC divide result: {result}')
 		try:
-			broker.queue('divide').call(
+			request(
 				{
 					'a': randint(
 						1,
@@ -54,6 +64,8 @@ if __name__ == '__main__':
 					),
 					'b': 0,
 				},
+				task=Divide,
+				broker=broker,
 				timeout=5,
 			)
 		except RemoteError as error:

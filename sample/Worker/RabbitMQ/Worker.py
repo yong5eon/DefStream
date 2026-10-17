@@ -4,52 +4,23 @@ from signal import (
 	signal,
 )
 
+from Tasks import (
+	Add,
+	Divide,
+)
+
 from PinkStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
-	Reject,
-	Requeue,
-	Subscription,
 )
 from PinkStream.Worker import (
+	declare,
+	send,
 	ProcessPool,
-	Run,
 	Worker,
 	WorkerSetup,
 	WorkerCleanup,
 )
-
-
-class Add(
-	Run,
-	parameters={
-		'queue': 'add',
-	},
-	on_error=Requeue(),
-):
-	def run(
-		self,
-		a: int,
-		b: int,
-	):
-		print(f'{a} + {b} = {a + b}')
-		return a + b
-
-
-class Divide(
-	Run,
-	parameters=Subscription(
-		queue='divide',
-	),
-	on_error=Reject(),
-):
-	def run(
-		self,
-		a: int,
-		b: int,
-	):
-		print(f'{a} / {b} = {a / b}')
-		return a / b
 
 
 class Prepare(WorkerSetup):
@@ -63,21 +34,26 @@ class Prepare(WorkerSetup):
 			Connection,
 		):
 			raise TypeError('A RabbitMQ broker is required')
-		for run in worker.runs:
-			parameters = Subscription.parse(run.parameters)
-			broker.create_queue(parameters.queue)
-			queue = broker.queue(parameters.queue)
-			for index in range(5):
-				queue.send({
-					'a': randint(
-						0,
-						99,
-					),
-					'b': randint(
-						0,
-						99,
-					),
-				})
+		for run in worker.tasks:
+			declare(
+				task=run,
+				broker=broker,
+			)
+			for _ in range(5):
+				send(
+					{
+						'a': randint(
+							0,
+							99,
+						),
+						'b': randint(
+							0,
+							99,
+						),
+					},
+					task=run,
+					broker=broker,
+				)
 		print('Prepared 5 messages per queue')
 
 
