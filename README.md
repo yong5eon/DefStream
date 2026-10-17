@@ -358,7 +358,7 @@ worker.run()
   Task execution remains in the existing ThreadPool/ProcessPool; the HTTP
   server and metric aggregation stay in the parent process.
 - This is a small operational HTTP interface, not a public web server. No
-  authentication, TLS, AsyncAPI generation, documentation UI or test UI is
+  authentication, TLS, documentation UI or test UI is
   provided yet. Keep it on loopback or a trusted management network.
 
 The RabbitMQ and Redis Worker samples enable `/status` and `/metrics` on
@@ -369,6 +369,153 @@ A health command inside the container needs no curl dependency:
 ```dockerfile
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9999/status', timeout=2).close()"
 ```
+
+### Request/response specifications
+
+`PinkStream.Descriptor` and `PinkStream.Validator` reuse the local Liquirizia
+Description/Validator APIs under the repository's GPLv3 license. Descriptor has
+**no DataModel dependency**: manual schemas and dataclass `ToSchema`/`ToObject`
+remain available. The original temporary sources are unchanged. Existing names
+and implementation style are retained in the ported modules to minimize drift.
+DataModel-only conversions and `IsDataModel` are not included.
+
+```python
+from PinkStream.Descriptor import (
+	Integer,
+	Object,
+	Properties,
+)
+from PinkStream.Validator import Validator
+from PinkStream.Validator.Patterns import (
+	IsInteger,
+	IsObject,
+)
+from PinkStream.Validator.Patterns.Object import (
+	IsMappingOf,
+	IsRequiredIn,
+)
+from PinkStream.Worker import (
+	Run,
+	Specification,
+)
+
+class Add(
+	Run,
+	parameters={'queue': 'add'},
+	request=Specification(
+		schema=Object(
+			properties=Properties(
+				a=Integer('First operand'),
+				b=Integer('Second operand'),
+			),
+		),
+		validator=Validator(IsObject(
+			IsRequiredIn(
+				'a',
+				'b',
+			),
+			IsMappingOf({
+				'a': IsInteger(),
+				'b': IsInteger(),
+			}),
+		)),
+		example={
+			'a': 10,
+			'b': 20,
+		},
+	),
+	response=Specification(
+		schema=Integer('Sum'),
+		validator=Validator(IsInteger()),
+		example=30,
+	),
+):
+	def run(
+		self,
+		a: int,
+		b: int,
+	):
+		return a + b
+```
+
+`Specification` accepts `schema`, `validator`, `example`, `description`, and
+`format` (default `application/json`).
+For example, `format='text/plain'` sets
+the message's AsyncAPI `contentType`. Request and response can declare different
+media types. This is contract metadata; it does not change broker codecs or the
+JSON content type of the specifications HTTP endpoint. Configure compatible
+broker encoders/decoders separately when using a different wire format.
+`schema` can be a Descriptor value, Schema/condition, JSON-schema mapping, or
+dataclass type. It describes the wire data; **it does not automatically validate
+or instantiate a model**. Use Validator for runtime rules and transformations.
+Custom validator rules are not reverse-engineered into JSON Schema. Examples
+are documentation values, not automatically executed or validated.
+
+Execution order is setup hooks, request validation/transformation, `run`,
+response validation/transformation, completion hooks, then RPC response/ACK.
+Request validation must return a mapping with string keys; specified tasks
+accept keyword arguments. Output can be any existing broker-serializable value.
+The returned validator value is used, not discarded. Validation failures invoke
+RunError hooks and the existing `on_error` policy; configure Reject where
+permanent invalid messages must not be requeued indefinitely. Request and
+response contracts are inherited. Tasks without contracts retain their behavior.
+The send/request helpers do not run the validators again.
+
+Necessary changes from the source: `AllOf` dumps as `allOf`; string `min`/`max`
+dump as `minLength`/`maxLength`; unsupported schema values/references fail
+explicitly. Conversion patterns use `ast.literal_eval`, not `eval`: numeric
+literal strings still work but executable expressions are rejected. `Validate`
+supports functions without defaults and positional-only arguments.
+
+### AsyncAPI JSON
+
+```python
+from PinkStream.Inspector.Extensions import Specifications
+
+# Add to Inspector(exts=(...)).
+specifications = Specifications(
+	'/asyncapi.json',
+	version='1.0.0',
+	description='Worker task contracts',
+	format='application/json',
+)
+```
+
+`Specifications.format` sets the document's `defaultContentType` and defaults to
+`application/json`. Messages without a request Specification inherit this default;
+each declared Specification's `format` remains an explicit message-level override
+(it also defaults to JSON). This does not change broker codecs or the JSON HTTP
+response format of this endpoint.
+
+`GET /asyncapi.json` serves an AsyncAPI **3.1.0** document generated from that
+Worker's registered tasks, without a global registry or broker connection.
+The document is available during startup/shutdown while HTTP remains open.
+It describes Worker-side **receive** operations, queue addresses, input message
+schemas/examples. Operation descriptions come from `request.description`;
+when it is None, the field is omitted without falling back to task docstrings.
+Unspecified inputs have an object payload
+with no additional constraints. Queue names can come from strings, subscription
+mappings or subscription objects; missing addresses fail explicitly.
+Operation keys are task class names (without modules). Receive channel keys are
+the actual queue names, preserved without replacement; JSON Pointer references
+escape `/` and `~`. Request messages are defined directly under each channel,
+referenced as `#/channels/<queue>/messages/request`. Specification has no
+`channel` option; subscription parameters determine the queue.
+Output contracts generate a standard operation **`reply`**, referencing the same
+channel and its `response` message at `#/channels/<queue>/messages/response`.
+Request and response definitions live together under the channel's `messages`;
+the receive operation selects only `request`, and its reply selects only
+`response`. No separate `.completion` channel is generated. Duplicate operation
+or queue channel keys fail explicitly.
+This describes the declared request/reply contract, not broker capabilities:
+declaring an output does not turn Redis into RPC, and ordinary sends do not
+request replies. Dynamic RabbitMQ reply address extraction, correlation and
+transport bindings are not modeled yet. No server credentials are exposed. This extension
+serves JSON only, not a documentation page or interactive task runner.
+
+The RabbitMQ Worker sample declares contracts for Add and Divide and serves
+them at `/asyncapi.json`. The Redis sample exposes the same endpoint, with
+unconstrained inputs for tasks that have no contract yet.
 
 ### Task-directed messages and declarations
 
