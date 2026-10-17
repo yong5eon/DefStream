@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{dashboard_title}}</title>
+<style>
+:root { color-scheme: light; font: 14px/1.55 system-ui, -apple-system, sans-serif; color: #263343; background: #f7f8fa; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { background: #fff; border-bottom: 1px solid #e1e5eb; }
+.heading, main { max-width: 1440px; margin: auto; padding: 24px 32px; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+h1 { margin: 0; font-size: 22px; letter-spacing: -.6px; overflow-wrap: anywhere; }
+h2 { margin: 0; font-size: 15px; }
+p { margin: 6px 0 0; }
+.subtitle, .muted { color: #657184; font-size: 12px; }
+.subtitle:empty { display: none; }
+.badge { padding: 5px 10px; border: 1px solid #c6dfcf; border-radius: 5px; color: #286f40; background: #f0faf3; font-size: 11px; white-space: nowrap; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+#notice { margin: 0; font-size: 12px; color: #536374; }
+#notice[data-state="error"] { color: #ab303d; }
+button { padding: 8px 14px; border: 1px solid #cdd5df; border-radius: 5px; font: 600 12px system-ui, sans-serif; background: #fff; color: #38485b; cursor: pointer; white-space: nowrap; }
+button:hover { background: #edf3f8; }
+select { padding: 8px; border: 1px solid #cdd5df; border-radius: 5px; background: #fff; color: #38485b; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+:focus-visible { outline: 3px solid #89b8ff; outline-offset: 3px; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card, .panel { min-width: 0; background: #fff; border: 1px solid #e1e5eb; border-radius: 7px; }
+.card { padding: 20px; }
+.label { font-size: 12px; color: #657184; }
+.value { margin-top: 8px; font-size: 28px; font-weight: 650; line-height: 1.3; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rate { color: #27834c; }
+.failure { color: #b33b45; }
+.hint { color: #768295; font-size: 11px; margin-top: 8px; }
+.panel-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 20px; border-bottom: 1px solid #e1e5eb; }
+.table-scroll { overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { background: #f7f9fb; color: #657184; font-weight: 600; white-space: nowrap; }
+th, td { padding: 13px 18px; text-align: right; border-bottom: 1px solid #edf0f4; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+td:first-child { max-width: 400px; overflow-wrap: anywhere; font: 12px/1.7 Consolas, monospace; }
+tr:last-child td { border-bottom: 0; }
+#empty { padding: 24px; color: #657184; font-size: 12px; }
+.notes { margin-top: 20px; color: #657184; font-size: 12px; }
+.stale .cards, .stale .panel { opacity: .55; }
+[hidden] { display: none !important; }
+@media(max-width: 800px) {
+  .heading, main { padding: 20px 16px; }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .card { padding: 16px; }
+  .value { font-size: 24px; }
+}
+@media(max-width: 420px) {
+  .cards { grid-template-columns: 1fr; }
+  .heading { align-items: start; }
+}
+</style>
+</head>
+<body>
+<header><div class="heading">
+<div><h1>{{dashboard_title}}</h1><p class="subtitle">{{dashboard_description}}</p></div>
+<span class="badge">LIVE DASHBOARD</span>
+</div></header>
+<main>
+<div class="toolbar">
+<p id="notice" role="status" aria-live="polite">Connecting to worker...</p>
+<div class="controls">
+<label for="window">View</label><select id="window"><option value="1">Last second</option><option value="60">Last minute</option></select>
+<button id="pause" type="button" aria-pressed="false">Pause updates</button>
+</div>
+</div>
+<div class="cards">
+<section class="card"><div class="label">Window completions</div><div id="rate" class="value rate">--</div><p id="window-hint" class="hint">Completed in the last fully elapsed second</p></section>
+<section class="card"><div class="label">In flight</div><div id="active" class="value">--</div><p class="hint">Submitted, not yet completed</p></section>
+<section class="card"><div class="label">Worker lifecycle</div><div id="state" class="value">--</div><p class="hint">Lifecycle only, not a health probe</p></section>
+<section class="card"><div class="label">Succeeded</div><div id="success" class="value">--</div><p class="hint">Since worker startup</p></section>
+<section class="card"><div class="label">Failed</div><div id="failure" class="value failure">--</div><p class="hint">Includes failed retry attempts</p></section>
+<section class="card"><div class="label">Uptime</div><div id="uptime" class="value">--</div><p class="hint">Since Metrics initialization</p></section>
+<section class="card"><div class="label">Window success / failure</div><div id="window-outcomes" class="value">--</div><p class="hint">Completed attempts in selected window</p></section>
+<section class="card"><div class="label">Window failure rate</div><div id="failure-rate" class="value">--</div><p class="hint">Failed / completed attempts</p></section>
+<section class="card"><div class="label">Window average time</div><div id="average" class="value">--</div><p class="hint">Includes pool wait and hooks</p></section>
+<section class="card"><div class="label">Window maximum time</div><div id="maximum" class="value">--</div><p class="hint">Slowest completion in selected window</p></section>
+<section class="card"><div class="label">Oldest in flight</div><div id="oldest" class="value">--</div><p class="hint">Elapsed since submission, including pool wait</p></section>
+</div>
+<section class="panel" aria-labelledby="tasks-title">
+<div class="panel-heading"><h2 id="tasks-title">Task activity</h2><span class="muted">Current rates &amp; cumulative totals</span></div>
+<div class="table-scroll"><table>
+<thead><tr><th scope="col">Task</th><th scope="col">In flight</th><th scope="col">Total success</th><th scope="col">Total failure</th><th id="rate-heading" scope="col">Tasks / sec</th><th scope="col">Window avg.</th><th scope="col">Window max.</th><th scope="col">Window success</th><th scope="col">Window failure</th><th scope="col">Failure rate</th><th scope="col">Oldest in flight</th></tr></thead>
+<tbody id="tasks"></tbody>
+</table></div>
+<p id="empty" hidden>No tasks registered.</p>
+</section>
+<p class="notes">Refreshes about every second. Windows end at the last fully elapsed monotonic second (less than one second behind live totals).
+Last minute counts actual completions in 60 seconds, not a multiplied per-second estimate. Startup windows include only data since startup.
+Counts represent execution attempts, not unique messages or confirmed ACKs. Average time includes pool wait and hooks.
+This page shows one worker only, with no persistent history.</p>
+</main>
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+let latest = null;
+let timer = null;
+let pending = false;
+let paused = false;
+const milliseconds = value => number.format(value * 1000) + ' ms';
+const failureRate = window => window.success + window.failure ? number.format(window.failure / (window.success + window.failure) * 100) + '%' : '--';
+function duration(seconds) {
+  const total = Math.floor(seconds);
+  return [Math.floor(total / 3600), Math.floor(total % 3600 / 60), total % 60].map(value => String(value).padStart(2, '0')).join(':');
+}
+function render(snapshot) {
+  const seconds = el('window').value || '1';
+  const unit = seconds === '60' ? 'min' : 'sec';
+  const totals = { active: 0, success: 0, failure: 0 };
+  const window = { success: 0, failure: 0, duration: 0, max_duration: 0 };
+  let oldest = 0;
+  const rows = Object.entries(snapshot.tasks).map(([name, task]) => {
+    for (const key of Object.keys(totals)) totals[key] += task[key];
+    const period = task.windows[seconds];
+    for (const key of ['success', 'failure', 'duration']) window[key] += period[key];
+    window.max_duration = Math.max(window.max_duration, period.max_duration);
+    oldest = Math.max(oldest, task.oldest_active);
+    const count = period.success + period.failure;
+    const row = document.createElement('tr');
+    const values = [name, number.format(task.active), number.format(task.success), number.format(task.failure),
+      number.format(count), count ? milliseconds(period.duration / count) : '--',
+      count ? milliseconds(period.max_duration) : '--', number.format(period.success), number.format(period.failure),
+      failureRate(period), task.active ? milliseconds(task.oldest_active) : '--'];
+    values.forEach((value, index) => {
+      const cell = document.createElement('td');
+      if (index >= 4) cell.className = 'task-rate';
+      cell.textContent = value;
+      row.append(cell);
+    });
+    return row;
+  });
+  el('tasks').replaceChildren(...rows);
+  el('empty').hidden = rows.length > 0;
+  for (const key of Object.keys(totals)) el(key).textContent = number.format(totals[key]);
+  const count = window.success + window.failure;
+  el('rate').textContent = number.format(count) + ' /' + unit;
+  el('window-hint').textContent = 'Completed in the last fully elapsed ' + (seconds === '60' ? '60 seconds' : 'second');
+  el('rate-heading').textContent = 'Tasks / ' + unit;
+  el('window-outcomes').textContent = number.format(window.success) + ' / ' + number.format(window.failure);
+  el('failure-rate').textContent = failureRate(window);
+  el('average').textContent = count ? milliseconds(window.duration / count) : '--';
+  el('maximum').textContent = count ? milliseconds(window.max_duration) : '--';
+  el('oldest').textContent = totals.active ? milliseconds(oldest) : '--';
+  el('state').textContent = snapshot.running ? 'Running' : 'Not running';
+  el('uptime').textContent = duration(snapshot.uptime);
+  latest = snapshot;
+}
+function stale() {
+  latest = null;
+  document.body.classList.add('stale');
+  for (const id of ['rate', 'window-outcomes', 'failure-rate', 'average', 'maximum', 'oldest']) el(id).textContent = '--';
+  for (const cell of document.querySelectorAll('.task-rate')) cell.textContent = '--';
+}
+el('window').onchange = () => { if (latest) render(latest); };
+async function refresh() {
+  if (pending || paused || document.hidden) return;
+  pending = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(window.location.pathname, {
+      headers: { Accept: 'application/json' }, credentials: 'omit', redirect: 'error', cache: 'no-store', signal: controller.signal
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const snapshot = await response.json();
+    if (paused || document.hidden) return;
+    render(snapshot);
+    document.body.classList.remove('stale');
+    el('notice').dataset.state = 'ready';
+    el('notice').textContent = (paused ? 'Paused. Last updated ' : 'Live. Updated ') + new Date().toLocaleTimeString();
+  } catch (error) {
+    stale();
+    el('notice').dataset.state = 'error';
+    el('notice').textContent = 'Disconnected - displayed totals are stale. ' + (error.name === 'AbortError' ? 'Request timed out.' : error.message);
+  } finally {
+    clearTimeout(timeout);
+    pending = false;
+    if (!paused && !document.hidden) timer = setTimeout(refresh, 1000);
+  }
+}
+el('pause').onclick = () => {
+  paused = !paused;
+  clearTimeout(timer);
+  el('pause').textContent = paused ? 'Resume updates' : 'Pause updates';
+  el('pause').setAttribute('aria-pressed', String(paused));
+  if (paused) {
+    stale();
+    el('notice').textContent = 'Paused - displayed data is not updating.';
+  } else refresh();
+};
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(timer);
+  if (document.hidden) stale();
+  if (!document.hidden) refresh();
+});
+refresh();
+</script>
+</body>
+</html>
