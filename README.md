@@ -175,8 +175,11 @@ for broker redelivery. Response publication and request ACK are not atomic:
 crashes can cause duplicate execution/replies, so side-effecting Runs must be
 idempotent. RPC does not provide exactly-once delivery.
 
-To try RPC, start `sample/Worker/RabbitMQ/Sample.py`, then run
-`sample/Worker/RabbitMQ/Sample.Rpc.py` in another terminal. The latter shows
+The RabbitMQ worker sample shares its Add and Divide tasks in
+`sample/Worker/RabbitMQ/Tasks.py`. To try RPC, start
+`sample/Worker/RabbitMQ/Worker.py`, then run
+`sample/Worker/RabbitMQ/Client.py` in another terminal. The client uses
+`request(body, task=..., broker=...)` with these shared tasks and shows
 successful addition/division and a rejected division by zero.
 For a standalone broker-only example, run
 `sample/Broker/Implements/RabbitMQ/Sample.RPC.py`. It starts a responder on its
@@ -290,6 +293,151 @@ localhost:6379 and create/delete only uniquely named test streams.
 
 ## Workers
 
+### Task-directed messages and declarations
+
+`declare`, `send` and `request` are exported from `PinkStream.Worker`. They resolve the
+destination from a concrete Run class's `parameters`; the sending application
+does not need a Worker or global task registry. Bodies must be mappings with
+string keys, matching `run(**body)`. A scalar Run result must be wrapped in a
+mapping before forwarding to another task.
+
+Connections are **borrowed**: callers must connect and close them. Neither helper
+connects, declares destinations, nor closes the passed connection, including on
+failure. One connection can publish many records:
+
+```python
+from PinkStream.Worker import (
+	declare,
+	send,
+	request,
+)
+from PinkStream.Broker.Implements.RabbitMQ import (
+	Connection,
+	Configuration,
+)
+
+connection = Connection(Configuration(
+	host='127.0.0.1',
+	port=5672,
+	username='guest',
+	password='guest',
+))
+connection.connect()
+try:
+	# Sample is an application Run class with subscription parameters.
+	declare(
+		task=Sample,
+		broker=connection,
+	)
+	for index in range(1000):
+		send(
+			{
+				'a': index,
+				'b': 1,
+			},
+			task=Sample,
+			broker=connection,
+		)
+	response = request(
+		{
+			'a': 10,
+			'b': 20,
+		},
+		task=Sample,
+		broker=connection,
+		timeout=5,
+	)
+finally:
+	connection.close()
+```
+
+`send` returns the published message ID. RabbitMQ uses one reusable publisher
+channel per connection, publisher confirms and mandatory routing; an absent
+destination raises rather than silently dropping a task. Redis uses XADD.
+The former task-directed `emit` name has been removed without an alias.
+`emit` is reserved for a future exchange/event publishing API, not implemented yet.
+RabbitMQ `request` delegates to Queue RPC, returning its result or propagating
+TimeoutError/RemoteError/publication errors. Redis `request` raises
+NotImplementedError. RPC still opens a dedicated request/reply connection per
+call internally; the caller-owned connection remains open. This is not pooled
+or multiplexed RPC.
+
+`worker.tasks` replaces `worker.runs` and contains registered Run classes.
+Declarations remain explicit, not a side effect of subscribing or sending:
+
+```python
+class Declare(WorkerSetup):
+	def __call__(
+		self,
+		worker: Worker,
+	) -> None:
+		for task in worker.tasks:
+			declare(
+				task=task,
+				broker=worker.broker,
+			)
+```
+
+Pass `setups=Declare()` to Worker. Its broker is already connected before setup
+runs. `declare(task=task, broker=connection)` delegates to
+`connection.declare(task.parameters)` without opening or closing the connection.
+It can be used without a Worker; there is no `worker.declare()` method.
+RabbitMQ declares durable queues and, when `error` is provided, the durable DLQ
+and dead-letter routing through the default exchange. Redis creates the stream
+and named consumer group. Existing incompatible RabbitMQ declarations fail
+explicitly; no queue is deleted/recreated automatically. This initial task
+declaration API provisions ordinary queues, not RabbitMQ stream queues or
+exchange bindings.
+
+Adapters explicitly implement the optional Declarable, TaskSender and Requestable
+protocols in `Broker.Connection` (also exported from `Broker`). These three
+protocols support runtime capability checks so helpers can report unsupported
+operations. Other connection protocols remain static contracts. A normal Worker
+still requires only connect/close/consumer; declaration is optional.
+
+Completion hooks can forward work:
+
+```python
+class SendNext(RunComplete):
+	def __call__(
+		self,
+		context,
+		completion,
+	) -> None:
+		connection = Connection(Configuration(
+			host='127.0.0.1',
+			port=5672,
+			username='guest',
+			password='guest',
+		))
+		connection.connect()
+		try:
+			for record in completion:
+				send(
+					record,
+					task=Sample2,
+					broker=connection,
+				)
+		finally:
+			connection.close()
+```
+
+Here completion is an iterable of mappings. For one mapping, call send once
+instead. Use `completes=SendNext()` on the source Run. Both destinations must
+already be declared. Hooks execute inside the pool thread/process: open their
+producer connection there, never share the consumer connection or a live
+connection across processes/threads. For ProcessPool, hook and Run classes must
+be defined at module scope. Connections can be reused within a batch; reuse
+across multiple Runs can be managed by application PoolSetup/PoolCleanup hooks.
+Keep RabbitMQ heartbeats serviced during long idle/compute periods.
+
+Hook publication failures propagate as task failures and prevent success ACK.
+Earlier publications in a partially completed batch are not rolled back.
+Publication and source ACK are not atomic: retries/crashes may duplicate
+downstream messages, so recipients must be idempotent. Blocking requests from a
+hook to the same exhausted pool can deadlock until timeout; use separate
+capacity/workers for such dependencies.
+
 Workers receive a broker and a bounded execution pool. Register Run classes
 explicitly; importing or defining a Run does not register it globally.
 `EventContext`, `EventProperties`, `EventRunner`, worker `Factory`, `Invoker`,
@@ -297,6 +445,7 @@ and automatic module loading have been removed.
 
 ```python
 from PinkStream.Worker import (
+	declare,
 	Run,
 	ThreadPool,
 	Worker,
@@ -334,8 +483,11 @@ class DeclareQueues(WorkerSetup):
 			Connection,
 		):
 			raise TypeError('A RabbitMQ broker is required')
-		for run in worker.runs:
-			broker.create_queue(run.parameters.queue)
+		for task in worker.tasks:
+			declare(
+				task=task,
+				broker=broker,
+			)
 
 broker = Connection(Configuration(
 	host='127.0.0.1',
@@ -381,9 +533,12 @@ The separate `subscribe` method has been removed.
 RabbitMQ subscription settings can be a
 `Subscription(queue=..., offset=..., qos=..., error=None)`
 
-`error` optionally records a non-empty dead-letter queue name. It is metadata
-only for now: setting it does not declare queues, configure dead-letter routing,
-or change consumption/failure policies. Provision those separately.
+`error` optionally records a non-empty dead-letter queue name. Subscription
+itself does not provision resources. Explicit `declare(task=task, broker=connection)` (or
+`connection.declare(task.parameters)`) creates the DLQ and configures the source
+queue to dead-letter to it. `consumer.subs()` still never declares resources.
+Reject sends to the DLQ; Requeue does not. Existing queues with conflicting
+declaration arguments raise the broker error rather than being silently changed.
 or a dict with those fields. Unknown settings are rejected, not ignored.
 Set `qos` in each Run's subscription (mapped to RabbitMQ's `prefetch_count`) to limit its unacknowledged
 deliveries independently (`global_qos=False`). Omitted/None uses the Consumer's
@@ -444,7 +599,7 @@ by the scoped names above; there are no compatibility aliases.
 
 Pass `setups=` and `cleanups=` to Worker, ThreadPool, or ProcessPool. Each accepts
 a single hook or an ordered sequence. Worker setup hooks run after broker
-connection and before subscriptions; `worker.runs` contains the registered Run
+connection and before subscriptions; `worker.tasks` contains the registered Run
 classes. Use these hooks to declare queues/DLQs or check application dependencies.
 Worker cleanup hooks run after the pool has shut down and before the consumer
 and broker are closed, including when connection, setup, subscription, or
