@@ -1,0 +1,237 @@
+from queue import Queue as PyQueue
+from sys import stderr
+from typing import (
+	Any,
+	Callable,
+	Dict,
+	Optional,
+)
+
+from PinkStream.Broker import (
+	Connection as BaseConnection,
+	GetQueue,
+	GetConsumer,
+	Sendable,
+	Consumer as BaseConsumer,
+	Event as BaseEvent,
+	EventError,
+)
+from PinkStream.Broker.Event import EventHandler
+from PinkStream.Worker import (
+	Run,
+	ThreadPool,
+	Worker,
+	WorkerCleanup,
+	WorkerSetup,
+)
+
+
+class Queue(Sendable):
+	def __init__(self):
+		self.messages: PyQueue[Dict[str, Any]] = PyQueue()
+
+	def send(
+		self,
+		body: Dict[str, Any],
+	) -> None:
+		self.messages.put(body)
+
+
+class Broker(
+	BaseConnection,
+	GetQueue,
+	GetConsumer,
+):
+	def __init__(self):
+		self.connected = False
+		self.queues: Dict[str, Queue] = {}
+
+	def connect(self) -> None:
+		self.connected = True
+
+	def close(self) -> None:
+		self.connected = False
+
+	def queue(
+		self,
+		name: str,
+		**kwargs: Any,
+	) -> Queue:
+		if not self.connected:
+			raise RuntimeError('Broker is not connected')
+		if name not in self.queues:
+			self.queues[name] = Queue()
+		return self.queues[name]
+
+	def consumer(
+		self,
+		handler: Optional[EventHandler] = None,
+		**kwargs: Any,
+	) -> 'Consumer':
+		if not self.connected:
+			raise RuntimeError('Broker is not connected')
+		return Consumer(
+			self,
+			handler,
+		)
+
+class Event(BaseEvent):
+	def __init__(
+		self,
+		consumer: 'Consumer',
+		queue: Queue,
+		body: Dict[str, Any],
+	):
+		self.consumer = consumer
+		self.queue = queue
+		self.payload = body
+
+	@property
+	def body(self) -> Dict[str, Any]:
+		return self.payload
+
+	def ack(self) -> None:
+		self.consumer.pending -= 1
+
+	def nack(self) -> None:
+		self.queue.messages.put(self.body)
+		self.consumer.pending -= 1
+
+	def reject(self) -> None:
+		print(
+			f'Rejected: {self.body}',
+			file=stderr,
+		)
+		self.consumer.pending -= 1
+
+
+class Consumer(BaseConsumer):
+	def __init__(
+		self,
+		broker: Broker,
+		handler: Optional[EventHandler] = None,
+	):
+		self.broker = broker
+		self.handler = handler
+		self.handlers: Dict[str, EventHandler] = {}
+		self.callbacks: PyQueue[Callable[[], None]] = PyQueue()
+		self.pending = 0
+		self.running = False
+
+	def subs(
+		self,
+		queue: Any,
+		handler: Optional[EventHandler] = None,
+	) -> None:
+		name = queue if isinstance(
+			queue,
+			str,
+		) else queue['queue']
+		selected = handler if handler is not None else self.handler
+		if selected is None:
+			raise ValueError('A subscription handler is required')
+		if name in self.handlers:
+			raise ValueError('Queue is already subscribed')
+		self.broker.queue(name)
+		self.handlers[name] = selected
+
+	def call(
+		self,
+		callback: Callable[[], None],
+	) -> None:
+		self.callbacks.put(callback)
+
+	def fail(
+		self,
+		event: BaseEvent,
+		policy: Optional[EventError] = None,
+	) -> None:
+		if policy is None:
+			event.reject()
+		else:
+			policy(event)
+
+	def run(self) -> None:
+		self.running = True
+		while self.running:
+			if self.pending:
+				self.callbacks.get()()
+				continue
+			if not self.callbacks.empty():
+				self.callbacks.get_nowait()()
+				continue
+			for name, handler in self.handlers.items():
+				queue = self.broker.queues[name]
+				if not queue.messages.empty():
+					self.pending += 1
+					handler(Event(
+						self,
+						queue,
+						queue.messages.get_nowait(),
+					))
+					break
+			else:
+				self.stop()
+
+	def stop(self) -> None:
+		self.running = False
+
+	def close(self) -> None:
+		self.stop()
+
+
+class Add(
+	Run,
+	parameters={
+		'queue': 'add',
+	},
+):
+	def run(
+		self,
+		a: int,
+		b: int,
+	) -> None:
+		print(f'{a} + {b} = {a + b}')
+
+
+class Prepare(WorkerSetup):
+	def __call__(
+		self,
+		worker: Worker,
+	) -> None:
+		broker = worker.broker
+		if not isinstance(
+			broker,
+			Broker,
+		):
+			raise TypeError('The sample in-memory broker is required')
+		for run in worker.runs:
+			broker.queue(run.parameters['queue'])
+		queue = broker.queue('add')
+		queue.send({
+			'a': 1,
+			'b': 2,
+		})
+		queue.send({
+			'a': 3,
+			'b': 4,
+		})
+
+
+class Cleanup(WorkerCleanup):
+	def __call__(
+		self,
+		worker: Worker,
+	) -> None:
+		print('Worker cleanup')
+
+
+if __name__ == '__main__':
+	worker = Worker(
+		Broker(),
+		ThreadPool(1),
+		setups=Prepare(),
+		cleanups=Cleanup(),
+	)
+	worker.add(Add)
+	worker.run()
