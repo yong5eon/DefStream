@@ -24,6 +24,10 @@ dist/
 *.egg
 .Python
 
+# Local broker adapter links
+/src/Broker/Implements/*
+!/src/Broker/Implements/__init__.py
+
 # Operating system files
 .DS_Store
 Thumbs.db
@@ -53,4 +57,3 @@ tmp/
 
 # GitLab specific files
 .gitlab/
-
