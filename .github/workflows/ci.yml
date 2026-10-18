@@ -9,13 +9,91 @@ on:
 permissions:
   contents: read
 
+env:
+  RELEASE_SERIES: '0.1'
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Plan release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.changes.outputs.release }}
+      version: ${{ steps.changes.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up release planner Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Check complete push range and plan version
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+          RELEASE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        run: |
+          python - <<'PY'
+          from os import environ
+          from pathlib import Path
+          from re import fullmatch
+          from subprocess import check_output
+
+          if environ['RELEASE_PUSH'] != 'true':
+              with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+                  output.write('release=false\n')
+              raise SystemExit(0)
+          series = environ['RELEASE_SERIES']
+          if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)', series) is None:
+              raise ValueError(f'Invalid RELEASE_SERIES: {series!r}')
+          before = environ['BEFORE']
+          if not before:
+              raise ValueError('Missing push base commit')
+          first_push = set(before) == {'0'}
+          base = check_output(['git', 'hash-object', '-t', 'tree', '--stdin'], input='', text=True).strip() if first_push else before
+          changed = check_output(
+              ['git', 'diff', '--name-only', '--no-renames', base, environ['GITHUB_SHA'], '--', 'src/'],
+              text=True,
+          ).strip()
+          # Anchor to the pre-push history so a rerun ignores its own release tag.
+          tags = [] if first_push else check_output(['git', 'tag', '--merged', before], text=True).splitlines()
+          releases = []
+          for tag in tags:
+              match = fullmatch(r'v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:\.post\d+)?', tag)
+              if match and f'{int(match[1])}.{int(match[2])}' == series:
+                  releases.append(tuple(map(int, match.groups()[:3])) + (int(match[4] or 0),))
+          latest = max(releases) if releases else None
+          number = int(environ['GITHUB_RUN_NUMBER'])
+          if number < 1:
+              raise ValueError('Build number must be positive')
+          if latest is not None and number <= latest[3]:
+              raise ValueError('Build number must exceed the previous build; do not reset the workflow counter')
+          if changed:
+              patch = latest[2] + 1 if latest is not None else 0
+              print(f'Source changes:\n{changed}')
+          else:
+              if latest is None:
+                  raise ValueError(
+                      'No release tag in pre-push history for this series. '
+                      'Tag the exact source commit of the existing PyPI release before retrying.'
+                  )
+              patch = latest[2]
+              print('No src changes: keeping MAJOR.MINOR.PATCH and increasing BUILD')
+          version = f'{series}.{patch}.{number}'
+          print(f'Planned version: {version}')
+          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              output.write(f'release=true\nversion={version}\n')
+          PY
+
   test:
     name: Test Python ${{ matrix.python }}
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -56,6 +134,7 @@ jobs:
           repository: yong5eon/DefStream
           ref: ${{ github.event.repository.name == 'DefStream' && github.sha || 'master' }}
           path: packages/DefStream
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check out RabbitMQ adapter
@@ -64,6 +143,7 @@ jobs:
           repository: yong5eon/DefStream-RabbitMQ
           ref: ${{ github.event.repository.name == 'DefStream-RabbitMQ' && github.sha || 'master' }}
           path: packages/DefStream-RabbitMQ
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check out Redis adapter
@@ -72,6 +152,7 @@ jobs:
           repository: yong5eon/DefStream-Redis
           ref: ${{ github.event.repository.name == 'DefStream-Redis' && github.sha || 'master' }}
           path: packages/DefStream-Redis
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python
@@ -79,9 +160,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Record source commits and calculate version
+      - name: Record source commits and tag candidate locally
         env:
-          RELEASE_BUILD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          RELEASE_BUILD: ${{ needs.changes.outputs.release }}
+          RELEASE_VERSION: ${{ needs.changes.outputs.version }}
         run: |
           for package in packages/*; do
             echo "$package: $(git -C "$package" rev-parse HEAD)"
@@ -91,20 +173,27 @@ jobs:
           from os import environ
           from pathlib import Path
           from re import fullmatch
+          from subprocess import check_output, run
 
           project = environ['PROJECT']
           if project not in ('DefStream', 'DefStream-RabbitMQ', 'DefStream-Redis'):
               raise ValueError(f'Unexpected project: {project}')
-          path = Path('packages') / project / 'VERSION'
-          base = path.read_text(encoding='utf-8').strip()
-          match = fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', base)
-          if match is None:
-              raise ValueError(f'Expected major.minor.patch in VERSION, got {base!r}')
-          version = base
-          if environ['RELEASE_BUILD'] == 'true':
-              version = f'{match[1]}.{match[2]}.{environ["GITHUB_RUN_NUMBER"]}'
-              path.write_text(version + '\n', encoding='utf-8')
-          print(f'{project}: {base} -> {version}')
+          if environ['RELEASE_BUILD'] != 'true':
+              print('Test-only build: using the existing Git-derived development version.')
+              raise SystemExit(0)
+          version = environ['RELEASE_VERSION']
+          if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\.[1-9]\d*', version) is None:
+              raise ValueError(f'Invalid planned version: {version!r}')
+          path = Path('packages') / project
+          tag = version
+          tags = check_output(['git', '-C', str(path), 'tag', '--list', tag], text=True).strip()
+          if tags:
+              tagged = check_output(['git', '-C', str(path), 'rev-parse', f'{tag}^{{commit}}'], text=True).strip()
+              if tagged != environ['GITHUB_SHA']:
+                  raise RuntimeError(f'{tag} already points at another commit')
+          else:
+              run(['git', '-C', str(path), 'tag', tag, environ['GITHUB_SHA']], check=True)
+          print(f'{project}: local candidate {tag}')
           with Path(environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as summary:
               summary.write(f'## {project} {version}\n\nSource: `{environ["GITHUB_SHA"]}`\n')
           PY
@@ -147,7 +236,7 @@ jobs:
         run: node --test packages/DefStream/test/test_dashboard_ui.cjs
 
       - name: Preserve verified release distributions
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.python == '3.13'
+        if: needs.changes.outputs.release == 'true' && matrix.python == '3.13'
         uses: actions/upload-artifact@v7
         with:
           name: distributions
@@ -157,12 +246,21 @@ jobs:
 
   publish:
     name: Publish PyPI
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.changes.outputs.release == 'true'
+    needs: [changes, test]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: pypi
+    permissions:
+      contents: write
     steps:
+      - name: Check out release source for tagging
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: release-source
+          fetch-depth: 0
+
       - name: Download verified distributions
         uses: actions/download-artifact@v8
         with:
@@ -178,6 +276,7 @@ jobs:
         id: release
         env:
           PROJECT: ${{ github.event.repository.name }}
+          RELEASE_VERSION: ${{ needs.changes.outputs.version }}
         run: |
           python - <<'PY'
           from email.parser import BytesParser
@@ -199,6 +298,9 @@ jobs:
           if metadata['Name'] != project:
               raise ValueError(f'Unexpected distribution: {metadata["Name"]}')
           version = metadata['Version']
+          expected_version = environ['RELEASE_VERSION']
+          if version != expected_version:
+              raise ValueError(f'Expected {expected_version}, got {version}')
           try:
               with urlopen(f'https://pypi.org/pypi/{project}/{version}/json', timeout=30) as response:
                   release = load(response)
@@ -218,7 +320,24 @@ jobs:
               exists = True
           with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
               output.write(f'publish={str(not exists).lower()}\n')
+              output.write(f'version={version}\n')
           PY
+
+      - name: Record verified release tag
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          tag="$VERSION"
+          cd release-source
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            if [ "$(git rev-parse "$tag^{commit}")" != "$GITHUB_SHA" ]; then
+              echo "::error::$tag already points at another commit."
+              exit 1
+            fi
+          else
+            git tag "$tag" "$GITHUB_SHA"
+          fi
+          git push origin "refs/tags/$tag"
 
       - name: Install upload tool
         if: steps.release.outputs.publish == 'true'
@@ -235,3 +354,50 @@ jobs:
             exit 1
           fi
           python -m twine upload --non-interactive dist/*
+
+      - name: Publish GitHub Release with verified distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python - <<'PY'
+          from json import load
+          from os import environ
+          from pathlib import Path
+          from subprocess import run
+          from urllib.error import HTTPError
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
+
+          repository = environ['GITHUB_REPOSITORY']
+          version = environ['VERSION']
+          request = Request(
+              f'{environ["GITHUB_API_URL"]}/repos/{repository}/releases/tags/{quote(version, safe="")}',
+              headers={
+                  'Authorization': f'Bearer {environ["GH_TOKEN"]}',
+                  'Accept': 'application/vnd.github+json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+              },
+          )
+          try:
+              with urlopen(request, timeout=30) as response:
+                  release = load(response)
+          except HTTPError as error:
+              if error.code != 404:
+                  raise
+              run([
+                  'gh', 'release', 'create', version, '--repo', repository,
+                  '--verify-tag', '--title', version, '--generate-notes', '--draft',
+              ], check=True)
+          else:
+              if release['tag_name'] != version:
+                  raise ValueError('GitHub Release does not match the verified version')
+          artifacts = sorted(str(path) for path in Path('dist').iterdir() if path.is_file())
+          run([
+              'gh', 'release', 'upload', version, '--repo', repository,
+              '--clobber', *artifacts,
+          ], check=True)
+          run([
+              'gh', 'release', 'edit', version, '--repo', repository, '--draft=false',
+          ], check=True)
+          PY

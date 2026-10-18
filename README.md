@@ -6,7 +6,19 @@ The `CI` workflow runs on pull requests targeting `master` and pushes to
 `master`. Python 3.9 through 3.14 build the distributions, install the wheels in
 a clean virtual environment, and run this repository's tests against RabbitMQ
 4.1 and Redis 7.4 service containers. The core JavaScript UI tests also run.
-Only a successful `master` push can publish to PyPI.
+Every successful `master` push publishes to PyPI; PRs only run tests.
+Source additions,
+deletions, and renames are detected across the entire push range; the first
+push compares against an empty tree. A failed or unavailable base comparison
+fails the workflow rather than assuming that there were no source changes.
+Release versions and tags use `MAJOR.MINOR.PATCH.BUILD`, for example
+`0.1.3.123`. Changes to `src/**` increment PATCH by one; changes only to tests,
+documentation, samples, workflows, or `setup.py` keep MAJOR.MINOR.PATCH.
+BUILD is the Actions run number in both cases:
+`0.1.3.123` -> `0.1.3.124` (docs) -> `0.1.4.125` (source).
+The entire four-part value is the public PyPI version, not hidden metadata.
+Every upload has a distinct version; PyPI files are never overwritten.
+Older three-part and `v`-prefixed tags remain readable; new tags have no prefix.
 
 The workflow checks out the current repository's event commit and the other
 two `yong5eon/DefStream*` repositories at `master`, recording all commit IDs in
@@ -15,12 +27,48 @@ All three packages are built locally, so the first release does not depend on
 existing PyPI releases. This tests the source combination, not compatibility
 with previously published dependency versions.
 
-For a push, `VERSION` must contain `major.minor.patch`; the build replaces its
-patch component with `github.run_number` (for example, `0.1.0` becomes `0.1.42`
-on run 42). PR builds retain the checked-in version. No version commit, PR, or
-Git tag is created. Change the major/minor in `VERSION` when starting a new
-release series. Run numbers can have gaps; renaming/replacing this workflow or
-switching an existing package to this scheme requires checking for collisions.
+There is no `VERSION` or `pyproject.toml` file. `setup.py` declares
+`setuptools-scm` through `setup_requires` and configures the tag format.
+Build with `python -m build`, which resolves that build dependency in an
+isolated environment; the legacy declaration may emit a deprecation warning.
+`setuptools-scm` derives the package version from Git tags using full history.
+On every master push, CI creates a local candidate tag
+`<RELEASE_SERIES>.<PATCH>.<github.run_number>` (for example, `0.1.4.125`).
+`RELEASE_SERIES` is configured in the workflow; change it to start a new
+major/minor series. PATCH is calculated from the highest matching version tag
+in the pre-push history, increasing only when source files change.
+The planner uses tags reachable from the push's `before` commit so reruns do
+not accidentally base themselves on their own new tag. PR builds use the
+existing Git-derived development version without creating candidate tags.
+No version commit or version-update PR is created. A new release series starts
+at PATCH 0 on a source-changing push; non-source pushes require an existing
+matching release tag. Build counter regressions fail rather than uploading an
+older build. Legacy `.postN` tags are still accepted when determining PATCH;
+four-part numeric builds sort above post releases of a three-part base.
+
+After all tests pass, the publish job pushes the release tag to the exact
+tested commit, then uploads the verified distributions. A tag can therefore
+exist before a failed upload is retried; check PyPI or the job result for
+publication status. An existing tag on another commit is an error and is
+never overwritten. Run numbers can have gaps; check for collisions before
+renaming/replacing this workflow.
+
+After PyPI upload succeeds (or a rerun confirms the version is already fully
+published), CI creates a GitHub Release with the same version as its title and
+tag, automatically generated release notes, and the verified wheel and sdist
+as assets. New releases stay in draft until both assets are uploaded. If this
+step fails, rerun the workflow: it reuses the existing release and replaces
+matching assets with the verified files before publishing. A failed PyPI
+upload never proceeds to GitHub Release creation. PyPI's project links include
+the GitHub Releases page for change history. No additional GitHub token secret
+is needed; release creation uses the job's write-enabled `GITHUB_TOKEN`.
+
+Local release checkouts use their tag version. Commits after a tag produce
+development versions, and dirty trees get a local version suffix. Fetch tags
+with `git fetch --tags`; build from a Git checkout or the published sdist,
+not a GitHub source ZIP without Git metadata. The sdist carries the version
+in its package metadata and can be rebuilt without `.git`. Query installed
+versions with `importlib.metadata.version('DefStream')`.
 
 After every Python matrix entry passes, the publish job downloads the exact
 Python 3.13 distributions already built and tested. A fully published version
@@ -36,6 +84,9 @@ Before enabling automatic releases:
    appropriate PyPI project scope once the project exists. Never commit tokens.
 2. Configure the `pypi` environment to allow deployments only from `master`.
    Do not require manual approval if fully automatic deployment is desired.
+   Allow the workflow's `GITHUB_TOKEN` to write repository contents so the
+   publish job can create numeric version tags. Tag rulesets must permit this
+   workflow for four-part version tags.
 3. Protect `master`, require PRs, and require all six `Test Python 3.x` checks.
    Do not require `Publish PyPI`, which intentionally does not run on PRs.
 4. Keep the workflow filename/name stable and review changes to workflows and
@@ -43,6 +94,15 @@ Before enabling automatic releases:
 
 Dependencies still need to be published before end users can install adapters
 from PyPI. For the initial release, publish DefStream before its adapters.
+Before migrating to SCM versions, tag each already published release's exact
+source commit as `<its-PyPI-version>` and push those tags. Do not point a
+release tag at an unrelated newer commit. The shared CI builds sibling
+`master` sources: an untagged SCM dependency can resolve to `0.1.dev...`, below
+its required minimum. These initial tags supply the starting PATCH when
+migration changes no source files. For example, tag the commit used to publish
+`0.1.3` as `0.1.3`; a later docs-only run 123 produces `0.1.3.123`.
+This tag is a historical source/version link, not a source edit or a new PyPI
+upload. Never invent that link by tagging an arbitrary current commit.
 
 **Just def.**<br>
 **Let workers do the work.**<br>

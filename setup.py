@@ -29,8 +29,14 @@ setup(
 	project_urls={
 		'Source': 'https://github.com/yong5eon/DefStream',
 		'Issues': 'https://github.com/yong5eon/DefStream/issues',
+		'Releases': 'https://github.com/yong5eon/DefStream/releases',
 	},
-	version=Path('VERSION').read_text(encoding='utf-8').strip(),
+	use_scm_version={
+		'tag_regex': r'^v?(?P<version>[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:(?:rc|\.post)[0-9]+)?)$',
+	},
+	setup_requires=[
+		'setuptools-scm>=8,<10',
+	],
 	packages=PACKAGES,
 	package_dir=PACKAGE_DIR,
 	include_package_data=False,
