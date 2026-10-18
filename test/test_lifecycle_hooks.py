@@ -6,6 +6,10 @@ from os import (
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import get_ident
+from time import (
+	monotonic,
+	sleep,
+)
 from unittest import (
 	TestCase,
 	main,
@@ -74,6 +78,22 @@ class IdentityRun(Run):
 		return identity()
 
 
+class ConcurrentIdentityRun(Run):
+	def run(
+		self,
+		directory,
+	):
+		current = identity()
+		path = Path(directory)
+		(path / (current + '.ready')).touch()
+		deadline = monotonic() + 15
+		while len(list(path.glob('*.ready'))) < 3:
+			if monotonic() >= deadline:
+				raise TimeoutError('Three pool execution environments did not start')
+			sleep(0.01)
+		return current
+
+
 class CrashRun(Run):
 	def run(self):
 		_exit(1)
@@ -97,19 +117,28 @@ class LifecycleTests(TestCase):
 		):
 			with self.subTest(pool=pool_class), TemporaryDirectory() as directory:
 				children = {child.pid for child in active_children()}
+				ready = Path(directory) / 'ready'
+				ready.mkdir()
 				pool = pool_class(
 					3,
 					setups=TraceSetup(directory),
 					cleanups=TraceCleanup(directory),
 				)
-				futures = [
-					pool.submit(
-						IdentityRun,
-						{},
-					)
-					for index in range(3)
-				]
-				pool.stop()
+				try:
+					futures = [
+						pool.submit(
+							ConcurrentIdentityRun,
+							{'directory': str(ready)},
+						)
+						for index in range(3)
+					]
+					identities = {future.result(timeout=30) for future in futures}
+				finally:
+					pool.stop()
+				self.assertEqual(
+					len(identities),
+					3,
+				)
 				self.assertEqual(
 					{child.pid for child in active_children()} - children,
 					set(),
@@ -117,6 +146,7 @@ class LifecycleTests(TestCase):
 				traces = {
 					path.name: path.read_text(encoding='utf-8').splitlines()
 					for path in Path(directory).iterdir()
+					if path.is_file()
 				}
 				self.assertEqual(
 					len(traces),
