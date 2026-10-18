@@ -1,6 +1,6 @@
 # Sample for EventBroker
 
-from PinkStream.Broker import (
+from DefStream.Broker import (
 	Configuration as BaseConfiguration,
 	Connection as BaseConnection,
 	GetExchange,
@@ -9,7 +9,7 @@ from PinkStream.Broker import (
 	Sendable,
 	Consumer as BaseConsumer,
 )
-from PinkStream.Broker.Event import EventHandler
+from DefStream.Broker.Event import EventHandler
 
 from queue import (
 	SimpleQueue,

@@ -101,7 +101,7 @@ class Connection(
 	def queue(
 		self,
 		name: str,
-		group: str = 'PinkStream',
+		group: str = 'DefStream',
 	) -> Queue:
 		return Queue(
 			self.connected(),
@@ -114,7 +114,7 @@ class Connection(
 	def stream(
 		self,
 		name: str,
-		group: str = 'PinkStream',
+		group: str = 'DefStream',
 	) -> Queue:
 		return self.queue(
 			name,
@@ -139,7 +139,7 @@ class Connection(
 	def create_queue(
 		self,
 		name: str,
-		group: str = 'PinkStream',
+		group: str = 'DefStream',
 	) -> None:
 		self.queue(
 			name,
@@ -155,7 +155,7 @@ class Connection(
 	def create_stream(
 		self,
 		name: str,
-		group: str = 'PinkStream',
+		group: str = 'DefStream',
 	) -> None:
 		self.create_queue(
 			name,

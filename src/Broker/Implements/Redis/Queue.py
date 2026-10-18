@@ -42,7 +42,7 @@ class Queue(
 		encode: Encoder,
 		decode: Decoder,
 		name: str,
-		group: str = 'PinkStream',
+		group: str = 'DefStream',
 	):
 		self.subscription = Subscription(
 			name,

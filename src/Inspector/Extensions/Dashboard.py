@@ -24,7 +24,7 @@ class Dashboard(Extension):
 		self,
 		path: str,
 		*,
-		title: str = 'PinkStream',
+		title: str = 'DefStream',
 		description: Optional[str] = None,
 	):
 		super().__init__(path)

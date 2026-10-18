@@ -10,7 +10,7 @@ __all__ = (
 @dataclass(frozen=True)
 class Subscription:
 	queue: str
-	group: str = 'PinkStream'
+	group: str = 'DefStream'
 
 	def __post_init__(self) -> None:
 		for value in (

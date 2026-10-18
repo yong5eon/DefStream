@@ -1,6 +1,6 @@
-# Sample for PinkStream.Broker.Implements.RabbitMQ
+# Sample for DefStream.Broker.Implements.RabbitMQ
 
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection as RabbitConnection,
 	Configuration,
 	Event,

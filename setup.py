@@ -7,7 +7,7 @@ from setuptools import (
 	setup,
 )
 
-PACKAGE = 'PinkStream'
+PACKAGE = 'DefStream'
 SOURCE = 'src'
 PACKAGES = [PACKAGE]
 PACKAGE_DIR = {PACKAGE: SOURCE}
@@ -20,7 +20,7 @@ for package in find_packages(SOURCE):
 	)
 
 setup(
-	name='PinkStream',
+	name='DefStream',
 	description='Synchronous message processing with broker adapters',
 	long_description=Path('README.md').read_text(encoding='utf-8'),
 	long_description_content_type='text/markdown',
@@ -30,7 +30,7 @@ setup(
 	package_dir=PACKAGE_DIR,
 	include_package_data=False,
 	package_data={
-		'PinkStream.Inspector.Extensions': [
+		'DefStream.Inspector.Extensions': [
 			'Console.html',
 			'Dashboard.html',
 		],

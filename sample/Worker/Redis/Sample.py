@@ -4,21 +4,21 @@ from signal import (
 	signal,
 )
 
-from PinkStream.Broker.Implements.Redis import (
+from DefStream.Broker.Implements.Redis import (
 	Connection,
 	Configuration,
 	Reject,
 	Subscription,
 )
-from PinkStream.Inspector import Inspector
-from PinkStream.Inspector.Extensions import (
+from DefStream.Inspector import Inspector
+from DefStream.Inspector.Extensions import (
 	HealthCheck,
 	Metrics,
 	Specifications,
 	Console,
 	Dashboard,
 )
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	declare,
 	send,
 	Run,
@@ -114,15 +114,15 @@ def main() -> None:
 				Metrics('/metrics'),
 				Dashboard(
 					'/dashboard',
-					title='PinkStream using Redis Sample',
-					description='A sample PinkStream worker using Redis as the broker',
+					title='DefStream using Redis Sample',
+					description='A sample DefStream worker using Redis as the broker',
 				),
 				Specifications('/spec'),
 				Console(
 					'/console',
 					broker=lambda: Connection(Configuration()),
-					title='PinkStream using Redis Sample',
-					description='A sample PinkStream worker using Redis as the broker',
+					title='DefStream using Redis Sample',
+					description='A sample DefStream worker using Redis as the broker',
 				),
 			),
 		),

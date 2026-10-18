@@ -3,8 +3,8 @@ from sys import stderr
 from threading import Event as PyEvent
 from uuid import uuid4
 
-from PinkStream.Broker import RemoteError
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker import RemoteError
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 	Consumer,
@@ -86,7 +86,7 @@ if __name__ == '__main__':
 		password='guest',
 	)
 	broker = Connection(configuration)
-	name = 'pinkstream-rpc-sample-' + uuid4().hex
+	name = 'defstream-rpc-sample-' + uuid4().hex
 	ready = PyEvent()
 	stopping = PyEvent()
 	created_queue = False

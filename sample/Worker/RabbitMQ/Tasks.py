@@ -1,25 +1,25 @@
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker.Implements.RabbitMQ import (
 	Reject,
 	Requeue,
 	Subscription,
 )
-from PinkStream.Descriptor import (
+from DefStream.Descriptor import (
 	Integer,
 	Number,
 	Object,
 	Properties,
 )
-from PinkStream.Validator import Validator
-from PinkStream.Validator.Patterns import (
+from DefStream.Validator import Validator
+from DefStream.Validator.Patterns import (
 	IsInteger,
 	IsNumber,
 	IsObject,
 )
-from PinkStream.Validator.Patterns.Object import (
+from DefStream.Validator.Patterns.Object import (
 	IsMappingOf,
 	IsRequiredIn,
 )
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	Run,
 	Specification,
 )

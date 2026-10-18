@@ -87,7 +87,7 @@ class Console(Extension):
 		broker: Callable[[], Producer],
 		token: Optional[str] = None,
 		timeout: float = 5,
-		title: str = 'PinkStream',
+		title: str = 'DefStream',
 		description: Optional[str] = None,
 	):
 		super().__init__(path)

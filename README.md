@@ -1,24 +1,35 @@
-# PinkStream
+# DefStream
+
+**Just def.**<br>
+**Let workers do the work.**<br>
+**You don't need to await this.**
 
 ## Installation
 
 ```shell
-pip install PinkStream
-pip install "PinkStream[RabbitMQ]"
-pip install "PinkStream[Redis]"
-pip install "PinkStream[RabbitMQ,Redis]"
+pip install DefStream
+pip install "DefStream[RabbitMQ]"
+pip install "DefStream[Redis]"
+pip install "DefStream[RabbitMQ,Redis]"
 ```
 
 The base package has no broker client dependencies. Extras install `pika` and/or
 `redis`; adapter source files are always included. Import only the adapters whose
 extras are installed. For development, use `pip install -e ".[RabbitMQ,Redis]"`.
 
+The project is now named DefStream. Distribution/import names use `DefStream`,
+Prometheus metric names use `defstream_`, and integration-test environment
+variables use `DEFSTREAM_`. Redis's default consumer group is now `DefStream`;
+when continuing an existing deployment, explicitly keep its previous group name
+to preserve consumer-group position and pending messages. Queue names explicitly
+configured by applications are unchanged.
+
 ```python
-from PinkStream.Worker import Worker
-from PinkStream.Broker.Implements.RabbitMQ import Connection as RabbitConnection
+from DefStream.Worker import Worker
+from DefStream.Broker.Implements.RabbitMQ import Connection as RabbitConnection
 ```
 
-There is no combined `PinkStream.Broker.Broker` interface. Implementations expose
+There is no combined `DefStream.Broker.Broker` interface. Implementations expose
 a concrete `Connection` class without a `Broker` compatibility alias.
 
 Create broker connections directly with the implementation's configuration and
@@ -32,8 +43,8 @@ RabbitMQ resource methods use snake_case: `create_exchange`, `delete_exchange`,
 
 ## Connection capabilities
 
-`PinkStream.Broker.Connection` defines independent `typing.Protocol` contracts,
-also exported from `PinkStream.Broker`. Implementations explicitly inherit only
+`DefStream.Broker.Connection` defines independent `typing.Protocol` contracts,
+also exported from `DefStream.Broker`. Implementations explicitly inherit only
 the capabilities they provide:
 
 | Protocol | Contract | RabbitMQ | Redis |
@@ -60,7 +71,7 @@ optional settings. The contracts intentionally do not promise arbitrary
 `**kwargs`. Missing connection/factory implementations prevent instantiation of
 explicit subclasses through `@abstractmethod`.
 
-`PinkStream.Worker.WorkerConnection` composes only Connection and
+`DefStream.Worker.WorkerConnection` composes only Connection and
 GetConsumer. Worker does not require queues, streams or exchanges.
 Application connections can inherit these protocols explicitly or satisfy them
 structurally without inheritance. Protocols are for static checking, not
@@ -75,8 +86,8 @@ base classes or introduce new contracts for every callable.
 
 ## Message capabilities
 
-Common message I/O contracts now live in `PinkStream.Broker.Protocol` and are
-also exported from `PinkStream.Broker`:
+Common message I/O contracts now live in `DefStream.Broker.Protocol` and are
+also exported from `DefStream.Broker`:
 
 | Protocol | Operation | Timeout |
 | --- | --- | --- |
@@ -93,7 +104,7 @@ Exchange is Sendable/Callable, Queue is Sendable/Callable/Poppable, and Stream i
 Sendable/Readable. If `typing.Callable` is needed alongside the message
 `Callable`, import the typing symbol as `PyCallable`.
 `Event`, `EventHandler`, and `EventError` live together in `Broker.Event`
-and are exported from `PinkStream.Broker`. EventHandler is a Protocol with
+and are exported from `DefStream.Broker`. EventHandler is a Protocol with
 `__call__(event: Event) -> None`; explicitly inheriting handlers must implement
 it. The former standalone `Broker.EventHandler` module has been removed.
 `EventError` is a failure-policy contract, not an I/O capability.
@@ -163,7 +174,7 @@ An unavailable request queue raises Pika's UnroutableError instead of waiting.
 Requeue sends no final response, allowing retry. When the selected EventError
 calls reject(), the server sends an error envelope before rejecting the request
 (and preserving configured dead-letter routing). The client raises
-`PinkStream.Broker.RemoteError` with code `ProcessingError` and a generic message;
+`DefStream.Broker.RemoteError` with code `ProcessingError` and a generic message;
 server exception details stay in server logs. Custom EventError implementations
 must settle via the supplied event's ack/nack/reject methods.
 
@@ -193,7 +204,7 @@ The Redis adapter uses Redis Streams, not Pub/Sub or lists. Install the Redis
 extra and use Redis 6.2 or newer (including `XAUTOCLAIM` support):
 
 ```python
-from PinkStream.Broker.Implements.Redis import (
+from DefStream.Broker.Implements.Redis import (
 	Connection,
 	Configuration,
 )
@@ -247,7 +258,7 @@ stream-ID strings, such as `'1720000000000-0'`; the offset is exclusive.
 History reads do not participate in consumer groups, so their events cannot be
 acknowledged/requeued. Closing the iterator stops reading.
 
-Workers accept `Subscription(queue='add', group='PinkStream')` from the Redis
+Workers accept `Subscription(queue='add', group='DefStream')` from the Redis
 adapter; a queue-name string or equivalent mapping also works. Consumers within
 one group compete for messages; separate groups each receive the stream.
 `broker.consumer(qos=1)` limits total unacknowledged local deliveries across all
@@ -288,7 +299,7 @@ requeue. Other divisors are random and may also be zero. Successful messages
 continue processing. It runs until Ctrl+C, then drains work and runs Cleanup.
 Cleanup logs completion without deleting shared queues or stream history.
 You can publish more `{'a': 10, 'b': 20}` messages from another process.
-Enable the real Redis integration tests with `PINKSTREAM_REDIS_TESTS=1`; they use
+Enable the real Redis integration tests with `DEFSTREAM_REDIS_TESTS=1`; they use
 localhost:6379 and create/delete only uniquely named test streams.
 
 ## Workers
@@ -302,12 +313,12 @@ An occupied HTTP port fails Worker startup explicitly. Inspector is optional;
 workers without one keep their existing behavior.
 
 ```python
-from PinkStream.Inspector import Inspector
-from PinkStream.Inspector.Extensions import (
+from DefStream.Inspector import Inspector
+from DefStream.Inspector.Extensions import (
 	HealthCheck,
 	Metrics,
 )
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
@@ -339,9 +350,9 @@ worker.run()
   a stalled consumer's callback queue.
 - `GET /metrics` returns Prometheus text format, **200 even when not ready**,
   so failures and shutdown can still be observed. Metrics include
-  `pinkstream_worker_running`, `pinkstream_worker_uptime_seconds`,
-  `pinkstream_tasks_active`, `pinkstream_tasks_total` (success/failure), and
-  `pinkstream_task_duration_seconds` (summary count/sum). The running gauge
+  `defstream_worker_running`, `defstream_worker_uptime_seconds`,
+  `defstream_tasks_active`, `defstream_tasks_total` (success/failure), and
+  `defstream_task_duration_seconds` (summary count/sum). The running gauge
   describes lifecycle state; use `/status` for the responsiveness probe.
   Task labels use module-qualified class names; no message body/ID is exposed.
   Counters describe completed execution attempts, including retries and hooks,
@@ -353,8 +364,8 @@ worker.run()
   Extensions default to GET/HEAD; request-aware extensions can declare `methods`
   and override `handle(inspector, environ)` without changing existing endpoints.
   Additional endpoints can inherit `Extension` and return `Response`, both
-  exported from `PinkStream.Inspector`. Built-in extensions are exported from
-  `PinkStream.Inspector.Extensions`.
+  exported from `DefStream.Inspector`. Built-in extensions are exported from
+  `DefStream.Inspector.Extensions`.
 - Each extension owns its behavior and state: HealthCheck owns the consumer
   probe, lock and timeout; Metrics owns counters, execution timing and output.
   Inspector owns only HTTP serving, Worker attachment, routing and event
@@ -386,7 +397,7 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 CMD pytho
 Register `Dashboard` together with exactly one `Metrics` extension:
 
 ```python
-from PinkStream.Inspector.Extensions import (
+from DefStream.Inspector.Extensions import (
 	Dashboard,
 	Metrics,
 )
@@ -395,7 +406,7 @@ inspector = Inspector(exts=(
 	Metrics('/metrics'),
 	Dashboard(
 		'/dashboard',
-		title='PinkStream',
+		title='DefStream',
 		description='Worker activity',
 	),
 ))
@@ -404,7 +415,7 @@ inspector = Inspector(exts=(
 Open `/dashboard` for a lightweight, dependency-free status page. Both Worker
 samples register this route. The page reads the existing Metrics collector;
 there is no second collector, broker connection or server-side history.
-`title` defaults to `PinkStream`; optional `description` is the subtitle.
+`title` defaults to `DefStream`; optional `description` is the subtitle.
 HTML changes take effect on refresh without restarting.
 
 - Shows worker lifecycle, uptime, in-flight submissions, cumulative success
@@ -434,10 +445,10 @@ HTML changes take effect on refresh without restarting.
   exclusive end of both windows. Metrics keeps at most 61 one-second buckets per
   task (including the current incomplete second), not individual completion
   records. Pending submission timestamps are retained only until completion.
-  Prometheus also exposes `pinkstream_tasks_window` by `window_seconds`/`outcome`,
-  `pinkstream_task_window_duration_seconds_sum`,
-  `pinkstream_task_window_duration_seconds_max`, and
-  `pinkstream_task_oldest_active_seconds`. No p95 is collected.
+  Prometheus also exposes `defstream_tasks_window` by `window_seconds`/`outcome`,
+  `defstream_task_window_duration_seconds_sum`,
+  `defstream_task_window_duration_seconds_max`, and
+  `defstream_task_oldest_active_seconds`. No p95 is collected.
   Prometheus and Dashboard use the same lock-protected snapshot.
 - Like Metrics, Dashboard is unauthenticated. Restrict access at the application,
   network or proxy layer. It shows one Worker only, resets on restart, and is
@@ -445,7 +456,7 @@ HTML changes take effect on refresh without restarting.
 
 ### Request/response specifications
 
-`PinkStream.Descriptor` and `PinkStream.Validator` reuse the local Liquirizia
+`DefStream.Descriptor` and `DefStream.Validator` reuse the local Liquirizia
 Description/Validator APIs under the repository's GPLv3 license. Descriptor has
 **no DataModel dependency**: manual schemas and dataclass `ToSchema`/`ToObject`
 remain available. The original temporary sources are unchanged. Existing names
@@ -453,21 +464,21 @@ and implementation style are retained in the ported modules to minimize drift.
 DataModel-only conversions and `IsDataModel` are not included.
 
 ```python
-from PinkStream.Descriptor import (
+from DefStream.Descriptor import (
 	Integer,
 	Object,
 	Properties,
 )
-from PinkStream.Validator import Validator
-from PinkStream.Validator.Patterns import (
+from DefStream.Validator import Validator
+from DefStream.Validator.Patterns import (
 	IsInteger,
 	IsObject,
 )
-from PinkStream.Validator.Patterns.Object import (
+from DefStream.Validator.Patterns.Object import (
 	IsMappingOf,
 	IsRequiredIn,
 )
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	Run,
 	Specification,
 )
@@ -543,7 +554,7 @@ supports functions without defaults and positional-only arguments.
 ### AsyncAPI JSON
 
 ```python
-from PinkStream.Inspector.Extensions import Specifications
+from DefStream.Inspector.Extensions import Specifications
 
 # Add to Inspector(exts=(...)).
 specifications = Specifications(
@@ -607,8 +618,8 @@ The bundled HTML is read on each page request with caching disabled. Editing
 Python code and task contract changes still require a restart.
 
 ```python
-from PinkStream.Inspector.Extensions import Console
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Inspector.Extensions import Console
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 )
@@ -625,13 +636,13 @@ def create_connection() -> Connection:
 console = Console(
 	'/console',
 	broker=create_connection,
-	title='PinkStream',
+	title='DefStream',
 	description='Task contracts & interactive messaging',
 	timeout=5,
 )
 ```
 
-`Console.title` defaults to `PinkStream` and sets both the HTML document title
+`Console.title` defaults to `DefStream` and sets both the HTML document title
 and header name without a suffix. Optional `description` is the subtitle;
 omitting it hides the subtitle. Both values are escaped as plain text.
 After loading tasks, the document version is displayed beneath the subtitle.
@@ -639,7 +650,7 @@ Console uses the first registered `Specifications` extension, including its
 version, description and media type settings. Without one, it generates a
 default document with version `1.0.0`.
 Inspector has no `name` option: health responses contain status only, metrics
-have no worker-name label, and Specifications uses `PinkStream` as its info title.
+have no worker-name label, and Specifications uses `DefStream` as its info title.
 
 The factory must return a **new, independently owned producer connection**
 on every call, never the Worker's consumer connection or a shared singleton.
@@ -687,7 +698,7 @@ responsibility.
 
 ### Task-directed messages and declarations
 
-`declare`, `send` and `request` are exported from `PinkStream.Worker`. They resolve the
+`declare`, `send` and `request` are exported from `DefStream.Worker`. They resolve the
 destination from a concrete Run class's `parameters`; the sending application
 does not need a Worker or global task registry. Bodies must be mappings with
 string keys, matching `run(**body)`. A scalar Run result must be wrapped in a
@@ -698,12 +709,12 @@ connects, declares destinations, nor closes the passed connection, including on
 failure. One connection can publish many records:
 
 ```python
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	declare,
 	send,
 	request,
 )
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 )
@@ -836,14 +847,14 @@ explicitly; importing or defining a Run does not register it globally.
 and automatic module loading have been removed.
 
 ```python
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	declare,
 	Run,
 	ThreadPool,
 	Worker,
 	WorkerSetup,
 )
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 	Subscription,
@@ -958,9 +969,9 @@ duplicates. `NoAck` is not a failure policy.
 
 Run classes also accept `setups`, `completes`, and `errors`, each as a single
 hook or an ordered sequence. The `RunSetup`, `RunComplete`, `RunError`,
-and `Context` interfaces are exported from `PinkStream.Worker`.
+and `Context` interfaces are exported from `DefStream.Worker`.
 `errors` contains execution-error hooks (`RunError`), while `on_error` selects
-the failed-event policy (`EventError`, exported from `PinkStream.Broker`).
+the failed-event policy (`EventError`, exported from `DefStream.Broker`).
 These are separate responsibilities: error hooks run in the pool, then the
 event policy runs on the connection owner thread. The former `FailurePolicy`
 and `error_policy` names have been replaced by `EventError` and `on_error`.
@@ -977,7 +988,7 @@ policy applied on the connection thread. Pool capacity remains occupied until
 hooks finish. Hooks used with ProcessPool must also be picklable.
 ### Lifecycle hooks
 
-All hook interfaces are exported from `PinkStream.Worker`:
+All hook interfaces are exported from `DefStream.Worker`:
 
 | Scope | Hooks | Arguments |
 | --- | --- | --- |
@@ -985,7 +996,7 @@ All hook interfaces are exported from `PinkStream.Worker`:
 | Pool | `PoolSetup`, `PoolCleanup` | No arguments; executed inside each pool thread/process |
 | Worker | `WorkerSetup`, `WorkerCleanup` | The Worker instance |
 
-`Runner` has been renamed to `Run`, in the `PinkStream.Worker.Run` module.
+`Runner` has been renamed to `Run`, in the `DefStream.Worker.Run` module.
 The old `Setup`, `Complete`, `Error`, and `Initializer` names have been replaced
 by the scoped names above; there are no compatibility aliases.
 
@@ -1019,7 +1030,7 @@ Pool environment failures fail outstanding Futures and are also raised by
 Cleanup cannot be guaranteed after forced termination or a process crash.
 
 Broker confirmations run on the connection owner thread, not pool threads.
-`PinkStream.Broker.Event` is the common event contract (`body`, `ack`, `nack`,
+`DefStream.Broker.Event` is the common event contract (`body`, `ack`, `nack`,
 `reject`); RabbitMQ's `Event` implements it and retains its broker metadata.
 Worker and failure policies use this contract; there is no separate `Delivery`.
 Only the Run instance and body are sent to ProcessPool children; Run classes
@@ -1033,7 +1044,7 @@ runs WorkerCleanup, and closes broker resources. The library does not replace
 the application's parent-side signal handler.
 
 Run unit tests with `python -m unittest discover -s test -p "test_*.py"`.
-To include local RabbitMQ integration tests, set `PINKSTREAM_RABBITMQ_TESTS=1`
+To include local RabbitMQ integration tests, set `DEFSTREAM_RABBITMQ_TESTS=1`
 first. They use `127.0.0.1:5672` with guest credentials and create/delete only
 uniquely named test queues.
 
@@ -1056,20 +1067,20 @@ unless a Worker setup provisions them.
 
 Sources remain in `src/Worker` and `src/Broker`. On Windows, install the package
 into the workspace virtual environment, then create a directory junction named
-`PinkStream` in its `site-packages` directory:
+`DefStream` in its `site-packages` directory:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e .
 New-Item -ItemType Junction `
-  -Path .\.venv\Lib\site-packages\PinkStream `
+  -Path .\.venv\Lib\site-packages\DefStream `
   -Target (Resolve-Path .\src).Path
 ```
 
 Select that virtual environment as VS Code's Python interpreter. Python and
-Pylance can resolve `PinkStream` directly through the junction, without extra
+Pylance can resolve `DefStream` directly through the junction, without extra
 search paths or a generated build tree.
 
 Source edits and added or removed modules are reflected without reinstalling.
 Reinstall after changing package metadata or dependencies. Recreate the junction
 when recreating the virtual environment or moving the source directory; do not
-create it over an existing `PinkStream` directory.
+create it over an existing `DefStream` directory.

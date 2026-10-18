@@ -6,12 +6,12 @@ from Tasks import (
 	Divide,
 )
 
-from PinkStream.Broker import RemoteError
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker import RemoteError
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 )
-from PinkStream.Worker import request
+from DefStream.Worker import request
 
 
 if __name__ == '__main__':

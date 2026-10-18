@@ -9,19 +9,19 @@ from Tasks import (
 	Divide,
 )
 
-from PinkStream.Broker.Implements.RabbitMQ import (
+from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Configuration,
 )
-from PinkStream.Inspector import Inspector
-from PinkStream.Inspector.Extensions import (
+from DefStream.Inspector import Inspector
+from DefStream.Inspector.Extensions import (
 	HealthCheck,
 	Metrics,
 	Specifications,
 	Console,
 	Dashboard,
 )
-from PinkStream.Worker import (
+from DefStream.Worker import (
 	declare,
 	send,
 	ProcessPool,
@@ -92,8 +92,8 @@ if __name__ == '__main__':
 				Metrics('/metrics'),
 				Dashboard(
 					'/dashboard',
-					title='PinkStream using RabbitMQ Sample',
-					description='A sample PinkStream worker using RabbitMQ as the broker',
+					title='DefStream using RabbitMQ Sample',
+					description='A sample DefStream worker using RabbitMQ as the broker',
 				),
 				Specifications('/spec'),
 				Console(
@@ -104,8 +104,8 @@ if __name__ == '__main__':
 						username='guest',
 						password='guest',
 					)),
-					title='PinkStream using RabbitMQ Sample',
-					description='A sample PinkStream worker using RabbitMQ as the broker',
+					title='DefStream using RabbitMQ Sample',
+					description='A sample DefStream worker using RabbitMQ as the broker',
 				),
 			),
 		),

@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from PinkStream.Broker.Implements.Redis import (
+from DefStream.Broker.Implements.Redis import (
 	Connection,
 	Configuration,
 )
@@ -8,7 +8,7 @@ from PinkStream.Broker.Implements.Redis import (
 
 def main() -> None:
 	broker = Connection(Configuration())
-	name = 'pinkstream-stream-sample-' + uuid4().hex
+	name = 'defstream-stream-sample-' + uuid4().hex
 	try:
 		broker.connect()
 		stream = broker.stream(name)

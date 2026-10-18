@@ -7,7 +7,7 @@ from typing import (
 	Optional,
 )
 
-from PinkStream.Broker import (
+from DefStream.Broker import (
 	Connection as BaseConnection,
 	GetQueue,
 	GetConsumer,
@@ -16,8 +16,8 @@ from PinkStream.Broker import (
 	Event as BaseEvent,
 	EventError,
 )
-from PinkStream.Broker.Event import EventHandler
-from PinkStream.Worker import (
+from DefStream.Broker.Event import EventHandler
+from DefStream.Worker import (
 	Run,
 	ThreadPool,
 	Worker,
