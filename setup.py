@@ -25,6 +25,11 @@ setup(
 	long_description=Path('README.md').read_text(encoding='utf-8'),
 	long_description_content_type='text/markdown',
 	author='Heo Yongseon',
+	url='https://github.com/yong5eon/DefStream',
+	project_urls={
+		'Source': 'https://github.com/yong5eon/DefStream',
+		'Issues': 'https://github.com/yong5eon/DefStream/issues',
+	},
 	version=Path('VERSION').read_text(encoding='utf-8').strip(),
 	packages=PACKAGES,
 	package_dir=PACKAGE_DIR,
