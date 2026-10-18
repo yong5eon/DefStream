@@ -1,4 +1,5 @@
 from http.client import HTTPConnection
+from importlib import import_module
 from contextlib import nullcontext
 from io import BytesIO
 from json import (
@@ -273,7 +274,10 @@ class ConsoleExtensionTests(TestCase):
 		)
 
 	def test_html_is_read_again_on_each_refresh(self):
-		with patch('DefStream.Inspector.Extensions.Console.files') as resources:
+		with patch.object(
+			import_module('DefStream.Inspector.Extensions.Console'),
+			'files',
+		) as resources:
 			resource = resources.return_value.joinpath.return_value
 			resource.read_bytes.side_effect = [
 				b'<body data-auth-required="true">First</body>',

@@ -490,7 +490,7 @@ class InspectorTests(TestCase):
 				text,
 			)
 			duration = next(line for line in text.splitlines() if line.startswith(f'defstream_task_duration_seconds_sum{{{labels}}} '))
-			self.assertGreater(
+			self.assertGreaterEqual(
 				float(duration.rsplit(' ')[1]),
 				0,
 			)

@@ -1,5 +1,49 @@
 # DefStream
 
+## CI and PyPI releases
+
+The `CI` workflow runs on pull requests targeting `master` and pushes to
+`master`. Python 3.9 through 3.14 build the distributions, install the wheels in
+a clean virtual environment, and run this repository's tests against RabbitMQ
+4.1 and Redis 7.4 service containers. The core JavaScript UI tests also run.
+Only a successful `master` push can publish to PyPI.
+
+The workflow checks out the current repository's event commit and the other
+two `yong5eon/DefStream*` repositories at `master`, recording all commit IDs in
+the log. Those repositories must be accessible and have a `master` branch.
+All three packages are built locally, so the first release does not depend on
+existing PyPI releases. This tests the source combination, not compatibility
+with previously published dependency versions.
+
+For a push, `VERSION` must contain `major.minor.patch`; the build replaces its
+patch component with `github.run_number` (for example, `0.1.0` becomes `0.1.42`
+on run 42). PR builds retain the checked-in version. No version commit, PR, or
+Git tag is created. Change the major/minor in `VERSION` when starting a new
+release series. Run numbers can have gaps; renaming/replacing this workflow or
+switching an existing package to this scheme requires checking for collisions.
+
+After every Python matrix entry passes, the publish job downloads the exact
+Python 3.13 distributions already built and tested. A fully published version
+is skipped only on a rerun; first-attempt collisions and partially published
+versions fail explicitly. Network errors are not treated as missing releases.
+Concurrent runs are serialized without cancelling the active run; GitHub may
+supersede an older pending run when more pushes arrive.
+
+Before enabling automatic releases:
+
+1. In each repository, add `PYPI_API_TOKEN` under **Settings > Secrets and
+   variables > Actions**, or as a secret in the `pypi` environment. Use the
+   appropriate PyPI project scope once the project exists. Never commit tokens.
+2. Configure the `pypi` environment to allow deployments only from `master`.
+   Do not require manual approval if fully automatic deployment is desired.
+3. Protect `master`, require PRs, and require all six `Test Python 3.x` checks.
+   Do not require `Publish PyPI`, which intentionally does not run on PRs.
+4. Keep the workflow filename/name stable and review changes to workflows and
+   packaging carefully: merging to `master` authorizes a public release.
+
+Dependencies still need to be published before end users can install adapters
+from PyPI. For the initial release, publish DefStream before its adapters.
+
 **Just def.**<br>
 **Let workers do the work.**<br>
 **You don't need to await this.**
