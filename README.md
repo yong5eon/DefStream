@@ -1056,9 +1056,20 @@ the application's parent-side signal handler.
 Install the core and both adapters before running the test suite. Tests use the
 installed `DefStream` package rather than importing the source directory as `src`.
 Run unit tests with `python -m unittest discover -s test -p "test_*.py"`.
+The core suite retains shared Worker, Inspector, and cross-adapter contract
+tests. Adapter-specific unit and integration tests live in each adapter's
+`test` directory. From the common parent directory, run all three suites:
+
+```powershell
+python -m unittest discover -s .\DefStream\test -p "test_*.py"
+python -m unittest discover -s .\DefStream-RabbitMQ\test -p "test_*.py"
+python -m unittest discover -s .\DefStream-Redis\test -p "test_*.py"
+```
+
 To include local RabbitMQ integration tests, set `DEFSTREAM_RABBITMQ_TESTS=1`
 first. They use `127.0.0.1:5672` with guest credentials and create/delete only
-uniquely named test queues.
+uniquely named test queues. Redis integration tests are enabled separately with
+`DEFSTREAM_REDIS_TESTS=1`.
 
 Examples are organized under:
 
