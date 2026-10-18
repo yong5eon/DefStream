@@ -51,7 +51,7 @@ jobs:
           --health-retries 12
     steps:
       - name: Check out core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: yong5eon/DefStream
           ref: ${{ github.event.repository.name == 'DefStream' && github.sha || 'master' }}
@@ -59,7 +59,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out RabbitMQ adapter
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: yong5eon/DefStream-RabbitMQ
           ref: ${{ github.event.repository.name == 'DefStream-RabbitMQ' && github.sha || 'master' }}
@@ -67,7 +67,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out Redis adapter
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: yong5eon/DefStream-Redis
           ref: ${{ github.event.repository.name == 'DefStream-Redis' && github.sha || 'master' }}
@@ -75,7 +75,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
 
@@ -138,7 +138,7 @@ jobs:
 
       - name: Set up Node for core UI tests
         if: env.PROJECT == 'DefStream'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Preserve verified release distributions
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.python == '3.13'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: distributions
           path: dist/*
@@ -164,13 +164,13 @@ jobs:
     environment: pypi
     steps:
       - name: Download verified distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: distributions
           path: dist
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
 
