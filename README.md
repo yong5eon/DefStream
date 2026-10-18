@@ -13,9 +13,19 @@ pip install "DefStream[Redis]"
 pip install "DefStream[RabbitMQ,Redis]"
 ```
 
-The base package has no broker client dependencies. Extras install `pika` and/or
-`redis`; adapter source files are always included. Import only the adapters whose
-extras are installed. For development, use `pip install -e ".[RabbitMQ,Redis]"`.
+The base package has no broker client dependencies and does not include adapter
+source files. Extras install the separate `DefStream-RabbitMQ` and/or
+`DefStream-Redis` distributions, which depend on `pika` and `redis`, respectively.
+You can also install the adapters directly:
+
+```shell
+pip install DefStream-RabbitMQ
+pip install DefStream-Redis
+```
+
+The Python import paths remain `DefStream.Broker.Implements.RabbitMQ` and
+`DefStream.Broker.Implements.Redis`. For local development of all three projects,
+see the editable installation instructions below.
 
 The project is now named DefStream. Distribution/import names use `DefStream`,
 Prometheus metric names use `defstream_`, and integration-test environment
@@ -1043,6 +1053,8 @@ KeyboardInterrupt. The parent drains message confirmations, stops the pool,
 runs WorkerCleanup, and closes broker resources. The library does not replace
 the application's parent-side signal handler.
 
+Install the core and both adapters before running the test suite. Tests use the
+installed `DefStream` package rather than importing the source directory as `src`.
 Run unit tests with `python -m unittest discover -s test -p "test_*.py"`.
 To include local RabbitMQ integration tests, set `DEFSTREAM_RABBITMQ_TESTS=1`
 first. They use `127.0.0.1:5672` with guest credentials and create/delete only
@@ -1065,22 +1077,34 @@ unless a Worker setup provisions them.
 
 ## Development in VS Code
 
-Sources remain in `src/Worker` and `src/Broker`. On Windows, install the package
-into the workspace virtual environment, then create a directory junction named
-`DefStream` in its `site-packages` directory:
+The core sources remain in `src/Worker` and `src/Broker`. RabbitMQ and Redis
+implementation files live directly under `src` in the sibling
+`DefStream-RabbitMQ` and `DefStream-Redis` projects. Their distributions provide
+only their adapter packages, not the parent packages owned by the core.
+
+From the common parent directory, install all three projects into the workspace
+virtual environment:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-New-Item -ItemType Junction `
-  -Path .\.venv\Lib\site-packages\DefStream `
-  -Target (Resolve-Path .\src).Path
+.\.venv\Scripts\python.exe -m pip install `
+  --config-settings editable_mode=strict -e .\DefStream
+.\.venv\Scripts\python.exe -m pip install `
+  -e .\DefStream-RabbitMQ `
+  -e .\DefStream-Redis
 ```
 
-Select that virtual environment as VS Code's Python interpreter. Python and
-Pylance can resolve `DefStream` directly through the junction, without extra
-search paths or a generated build tree.
+Select that virtual environment as VS Code's Python interpreter. No manual
+`site-packages/DefStream` symbolic link or junction is needed. Remove an existing
+link before installing the split projects: otherwise installing adapter files
+under that link can write into the core source directory.
 
-Source edits and added or removed modules are reflected without reinstalling.
-Reinstall after changing package metadata or dependencies. Recreate the junction
-when recreating the virtual environment or moving the source directory; do not
-create it over an existing `DefStream` directory.
+Use strict editable mode for the core and default editable mode for the
+adapters. The default adapter finders provide parent namespace entries, which
+can otherwise mask the core's default editable finder. Strict mode exposes the
+core as regular packages through a link tree under its `build` directory.
+Keep that link tree while using the editable installation.
+
+Edits to existing source files are reflected without reinstalling. Reinstall
+the core after adding or removing its modules. Reinstall the relevant project
+after changing package metadata or dependencies, recreating the virtual
+environment, or moving a project directory.
