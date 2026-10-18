@@ -99,12 +99,12 @@ class StartupTests(TestCase):
 				output = stream.getvalue()
 				for expected in (
 					LOGO.rstrip(),
-					'DefStream | Starting worker',
+					'Starting Worker',
 					'concurrency=4',
-					'Tasks (1)',
+					'Tasks: 1 tasks',
 					'StartupTests.worker.<locals>.Task',
 					'on_error=Reject',
-					'Queues (1 known)',
+					'Queues: 1 queues',
 					*options,
 				):
 					self.assertIn(
@@ -122,19 +122,17 @@ class StartupTests(TestCase):
 		observed = []
 
 		def check_startup():
+			self.assertTrue(stream.getvalue().startswith(LOGO.rstrip() + '\n\nStarting Worker\n'))
 			self.assertIn(
 				"queue='jobs'",
 				stream.getvalue(),
 			)
-			self.assertNotIn(
-				'Subscriptions ready',
-				stream.getvalue(),
-			)
+			self.assertFalse(worker.running.is_set())
 			observed.append('preparing')
 
 		def check_consumption():
 			self.assertIn(
-				'Subscriptions ready. Starting consumer...',
+				"  Queues: 1 queues\n    - 'jobs'\n",
 				stream.getvalue(),
 			)
 			self.assertTrue(worker.running.is_set())
@@ -157,17 +155,17 @@ class StartupTests(TestCase):
 			],
 		)
 		self.assertEqual(
-			stream.getvalue().count('DefStream | Starting worker'),
+			stream.getvalue().count('Starting Worker'),
 			1,
 		)
 		with redirect_stdout(stream), self.assertRaises(RuntimeError):
 			worker.run()
 		self.assertEqual(
-			stream.getvalue().count('DefStream | Starting worker'),
+			stream.getvalue().count('Starting Worker'),
 			1,
 		)
 
-	def test_failed_preparation_does_not_announce_consumption(self):
+	def test_failed_preparation_prints_banner_but_does_not_consume(self):
 		for stage in (
 			'connect',
 			'subscribe',
@@ -183,22 +181,22 @@ class StartupTests(TestCase):
 					'preparation failed',
 				):
 					worker.run()
-				self.assertNotIn(
-					'Subscriptions ready',
+				self.assertIn(
+					'Starting Worker',
 					stream.getvalue(),
 				)
 				consumer.run.assert_not_called()
 				worker.pool.stop.assert_called_once_with()
 				worker.broker.close.assert_called_once_with()
 
-	def test_stopped_worker_does_not_announce_consumption(self):
+	def test_stopped_worker_prints_banner_but_does_not_consume(self):
 		worker = self.worker('jobs')
 		worker.stop()
 		stream = StringIO()
 		with redirect_stdout(stream):
 			worker.run()
-		self.assertNotIn(
-			'Subscriptions ready',
+		self.assertIn(
+			'Starting Worker',
 			stream.getvalue(),
 		)
 		worker.broker.consumer.return_value.run.assert_not_called()
@@ -237,11 +235,11 @@ class StartupTests(TestCase):
 			worker.run()
 		output = stream.getvalue()
 		self.assertIn(
-			'Tasks (3)',
+			'Tasks: 3 tasks',
 			output,
 		)
 		self.assertIn(
-			"Queues (2 known):\n    - 'jobs'\n    - 'other.jobs'",
+			"Queues: 2 queues\n    - 'jobs'\n    - 'other.jobs'",
 			output,
 		)
 		for task in worker.tasks:
