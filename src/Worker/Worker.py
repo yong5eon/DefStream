@@ -32,6 +32,7 @@ from .Pool import (
 )
 from .Run import Run
 from .Executor import run_cleanups
+from .Startup import startup
 
 __all__ = (
 	'Worker',
@@ -121,6 +122,7 @@ class Worker:
 			raise RuntimeError('Register at least one Run before starting')
 		self.started = True
 		try:
+			startup(self)
 			if self.inspector is not None:
 				self.inspector.start(self)
 			self.broker.connect()
