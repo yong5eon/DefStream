@@ -25,7 +25,7 @@ from unittest import (
 	skipUnless,
 )
 
-from src.Worker import (
+from DefStream.Worker import (
 	PoolCleanup,
 	ProcessPool,
 	Run,

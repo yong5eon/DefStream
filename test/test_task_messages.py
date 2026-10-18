@@ -14,19 +14,19 @@ from unittest.mock import (
 )
 from uuid import uuid4
 
-from src.Broker import RemoteError
-from src.Broker.Implements.RabbitMQ import (
+from DefStream.Broker import RemoteError
+from DefStream.Broker.Implements.RabbitMQ import (
 	Configuration as RabbitConfiguration,
 	Connection as RabbitConnection,
 	Reject,
 	Subscription as RabbitSubscription,
 )
-from src.Broker.Implements.Redis import (
+from DefStream.Broker.Implements.Redis import (
 	Configuration as RedisConfiguration,
 	Connection as RedisConnection,
 	Subscription as RedisSubscription,
 )
-from src.Worker import (
+from DefStream.Worker import (
 	declare,
 	Run,
 	RunComplete,
@@ -36,7 +36,7 @@ from src.Worker import (
 	send,
 	request,
 )
-from src.Worker import __all__ as worker_exports
+from DefStream.Worker import __all__ as worker_exports
 
 
 class Task(
@@ -555,7 +555,7 @@ class RabbitMessageTests(TestCase):
 				7,
 			)
 			with self.assertLogs(
-				'src.Worker.Worker',
+				'DefStream.Worker.Worker',
 				level='ERROR',
 			), self.assertRaises(RemoteError):
 				request(

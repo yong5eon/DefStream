@@ -22,17 +22,17 @@ from unittest import (
 from unittest.mock import Mock
 from uuid import uuid4
 
-from src.Broker.Policies import Reject
-from src.Inspector import (
+from DefStream.Broker.Policies import Reject
+from DefStream.Inspector import (
 	Extension,
 	Inspector,
 	Response,
 )
-from src.Inspector.Extensions import (
+from DefStream.Inspector.Extensions import (
 	HealthCheck,
 	Metrics,
 )
-from src.Worker import (
+from DefStream.Worker import (
 	PoolFull,
 	ProcessPool,
 	Run,
@@ -445,7 +445,7 @@ class InspectorTests(TestCase):
 		))
 		self.assertTrue(acked.wait(5))
 		with self.assertLogs(
-			'src.Worker.Worker',
+			'DefStream.Worker.Worker',
 			level='ERROR',
 		):
 			consumer.call(lambda: worker.receive(
@@ -724,7 +724,7 @@ class InspectorTests(TestCase):
 			)
 			task = Divide.__module__ + '.' + Divide.__qualname__
 			with self.assertLogs(
-				'src.Worker.Worker',
+				'DefStream.Worker.Worker',
 				level='ERROR',
 			):
 				for divisor in (
@@ -796,7 +796,7 @@ class InspectorTests(TestCase):
 		'Opt-in local Redis Inspector integration',
 	)
 	def test_live_redis_process_pool_health_and_metrics(self):
-		from src.Broker.Implements.Redis import (
+		from DefStream.Broker.Implements.Redis import (
 			Connection,
 			Configuration,
 		)
@@ -808,7 +808,7 @@ class InspectorTests(TestCase):
 		'Opt-in local RabbitMQ Inspector integration',
 	)
 	def test_live_rabbitmq_process_pool_health_and_metrics(self):
-		from src.Broker.Implements.RabbitMQ import (
+		from DefStream.Broker.Implements.RabbitMQ import (
 			Connection,
 			Configuration,
 		)

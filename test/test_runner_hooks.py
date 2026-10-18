@@ -7,8 +7,8 @@ from unittest import (
 )
 from unittest.mock import Mock
 
-from src.Broker.Implements.RabbitMQ import Reject
-from src.Worker import (
+from DefStream.Broker.Implements.RabbitMQ import Reject
+from DefStream.Worker import (
 	RunComplete,
 	RunError,
 	Context,
@@ -157,7 +157,7 @@ class HookTests(TestCase):
 					if failure is None:
 						worker.run()
 					else:
-						with self.assertLogs('src.Worker.Worker', level='ERROR'):
+						with self.assertLogs('DefStream.Worker.Worker', level='ERROR'):
 							worker.run()
 					self.assertEqual(observed, [(consumer.owner, expected)])
 					getattr(delivery, action).assert_called_once_with()

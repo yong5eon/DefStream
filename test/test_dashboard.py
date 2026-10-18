@@ -9,12 +9,12 @@ from unittest.mock import (
 	patch,
 )
 
-from src.Inspector import Inspector
-from src.Inspector.Extensions import (
+from DefStream.Inspector import Inspector
+from DefStream.Inspector.Extensions import (
 	Dashboard,
 	Metrics,
 )
-from src.Worker import (
+from DefStream.Worker import (
 	Run,
 	ThreadPool,
 	Worker,
@@ -78,7 +78,7 @@ class DashboardTests(TestCase):
 		self.worker.running.set()
 		started = self.metrics.begin(self.task)
 		with patch(
-			'src.Inspector.Extensions.Metrics.monotonic',
+			'DefStream.Inspector.Extensions.Metrics.monotonic',
 			return_value=started + 0.25,
 		):
 			self.metrics.end(
@@ -187,7 +187,7 @@ class DashboardTests(TestCase):
 			"connect-src 'self'",
 			headers['Content-Security-Policy'],
 		)
-		with patch('src.Inspector.Extensions.Dashboard.files') as resources:
+		with patch('DefStream.Inspector.Extensions.Dashboard.files') as resources:
 			resource = resources.return_value.joinpath.return_value
 			resource.read_text.side_effect = [
 				'<title>{{dashboard_title}}</title>First',
@@ -261,7 +261,7 @@ class DashboardTests(TestCase):
 		)
 
 	def test_second_minute_boundaries_and_retention(self):
-		with patch('src.Inspector.Extensions.Metrics.monotonic') as clock:
+		with patch('DefStream.Inspector.Extensions.Metrics.monotonic') as clock:
 			clock.return_value = 100.0
 			self.metrics.start(self.inspector)
 
@@ -368,7 +368,7 @@ class DashboardTests(TestCase):
 			)
 
 	def test_oldest_pending_collision_and_rejected_submission(self):
-		with patch('src.Inspector.Extensions.Metrics.monotonic') as clock:
+		with patch('DefStream.Inspector.Extensions.Metrics.monotonic') as clock:
 			clock.return_value = 100.0
 			self.metrics.start(self.inspector)
 			first = self.metrics.begin(self.task)

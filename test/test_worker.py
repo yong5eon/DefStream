@@ -13,12 +13,12 @@ from unittest import (
 )
 from unittest.mock import Mock
 
-from src.Broker.Implements.RabbitMQ import (
+from DefStream.Broker.Implements.RabbitMQ import (
 	Requeue,
 	Reject,
 	Subscription,
 )
-from src.Worker import (
+from DefStream.Worker import (
 	PoolFull,
 	ProcessPool,
 	Run,
@@ -188,7 +188,7 @@ class PoolTests(TestCase):
 	def test_submission_failure_releases_capacity(self):
 		executor = Mock()
 		executor.submit.side_effect = RuntimeError('submit failed')
-		from src.Worker import Pool
+		from DefStream.Worker import Pool
 		pool = Pool(executor, 1)
 		for _ in range(2):
 			with self.assertRaisesRegex(RuntimeError, 'submit failed'):
@@ -304,7 +304,7 @@ class WorkerTests(TestCase):
 					worker.stop()
 
 				consumer.on_run = receive
-				with self.assertLogs('src.Worker.Worker', level='ERROR'):
+				with self.assertLogs('DefStream.Worker.Worker', level='ERROR'):
 					worker.run()
 				self.assertEqual(threads, [consumer.owner])
 				delivery.ack.assert_not_called()
@@ -335,7 +335,7 @@ class WorkerTests(TestCase):
 			worker.stop()
 
 		consumer.on_run = receive
-		with self.assertLogs('src.Worker.Worker', level='ERROR'):
+		with self.assertLogs('DefStream.Worker.Worker', level='ERROR'):
 			worker.run()
 		delivery.reject.assert_called_once_with()
 		worker.pool.submit.assert_not_called()

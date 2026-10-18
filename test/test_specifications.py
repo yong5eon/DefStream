@@ -25,9 +25,9 @@ from unittest import (
 from unittest.mock import Mock
 from uuid import uuid4
 
-from src.Broker import RemoteError
-from src.Broker.Policies import Reject
-from src.Descriptor import (
+from DefStream.Broker import RemoteError
+from DefStream.Broker.Policies import Reject
+from DefStream.Descriptor import (
 	AllOf,
 	Array,
 	DumpSchema,
@@ -40,24 +40,24 @@ from src.Descriptor import (
 	ToObject,
 	ToSchema,
 )
-from src.Inspector import Inspector
-from src.Inspector.Extensions import Specifications
-from src.Validator import (
+from DefStream.Inspector import Inspector
+from DefStream.Inspector.Extensions import Specifications
+from DefStream.Validator import (
 	Validate,
 	Validator,
 )
-from src.Validator.Patterns import (
+from DefStream.Validator.Patterns import (
 	IsGreaterThan,
 	IsInteger,
 	IsObject,
 	SetDefault,
 	ToInteger,
 )
-from src.Validator.Patterns.Object import (
+from DefStream.Validator.Patterns.Object import (
 	IsMappingOf,
 	IsRequiredIn,
 )
-from src.Worker import (
+from DefStream.Worker import (
 	ProcessPool,
 	Run,
 	Specification,
@@ -172,7 +172,7 @@ class ContractTests(TestCase):
 			schema['properties']['b']['default'],
 			2,
 		)
-		self.assertFalse(any('DataModel' in name for name in modules if name.startswith('src.Descriptor')))
+		self.assertFalse(any('DataModel' in name for name in modules if name.startswith('DefStream.Descriptor')))
 		batch_schema = DumpSchema(ToSchema(Batch))
 		self.assertEqual(
 			batch_schema['properties']['items']['items'],
@@ -790,7 +790,7 @@ class DocumentTests(TestCase):
 )
 class SpecificationRPCTests(TestCase):
 	def test_validation_and_transformed_response_over_real_rpc(self):
-		from src.Broker.Implements.RabbitMQ import (
+		from DefStream.Broker.Implements.RabbitMQ import (
 			Connection,
 			Configuration,
 		)
@@ -844,7 +844,7 @@ class SpecificationRPCTests(TestCase):
 				5,
 			)
 			with self.assertLogs(
-				'src.Worker.Worker',
+				'DefStream.Worker.Worker',
 				level='ERROR',
 			), self.assertRaises(RemoteError):
 				request(

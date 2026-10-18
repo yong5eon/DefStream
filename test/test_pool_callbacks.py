@@ -7,7 +7,7 @@ from unittest import (
 )
 from unittest.mock import Mock
 
-from src.Worker import (
+from DefStream.Worker import (
 	Pool,
 	ProcessPool,
 	Run,

@@ -21,14 +21,14 @@ from unittest.mock import (
 )
 from uuid import uuid4
 
-from src.Broker.Errors import RemoteError
-from src.Broker.Policies import Reject
-from src.Inspector import Inspector
-from src.Inspector.Extensions import (
+from DefStream.Broker.Errors import RemoteError
+from DefStream.Broker.Policies import Reject
+from DefStream.Inspector import Inspector
+from DefStream.Inspector.Extensions import (
 	Console,
 	Specifications,
 )
-from src.Worker import (
+from DefStream.Worker import (
 	Run,
 	Specification,
 	ThreadPool,
@@ -273,7 +273,7 @@ class ConsoleExtensionTests(TestCase):
 		)
 
 	def test_html_is_read_again_on_each_refresh(self):
-		with patch('src.Inspector.Extensions.Console.files') as resources:
+		with patch('DefStream.Inspector.Extensions.Console.files') as resources:
 			resource = resources.return_value.joinpath.return_value
 			resource.read_bytes.side_effect = [
 				b'<body data-auth-required="true">First</body>',
@@ -313,7 +313,7 @@ class ConsoleExtensionTests(TestCase):
 			),
 		):
 			with self.assertLogs(
-				'src.Inspector.Extensions.Console',
+				'DefStream.Inspector.Extensions.Console',
 				level='WARNING',
 			):
 				status, body, headers = self.fetch(
@@ -383,7 +383,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_configured_token_rejects_missing_authorization(self):
 		with self.assertLogs(
-			'src.Inspector.Extensions.Console',
+			'DefStream.Inspector.Extensions.Console',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -515,7 +515,7 @@ class ConsoleExtensionTests(TestCase):
 				'wsgi.input': BytesIO(raw),
 			}
 			with self.assertLogs(
-				'src.Inspector.Extensions.Console',
+				'DefStream.Inspector.Extensions.Console',
 				level='WARNING',
 			) if expected == 400 else nullcontext():
 				response = self.extension.handle(
@@ -529,7 +529,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_malformed_origin_is_rejected_explicitly(self):
 		with self.assertLogs(
-			'src.Inspector.Extensions.Console',
+			'DefStream.Inspector.Extensions.Console',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -564,7 +564,7 @@ class ConsoleExtensionTests(TestCase):
 		):
 			self.extension.broker = lambda: producer
 			with self.assertLogs(
-				'src.Inspector.Extensions.Console',
+				'DefStream.Inspector.Extensions.Console',
 				level='ERROR',
 			):
 				self.assertEqual(
@@ -581,7 +581,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_cross_origin_and_invalid_requests_do_not_publish(self):
 		with self.assertLogs(
-			'src.Inspector.Extensions.Console',
+			'DefStream.Inspector.Extensions.Console',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -658,7 +658,7 @@ class ConsoleExtensionTests(TestCase):
 			producer.error = error
 			self.extension.broker = lambda: producer
 			with self.assertLogs(
-				'src.Inspector.Extensions.Console',
+				'DefStream.Inspector.Extensions.Console',
 				level='WARNING',
 			):
 				status, body, headers = self.fetch(
@@ -681,7 +681,7 @@ class ConsoleExtensionTests(TestCase):
 	def test_worker_connection_is_rejected_without_closing_it(self):
 		self.extension.broker = lambda: self.worker.broker
 		with self.assertLogs(
-			'src.Inspector.Extensions.Console',
+			'DefStream.Inspector.Extensions.Console',
 			level='ERROR',
 		):
 			self.assertEqual(
@@ -826,7 +826,7 @@ class ConsoleExtensionTests(TestCase):
 		'Opt-in local RabbitMQ interactive test integration',
 	)
 	def test_live_rabbitmq_send_rpc_and_remote_error(self):
-		from src.Broker.Implements.RabbitMQ import (
+		from DefStream.Broker.Implements.RabbitMQ import (
 			Connection,
 			Configuration,
 		)
@@ -846,7 +846,7 @@ class ConsoleExtensionTests(TestCase):
 		'Opt-in local Redis interactive test integration',
 	)
 	def test_live_redis_send_and_unsupported_rpc(self):
-		from src.Broker.Implements.Redis import (
+		from DefStream.Broker.Implements.Redis import (
 			Connection,
 			Configuration,
 		)
