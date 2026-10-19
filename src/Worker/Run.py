@@ -101,7 +101,7 @@ class Run(ABC):
 		**kwargs,
 	):
 		super().__init_subclass__(**kwargs)
-		parent = next(base for base in cls.__mro__[1:] if issubclass(
+		parents = tuple(base for base in cls.__mro__[1:] if issubclass(
 			base,
 			Run,
 		))
@@ -111,10 +111,10 @@ class Run(ABC):
 			'priority',
 			'max_priority',
 		):
-			if priority_setting(
-				parent.parameters,
+			if any(priority_setting(
+				base.parameters,
 				name,
-			) is not None and priority_setting(
+			) is not None for base in parents) and priority_setting(
 				cls.parameters,
 				name,
 			) is None:
