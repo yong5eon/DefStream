@@ -1,4 +1,7 @@
-from contextlib import redirect_stdout
+from contextlib import (
+	closing,
+	redirect_stdout,
+)
 from hashlib import sha256
 from io import (
 	BytesIO,
@@ -230,7 +233,7 @@ class ReleaseWorkflowTests(TestCase):
 				response.close()
 				response = HTTPError('https://example.invalid', 404, 'not found', None, None)
 			with (
-				response,
+				closing(response),
 				patch.dict(environ, {
 					'PROJECT': 'DefStream',
 					'RELEASE_VERSION': '0.1.5',
@@ -253,6 +256,14 @@ class ReleaseWorkflowTests(TestCase):
 			'defstream-0.1.5-42-py3-none-any.whl',
 			'defstream-0.1.5.tar.gz',
 		})
+		return
+
+	def test_missing_pypi_release_does_not_enter_http_error(self) -> None:
+		with patch.object(HTTPError, '__enter__', side_effect=AttributeError('fp is None')) as enter:
+			result, files = self.check_upload({}, new_version=True)
+		enter.assert_not_called()
+		self.assertEqual(result['publish'], 'true')
+		self.assertEqual(len(files), 2)
 		return
 
 	def test_rebuild_only_uploads_new_wheel(self) -> None:
