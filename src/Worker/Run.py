@@ -12,6 +12,7 @@ from typing import (
 )
 
 from ..Broker.Event import EventError
+from ..Broker.Priority import validate_priority
 from .Specification import Specification
 
 __all__ = (
@@ -21,6 +22,22 @@ __all__ = (
 	'RunError',
 	'Run',
 )
+
+
+def priority_setting(
+	parameters: Any,
+	name: str,
+) -> Optional[int]:
+	if isinstance(
+		parameters,
+		Mapping,
+	):
+		return parameters.get(name)
+	return getattr(
+		parameters,
+		name,
+		None,
+	)
 
 
 class Context:
@@ -84,8 +101,41 @@ class Run(ABC):
 		**kwargs,
 	):
 		super().__init_subclass__(**kwargs)
+		parents = tuple(base for base in cls.__mro__[1:] if issubclass(
+			base,
+			Run,
+		))
 		if parameters is not None:
 			cls.parameters = parameters
+		for name in (
+			'priority',
+			'max_priority',
+		):
+			if any(priority_setting(
+				base.parameters,
+				name,
+			) is not None for base in parents) and priority_setting(
+				cls.parameters,
+				name,
+			) is None:
+				raise ValueError('Inherited task ' + name + ' cannot be cleared')
+		maximum = priority_setting(
+			cls.parameters,
+			'max_priority',
+		)
+		validate_priority(
+			maximum,
+			None,
+			minimum=1,
+			name='max_priority',
+		)
+		validate_priority(
+			priority_setting(
+				cls.parameters,
+				'priority',
+			),
+			maximum,
+		)
 		for name, specification in (
 			(
 				'request',
@@ -133,6 +183,7 @@ class Run(ABC):
 		):
 			if not all(callable(hook) for hook in hooks):
 				raise TypeError('Run hooks must be callable')
+		return
 
 	def __call__(
 		self,

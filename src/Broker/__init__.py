@@ -10,6 +10,7 @@ from .Connection import (
 	Declarable,
 	TaskSender,
 	Requestable,
+	PrioritySupport,
 )
 from .Protocol import (
 	Sendable,
@@ -19,6 +20,11 @@ from .Protocol import (
 )
 from .Errors import RemoteError
 from .Consumer import Consumer
+from .Policies import (
+	Requeue,
+	Reject,
+)
+from .Priority import validate_priority
 from .Event import (
 	Event,
 	EventHandler,
@@ -35,6 +41,7 @@ __all__ = (
 	'Declarable',
 	'TaskSender',
 	'Requestable',
+	'PrioritySupport',
 	'Sendable',
 	'Callable',
 	'RemoteError',
@@ -44,4 +51,7 @@ __all__ = (
 	'EventHandler',
 	'Event',
 	'EventError',
+	'Requeue',
+	'Reject',
+	'validate_priority',
 )

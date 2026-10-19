@@ -202,6 +202,73 @@ Task bodies must be **mappings with string keys**. Return values must be
 serializable by the adapter. A Worker cannot register multiple tasks for the
 same queue: routing selects tasks by queue, not by a type field in the message.
 
+### Task priorities
+
+For RabbitMQ classic queues, define both the default message `priority` and queue
+`max_priority` in the RabbitMQ `Subscription` supplied as the task's `parameters`.
+There is no separate `priority` setting on `Run`.
+`declare()` reads these settings to provision the priority queue.
+
+```python
+from DefStream.Broker.Implements.RabbitMQ import Subscription
+from DefStream.Worker import (
+  Run,
+  declare,
+  request,
+  send,
+)
+
+
+class Add(
+  Run,
+  parameters=Subscription(
+    queue='defstream.example.priority.add',
+    max_priority=5,
+    priority=2,
+  ),
+):
+  def run(
+    self,
+    a: int,
+    b: int,
+  ):
+    return a + b
+
+
+# broker is a RabbitMQ Connection connected by the caller.
+declare(
+  task=Add,
+  broker=broker,
+)
+send(
+  {'a': 10, 'b': 20},
+  task=Add,
+  broker=broker,
+)
+# RPC requires a separately running Worker.
+result = request(
+  {'a': 10, 'b': 20},
+  task=Add,
+  broker=broker,
+  priority=5,
+)
+```
+
+- Omitting the call's `priority` or passing `None` uses the task default.
+  An explicit `0` overrides the default with the lowest priority.
+- Setting only the task default sets the queue maximum to RabbitMQ's limit of
+  `255`. Setting only the maximum leaves the default as `None`; without a
+  per-call value either, the message priority property is omitted.
+- Values above the task maximum, negative values, non-integers, and `bool` are rejected.
+- Specifying priority only at call time validates only the broker range `0..255`.
+  The caller must provision a priority queue and respect its actual maximum.
+- Child tasks inherit settings and may override them with valid values, but cannot
+  clear them.
+- Requesting priorities with Redis raises `NotImplementedError`.
+  Calls without priorities retain existing Redis behavior.
+- Priority affects delivery of waiting messages within the same queue. It does not
+  preempt delivered or running tasks or guarantee execution and completion order.
+
 ### Success, failures, and retries
 
 - ACK follows successful execution and completion hooks. RabbitMQ RPC also publishes the reply before ACK.

@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from inspect import isabstract
 from typing import (
 	Any,
+	Optional,
 	Type,
 )
 
@@ -9,8 +10,12 @@ from ..Broker.Connection import (
 	Declarable,
 	TaskSender,
 	Requestable,
+	PrioritySupport,
 )
-from .Run import Run
+from .Run import (
+	Run,
+	priority_setting,
+)
 
 __all__ = (
 	'declare',
@@ -49,6 +54,29 @@ def message_body(
 	return dict(body)
 
 
+def priority_parameters(
+	broker: Any,
+	parameters: Any,
+	priority: Optional[int],
+) -> Any:
+	if priority_setting(
+		parameters,
+		'priority',
+	) is None and priority_setting(
+		parameters,
+		'max_priority',
+	) is None and priority is None:
+		return parameters
+	if not isinstance(
+		broker,
+		PrioritySupport,
+	):
+		raise NotImplementedError('This connection does not support task priorities')
+	return broker.priority_parameters(
+		parameters,
+	)
+
+
 def declare(
 	*,
 	task: Type[Run],
@@ -60,7 +88,12 @@ def declare(
 		Declarable,
 	):
 		raise NotImplementedError('This connection does not support task declarations')
-	broker.declare(parameters)
+	broker.declare(priority_parameters(
+		broker,
+		parameters,
+		None,
+	))
+	return
 
 
 def send(
@@ -68,6 +101,7 @@ def send(
 	*,
 	task: Type[Run],
 	broker: TaskSender,
+	priority: Optional[int] = None,
 ) -> Any:
 	parameters = task_parameters(task)
 	payload = message_body(body)
@@ -76,6 +110,26 @@ def send(
 		TaskSender,
 	):
 		raise NotImplementedError('This connection does not support task sending')
+	parameters = priority_parameters(
+		broker,
+		parameters,
+		priority,
+	)
+	effective = priority_setting(
+		parameters,
+		'priority',
+	) if priority is None else priority
+	if effective is not None:
+		if not isinstance(
+			broker,
+			PrioritySupport,
+		):
+			raise NotImplementedError('This connection does not support task priorities')
+		return broker.send(
+			payload,
+			parameters,
+			priority=effective,
+		)
 	return broker.send(
 		payload,
 		parameters,
@@ -88,9 +142,31 @@ def request(
 	task: Type[Run],
 	broker: TaskSender,
 	timeout: float = 5,
+	priority: Optional[int] = None,
 ) -> Any:
 	parameters = task_parameters(task)
 	payload = message_body(body)
+	parameters = priority_parameters(
+		broker,
+		parameters,
+		priority,
+	)
+	effective = priority_setting(
+		parameters,
+		'priority',
+	) if priority is None else priority
+	if effective is not None:
+		if not isinstance(
+			broker,
+			PrioritySupport,
+		):
+			raise NotImplementedError('This connection does not support task priorities')
+		return broker.request(
+			payload,
+			parameters,
+			timeout=timeout,
+			priority=effective,
+		)
 	if not isinstance(
 		broker,
 		Requestable,
