@@ -199,6 +199,71 @@ python client.py
 하나의 Worker에서는 같은 큐에 여러 작업을 중복 등록할 수 없습니다.
 메시지 유형을 보고 여러 `Run` 중 하나를 고르는 방식이 아니라 큐별로 작업을 선택합니다.
 
+### 작업 우선순위
+
+RabbitMQ classic 큐에서는 작업 `parameters`의 RabbitMQ `Subscription`에
+`priority`로 기본 메시지 우선순위, `max_priority`로 큐 최대값을 함께 정의합니다.
+`Run`에 별도의 `priority` 설정을 두지 않습니다.
+`declare()`가 이 설정을 읽어 우선순위 큐를 준비합니다.
+
+```python
+from DefStream.Broker.Implements.RabbitMQ import Subscription
+from DefStream.Worker import (
+  Run,
+  declare,
+  request,
+  send,
+)
+
+
+class Add(
+  Run,
+  parameters=Subscription(
+    queue='defstream.example.priority.add',
+    max_priority=5,
+    priority=2,
+  ),
+):
+  def run(
+    self,
+    a: int,
+    b: int,
+  ):
+    return a + b
+
+
+# broker는 호출자가 연결한 RabbitMQ Connection입니다.
+declare(
+  task=Add,
+  broker=broker,
+)
+send(
+  {'a': 10, 'b': 20},
+  task=Add,
+  broker=broker,
+)
+# RPC에는 별도로 실행 중인 Worker가 필요합니다.
+result = request(
+  {'a': 10, 'b': 20},
+  task=Add,
+  broker=broker,
+  priority=5,
+)
+```
+
+- 호출의 `priority`가 생략되거나 `None`이면 작업 기본값을 사용합니다.
+  명시적 `0`은 가장 낮은 우선순위이며 기본값을 덮어씁니다.
+- 작업 기본값만 지정하면 큐 최대값은 RabbitMQ 상한 `255`입니다.
+  최대값만 지정하면 기본값은 `None`이며, 호출값도 없으면 메시지 속성을 생략합니다.
+- 작업 최대값을 초과하는 값, 음수, 정수가 아닌 값과 `bool`은 거부합니다.
+- 작업 설정 없이 호출에서만 지정하면 브로커 범위 `0..255`만 검증합니다.
+  우선순위 큐의 사전 선언과 실제 큐 최대값 준수는 호출자 책임입니다.
+- 자식 작업은 설정을 상속하고 유효한 값으로 재정의할 수 있지만 해제할 수는 없습니다.
+- Redis에 우선순위를 요청하면 `NotImplementedError`가 발생합니다.
+  우선순위 미지정 시 기존 Redis 동작은 유지합니다.
+- 우선순위는 같은 큐의 대기 메시지 전달에 적용됩니다. 이미 전달·실행 중인
+  작업을 선점하거나 여러 작업의 실행·완료 순서를 보장하지 않습니다.
+
 ### 성공, 실패와 재시도
 
 - 작업 실행과 완료 훅이 성공한 뒤 ACK합니다. RabbitMQ RPC는 응답 발행도 ACK보다 먼저 수행합니다.

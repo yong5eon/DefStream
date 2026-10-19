@@ -21,6 +21,7 @@ __all__ = (
 	'Declarable',
 	'TaskSender',
 	'Requestable',
+	'PrioritySupport',
 )
 
 
@@ -94,4 +95,31 @@ class Requestable(Protocol):
 		body: Any,
 		parameters: Any,
 		timeout: float = 5,
+	) -> Any: ...
+
+
+@runtime_checkable
+class PrioritySupport(Protocol):
+	"""작업 구독 설정의 우선순위 처리와 우선순위 발행을 지원하는 계약."""
+
+	def priority_parameters(
+		self,
+		parameters: Any,
+	) -> Any: ...
+
+	def send(
+		self,
+		body: Any,
+		parameters: Any,
+		*,
+		priority: Optional[int] = None,
+	) -> Any: ...
+
+	def request(
+		self,
+		body: Any,
+		parameters: Any,
+		timeout: float = 5,
+		*,
+		priority: Optional[int] = None,
 	) -> Any: ...
