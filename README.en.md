@@ -30,6 +30,13 @@ Configure execution, acknowledgements, failure policies, and monitoring without
 - [Broker selection and operational considerations](#broker-selection-and-operational-considerations)
 - [Examples and license](#examples-and-license)
 
+## 로깅 지원
+
+클래스별 표준 로거와 사용자 주도 핸들러 설정을 지원합니다.
+샘플은 `Sample` 및 `DefStream` 계층만 출력하며, ProcessPool 자식은 별도 setup 훅으로
+출력을 설정합니다. Worker의 시작 배너는 유지됩니다.
+로거 이름, 선택 수신, 예외 메시지 주의사항과 프로세스 설정은 [로깅 안내](./README.md#로깅)를 참고하세요.
+
 ## Installation
 
 Requires Python **3.9 or newer**. Prepare the broker server you intend to use.

@@ -2,6 +2,7 @@ from dataclasses import (
 	dataclass,
 	field,
 )
+from logging import getLogger
 from math import floor
 from threading import Lock
 from time import monotonic
@@ -102,6 +103,8 @@ def label(
 
 
 class Metrics(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.Metrics')
+
 	def __init__(
 		self,
 		path: str,
@@ -126,6 +129,11 @@ class Metrics(Extension):
 				task.__module__ + '.' + task.__qualname__: TaskMetrics()
 				for task in worker.tasks
 			}
+		self.logger.info(
+			'Metrics collection initialized: path=%s tasks=%d',
+			self.path,
+			len(self.tasks),
+		)
 
 	def begin(
 		self,
@@ -139,6 +147,10 @@ class Metrics(Extension):
 				started,
 				0,
 			) + 1
+			self.logger.debug(
+				'Metrics task observation started: task=%s',
+				task,
+			)
 			return started
 
 	def end(
@@ -181,6 +193,15 @@ class Metrics(Extension):
 					bucket['max_duration'],
 					duration,
 				)
+			else:
+				duration = now - context
+			self.logger.debug(
+				'Metrics task observation completed: task=%s success=%s duration=%.6f active=%d',
+				task,
+				success,
+				duration,
+				stats.active,
+			)
 
 	def snapshot(
 		self,
@@ -220,11 +241,18 @@ class Metrics(Extension):
 					for task, stats in self.tasks.items()
 				},
 			}
+		self.logger.debug(
+			'Metrics snapshot built: tasks=%d running=%s',
+			len(snapshot['tasks']),
+			snapshot['running'],
+		)
+		return snapshot
 
 	def render(
 		self,
 		inspector: 'Inspector',
 	) -> str:
+		self.logger.debug('Rendering Metrics in Prometheus format')
 		snapshot = self.snapshot(inspector)
 		running = snapshot['running']
 		uptime = snapshot['uptime']
@@ -274,8 +302,13 @@ class Metrics(Extension):
 		self,
 		inspector: 'Inspector',
 	) -> Response:
+		body = self.render(inspector).encode('utf-8')
+		self.logger.debug(
+			'Metrics HTTP response built: bytes=%d',
+			len(body),
+		)
 		return Response(
 			'200 OK',
-			self.render(inspector).encode('utf-8'),
+			body,
 			'text/plain; version=0.0.4; charset=utf-8',
 		)

@@ -1,4 +1,10 @@
-# Sample for EventBroker
+from logging import (
+	DEBUG,
+	Filter,
+	Formatter,
+	StreamHandler,
+	getLogger,
+)
 
 from DefStream.Broker import (
 	Configuration as BaseConfiguration,
@@ -17,6 +23,23 @@ from queue import (
 )
 from threading import Timer
 from typing import Optional
+
+
+logger = getLogger('Sample')
+
+
+def configure_logging() -> None:
+	handler = StreamHandler()
+	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
+	sources = (
+		Filter('Sample'),
+		Filter('DefStream'),
+	)
+	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+	root = getLogger()
+	root.setLevel(DEBUG)
+	root.addHandler(handler)
+	return
 
 
 class Configuration(BaseConfiguration):
@@ -183,12 +206,15 @@ class SampleEventHandler(EventHandler):
 		self,
 		event,
 	):
-		print(event)
+		logger.info(
+			'Sample event received: %s',
+			event,
+		)
 		return
 
 
 if __name__ == '__main__':
-
+	configure_logging()
 	con = Connection(Configuration())
 	con.connect()
 	e = con.exchange('e')
@@ -205,11 +231,23 @@ if __name__ == '__main__':
 	q2.send(3) # expect q2 has 1, 3
 	q3.send(3) # expect q3 has 1, 2, 3
 
-	print(q1.get()) # expect print 1
-	print(q1.get()) # expect print 2
+	logger.info(
+		'q1 received: %s',
+		q1.get(),
+	)
+	logger.info(
+		'q1 received: %s',
+		q1.get(),
+	)
 
-	print(q2.get()) # expect print 1
-	print(q2.get()) # expect print 3
+	logger.info(
+		'q2 received: %s',
+		q2.get(),
+	)
+	logger.info(
+		'q2 received: %s',
+		q2.get(),
+	)
 
 	c = con.consumer(SampleEventHandler())
 	c.subs('q3')

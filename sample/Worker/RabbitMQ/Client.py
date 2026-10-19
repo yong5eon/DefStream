@@ -1,9 +1,10 @@
 from random import randint
-from sys import stderr
 
 from Tasks import (
 	Add,
 	Divide,
+	LoggingSetup,
+	logger,
 )
 
 from DefStream.Broker import RemoteError
@@ -15,6 +16,7 @@ from DefStream.Worker import request
 
 
 if __name__ == '__main__':
+	LoggingSetup()()
 	broker = Connection(Configuration(
 		host='127.0.0.1',
 		port=5672,
@@ -38,7 +40,10 @@ if __name__ == '__main__':
 			broker=broker,
 			timeout=5,
 		)
-		print(f'RPC add result: {result}')
+		logger.info(
+			'RPC add result: %s',
+			result,
+		)
 		result = request(
 			{
 				'a': randint(
@@ -54,7 +59,10 @@ if __name__ == '__main__':
 			broker=broker,
 			timeout=5,
 		)
-		print(f'RPC divide result: {result}')
+		logger.info(
+			'RPC divide result: %s',
+			result,
+		)
 		try:
 			request(
 				{
@@ -69,9 +77,9 @@ if __name__ == '__main__':
 				timeout=5,
 			)
 		except RemoteError as error:
-			print(
-				f'RPC rejected: {error}',
-				file=stderr,
+			logger.info(
+				'RPC rejected: code=%s',
+				error.code,
 			)
 	finally:
 		broker.close()

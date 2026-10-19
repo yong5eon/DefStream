@@ -38,9 +38,6 @@ __all__ = (
 	'Console',
 )
 
-logger = getLogger(__name__)
-
-
 def json_response(
 	status: str,
 	value: dict,
@@ -63,6 +60,8 @@ def json_response(
 
 
 class Console(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.Console')
+
 	methods = (
 		'GET',
 		'HEAD',
@@ -113,6 +112,7 @@ class Console(Extension):
 		self,
 		inspector: 'Inspector',
 	) -> Response:
+		self.logger.debug('Building Inspector Console HTML response')
 		page = files(__package__).joinpath('Console.html').read_bytes()
 		values = {
 			'title': escape(self.title),
@@ -167,7 +167,7 @@ class Console(Extension):
 			sha256(authorization[7:].encode('utf-8')).digest(),
 			self.token_digest,
 		)):
-			logger.warning('Inspector Console rejected an unauthorized request')
+			self.logger.warning('Inspector Console rejected an unauthorized request')
 			return json_response(
 				'401 Unauthorized',
 				{'error': 'A valid Bearer token is required'},
@@ -183,17 +183,22 @@ class Console(Extension):
 			except ValueError:
 				valid_origin = False
 			if not valid_origin:
-				logger.warning('Inspector Console rejected a cross-origin request')
+				self.logger.warning('Inspector Console rejected a cross-origin request')
 				return json_response(
 					'403 Forbidden',
 					{'error': 'Cross-origin requests are not allowed'},
 				)
 		if not self.slots.acquire(blocking=False):
+			self.logger.warning('Inspector Console concurrent request limit exceeded')
 			return json_response(
 				'429 Too Many Requests',
 				{'error': 'Too many concurrent console requests'},
 			)
 		try:
+			self.logger.debug(
+				'Handling Inspector Console request: method=%s',
+				method,
+			)
 			if method in (
 				'GET',
 				'HEAD',
@@ -203,8 +208,11 @@ class Console(Extension):
 				inspector,
 				environ,
 			)
-		except Exception:
-			logger.exception('Inspector Console request failed')
+		except Exception as error:
+			self.logger.error(
+				'Inspector Console request failed: error=%s',
+				type(error).__name__,
+			)
 			return json_response(
 				'500 Internal Server Error',
 				{'error': 'Inspector console failed; consult the worker logs'},
@@ -216,6 +224,7 @@ class Console(Extension):
 		self,
 		inspector: 'Inspector',
 	) -> Response:
+		self.logger.debug('Building Inspector Console task catalog')
 		producer = self.broker()
 		try:
 			if inspector.worker is not None and producer is inspector.worker.broker:
@@ -237,6 +246,11 @@ class Console(Extension):
 			if specifications is None:
 				specifications = Specifications(self.path)
 			document = specifications.document(inspector)
+			self.logger.debug(
+				'Inspector Console task catalog built: tasks=%d rpc=%s',
+				len(document['operations']),
+				rpc,
+			)
 			return json_response(
 				'200 OK',
 				{
@@ -322,12 +336,20 @@ class Console(Extension):
 			TypeError,
 			UnicodeDecodeError,
 		) as error:
-			logger.warning('Inspector Console rejected invalid input')
+			self.logger.warning(
+				'Inspector Console rejected invalid input: error=%s',
+				type(error).__name__,
+			)
 			return json_response(
 				'400 Bad Request',
 				{'error': str(error)},
 			)
 		started = monotonic()
+		self.logger.debug(
+			'Inspector Console task request validated: task=%s mode=%s',
+			task.__module__ + '.' + task.__qualname__,
+			payload['mode'],
+		)
 		producer = self.broker()
 		if producer is worker.broker:
 			raise ValueError('Console requires a separate producer, not the Worker connection')
@@ -336,6 +358,7 @@ class Console(Extension):
 				producer,
 				Requestable,
 			):
+				self.logger.debug('Inspector Console request rejected: broker does not support RPC')
 				return json_response(
 					'501 Not Implemented',
 					{'error': 'This broker does not support RPC'},
@@ -356,14 +379,14 @@ class Console(Extension):
 						broker=producer,
 					)
 			except TimeoutError:
-				logger.warning('Inspector Console RPC timed out')
+				self.logger.warning('Inspector Console RPC timed out')
 				return json_response(
 					'504 Gateway Timeout',
 					{'error': 'RPC timed out; delivered work is not cancelled'},
 				)
 			except RemoteError as error:
-				logger.warning(
-					'Inspector Console received a remote task error: %s',
+				self.logger.warning(
+					'Inspector Console received a remote task error: code=%s',
 					error.code,
 				)
 				return json_response(
@@ -373,6 +396,12 @@ class Console(Extension):
 						'code': error.code,
 					},
 				)
+			self.logger.debug(
+				'Inspector Console task request completed: task=%s mode=%s elapsed=%.6f',
+				task.__module__ + '.' + task.__qualname__,
+				payload['mode'],
+				monotonic() - started,
+			)
 			return json_response(
 				'200 OK',
 				{

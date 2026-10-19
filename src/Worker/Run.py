@@ -3,6 +3,8 @@ from abc import (
 	abstractmethod,
 )
 from collections.abc import Mapping
+from logging import getLogger
+from time import monotonic
 from typing import (
 	Any,
 	Optional,
@@ -80,6 +82,7 @@ class RunError(ABC):
 
 
 class Run(ABC):
+	logger = getLogger('DefStream.Run')
 	parameters: Any = None
 	on_error: Optional[EventError] = None
 	setups: Tuple[RunSetup, ...] = ()
@@ -190,14 +193,34 @@ class Run(ABC):
 		*args,
 		**kwargs,
 	) -> Any:
+		task = type(self).__module__ + '.' + type(self).__qualname__
+		started = monotonic()
+		self.logger.debug(
+			'Starting task execution: task=%s',
+			task,
+		)
 		context = Context(
 			*args,
 			**kwargs,
 		)
 		for setup in self.setups:
+			self.logger.debug(
+				'Starting task setup: task=%s hook=%s',
+				task,
+				type(setup).__qualname__,
+			)
 			setup(context)
+			self.logger.debug(
+				'Task setup completed: task=%s hook=%s',
+				task,
+				type(setup).__qualname__,
+			)
 		try:
 			if self.request is not None:
+				self.logger.debug(
+					'Validating task input: task=%s',
+					task,
+				)
 				if context.args:
 					raise TypeError('A specified task request requires keyword arguments')
 				body = self.request(context.kwargs)
@@ -210,24 +233,74 @@ class Run(ABC):
 				) for key in body):
 					raise TypeError('A task request must remain a mapping with string keys')
 				context.kwargs = dict(body)
+				self.logger.debug(
+					'Task input validated: task=%s',
+					task,
+				)
+			self.logger.debug(
+				'Calling user task: task=%s',
+				task,
+			)
 			result = self.run(
 				*context.args,
 				**context.kwargs,
 			)
+			self.logger.debug(
+				'User task returned: task=%s',
+				task,
+			)
 			if self.response is not None:
+				self.logger.debug(
+					'Validating task output: task=%s',
+					task,
+				)
 				result = self.response(result)
+				self.logger.debug(
+					'Task output validated: task=%s',
+					task,
+				)
 		except Exception as error:
+			self.logger.debug(
+				'Task execution or validation failed: task=%s error_type=%s',
+				task,
+				type(error).__qualname__,
+			)
 			for handler in self.errors:
+				self.logger.debug(
+					'Starting task error hook: task=%s hook=%s',
+					task,
+					type(handler).__qualname__,
+				)
 				handler(
 					context,
 					error,
 				)
+				self.logger.debug(
+					'Task error hook completed: task=%s hook=%s',
+					task,
+					type(handler).__qualname__,
+				)
 			raise
 		for complete in self.completes:
+			self.logger.debug(
+				'Starting task completion hook: task=%s hook=%s',
+				task,
+				type(complete).__qualname__,
+			)
 			complete(
 				context,
 				result,
 			)
+			self.logger.debug(
+				'Task completion hook completed: task=%s hook=%s',
+				task,
+				type(complete).__qualname__,
+			)
+		self.logger.debug(
+			'Task execution completed: task=%s duration=%s',
+			task,
+			monotonic() - started,
+		)
 		return result
 
 	@abstractmethod

@@ -1,5 +1,11 @@
 from queue import Queue as PyQueue
-from sys import stderr
+from logging import (
+	DEBUG,
+	Filter,
+	Formatter,
+	StreamHandler,
+	getLogger,
+)
 from typing import (
 	Any,
 	Callable,
@@ -24,6 +30,23 @@ from DefStream.Worker import (
 	WorkerCleanup,
 	WorkerSetup,
 )
+
+
+logger = getLogger('Sample')
+
+
+def configure_logging() -> None:
+	handler = StreamHandler()
+	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
+	sources = (
+		Filter('Sample'),
+		Filter('DefStream'),
+	)
+	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+	root = getLogger()
+	root.setLevel(DEBUG)
+	root.addHandler(handler)
+	return
 
 
 class Queue(Sendable):
@@ -98,10 +121,7 @@ class Event(BaseEvent):
 		self.consumer.pending -= 1
 
 	def reject(self) -> None:
-		print(
-			f'Rejected: {self.body}',
-			file=stderr,
-		)
+		logger.info('Sample message rejected')
 		self.consumer.pending -= 1
 
 
@@ -191,7 +211,12 @@ class Add(
 		a: int,
 		b: int,
 	) -> None:
-		print(f'{a} + {b} = {a + b}')
+		logger.info(
+			'%s + %s = %s',
+			a,
+			b,
+			a + b,
+		)
 
 
 class Prepare(WorkerSetup):
@@ -223,10 +248,11 @@ class Cleanup(WorkerCleanup):
 		self,
 		worker: Worker,
 	) -> None:
-		print('Worker cleanup')
+		logger.info('Worker cleanup')
 
 
 if __name__ == '__main__':
+	configure_logging()
 	worker = Worker(
 		Broker(),
 		ThreadPool(1),
