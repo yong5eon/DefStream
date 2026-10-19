@@ -56,10 +56,10 @@ setup(
 	],
 	extras_require={
 		'RabbitMQ': [
-			'DefStream-RabbitMQ>=0.1.0',
+			'DefStream-RabbitMQ',
 		],
 		'Redis': [
-			'DefStream-Redis>=0.1.0',
+			'DefStream-Redis',
 		],
 	},
 	python_requires='>=3.9',
