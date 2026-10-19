@@ -292,7 +292,7 @@ class Inspector:
 		headers = []
 		ext = self.exts.get(environ['PATH_INFO'])
 		self.logger.debug(
-			'Routing Inspector request: method=%s path=%s extension=%s',
+			'Routing Inspector request: method=%s path=%r extension=%s',
 			method,
 			environ['PATH_INFO'],
 			type(ext).__name__ if ext is not None else 'none',
