@@ -2,11 +2,23 @@
 
 from collections.abc import Mapping
 
-from enum import  Enum
-
-from typing import Any, Iterator, KeysView, ItemsView, ValuesView
-from typing import Optional, Sequence, Dict, Union, Iterable, Tuple
-from abc import ABCMeta, ABC
+from enum import Enum
+from typing import (
+	Any,
+	Iterator,
+	KeysView,
+	ItemsView,
+	ValuesView,
+	Optional,
+	Dict,
+	Union,
+	Iterable,
+	Tuple,
+)
+from abc import (
+	ABCMeta,
+	ABC,
+)
 
 __all__ = (
 	'Type',
@@ -20,46 +32,72 @@ __all__ = (
 )
 
 
-class Descriptor(Mapping):
-	def __init__(self, **kwargs: Dict[str, Union['Value', 'Schema']]):
-		self.__properties__ = kwargs
+class Descriptor(Mapping[str, Any]):
+	def __init__(
+		self,
+		**kwargs: Any,
+	) -> None:
+		self.__properties__: Dict[str, Any] = kwargs
 		return
 
-	def __getitem__(self, key: Any) -> Any:
+	def __getitem__(
+		self,
+		key: str,
+	) -> Any:
 		return self.__properties__.__getitem__(key)
 	
-	def __setitem__(self, key: Any, value: Any) -> None:
+	def __setitem__(
+		self,
+		key: str,
+		value: Any,
+	) -> None:
 		return self.__properties__.__setitem__(key, value)
 	
-	def __delitem__(self, key: Any) -> None:
+	def __delitem__(
+		self,
+		key: str,
+	) -> None:
 		return self.__properties__.__delitem__(key)
 	
-	def __iter__(self) -> Iterator:
+	def __iter__(self) -> Iterator[str]:
 		return self.__properties__.__iter__()
 	
 	def __len__(self) -> int:
 		return self.__properties__.__len__()
 	
-	def __contains__(self, key: object) -> bool:
+	def __contains__(
+		self,
+		key: object,
+	) -> bool:
 		return self.__properties__.__contains__(key)
 	
-	def keys(self) -> KeysView:
+	def keys(self) -> KeysView[str]:
 		return self.__properties__.keys()
 	
-	def items(self) -> ItemsView:
+	def items(self) -> ItemsView[str, Any]:
 		return self.__properties__.items()
 	
-	def values(self) -> ValuesView:
+	def values(self) -> ValuesView[Any]:
 		return self.__properties__.values()
 	
-	def __eq__(self, other: object) -> bool:
+	def __eq__(
+		self,
+		other: object,
+	) -> bool:
 		return self.__properties__.__eq__(other)
 	
-	def __ne__(self, value: object) -> bool:
+	def __ne__(
+		self,
+		value: object,
+	) -> bool:
 		return self.__properties__.__ne__(value)
 	
-	def get(self, key: object) -> Any:
-		return self.__properties__.get(key)
+	def get(
+		self,
+		key: str,
+		default: Any = None,
+	) -> Any:
+		return self.__properties__.get(key, default)
 
 
 class Type(str, Enum):
@@ -75,14 +113,14 @@ class Value(Descriptor):
 	def __init__(
 		self, 
 		type: Type,
-		description: str = None,
-		format: str = None,
+		description: Optional[str] = None,
+		format: Optional[str] = None,
 		min: Any = None,
 		max: Any = None,
 		default: Any = None,
 		enum: Optional[Iterable[Any]] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(type=type)
 		if description: self['description'] = description
 		if format: self['format'] = format
@@ -95,25 +133,35 @@ class Value(Descriptor):
 
 
 class Condition(ABC):
-	def __init__(self, *args):
+	def __init__(
+		self,
+		*args: Union[Descriptor, 'Condition', 'Schema'],
+	) -> None:
 		self.args = args
 		return
 
 
 class Schema(object):
+	"""Descriptor 노드, 조건 또는 JSON Schema 매핑을 이름으로 감싼다."""
+
 	def __init__(
 		self,
 		name: str,
-		format: Union[Value, Condition] = None,
-	):
+		format: Optional[Union[Mapping[str, Any], Condition, 'Schema']] = None,
+	) -> None:
 		self.name = name
 		self.format = format
 		return
 
 
 class OneOf(Condition):
-	def __init__(self, *args: Iterable[Union[Value, Schema]], discriminator: str = None, required: bool = True):
-		self.args = args
+	def __init__(
+		self,
+		*args: Union[Descriptor, Condition, Schema],
+		discriminator: Optional[str] = None,
+		required: bool = True,
+	) -> None:
+		super().__init__(*args)
 		self.discriminator = discriminator
 		self.required = required
 		return
@@ -123,10 +171,18 @@ class AllOf(Condition): pass
 
 
 class TypeMapper(metaclass=ABCMeta):
-	def __call__(self, o: type) -> Tuple[Value, Dict[str, Any]]:
+	"""사용자 타입을 Value 파생 클래스와 생성 인자로 변환한다."""
+
+	def __call__(
+		self,
+		o: type,
+	) -> Tuple[type[Value], Dict[str, Any]]:
 		raise NotImplementedError('{} must be implemented __call__'.format(self.__class__.__name__))
 
 
 class TypeEncoder(metaclass=ABCMeta):
-	def __call__(self, o: Any) -> Any:
+	def __call__(
+		self,
+		o: Any,
+	) -> Any:
 		raise NotImplementedError('{} must be implemented __call__'.format(self.__class__.__name__))

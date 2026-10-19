@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from .Value import (
+	Descriptor,
+	Condition,
 	Value,
 	Schema,
 	OneOf,
@@ -19,13 +21,21 @@ from .Types import (
 	Properties,
 )
 
-from dataclasses import is_dataclass, MISSING, asdict
-from json import dumps, loads
+from dataclasses import (
+	is_dataclass,
+	MISSING,
+	asdict,
+)
+from json import (
+	dumps,
+	loads,
+)
 from typing import (
 	Type,
 	Any,
 	Union,
-	Sequence,
+	Optional,
+	Dict,
 	Iterable,
 	Annotated,
 	get_origin,
@@ -41,29 +51,44 @@ __all__ = (
 )
 
 
-def SchemaToDataObject(o: Schema, name: str = None) -> object:
-	# TODO : make dataclass according to schema dynamically
+def SchemaToDataObject(
+	o: Schema,
+	name: Optional[str] = None,
+) -> object:
+	# TODO: 스키마에 대응하는 dataclass 동적 생성을 구현한다.
 	raise NotImplementedError('SchemaToDataObject is not implemented yet')
 
 
 class DataObjectToSchema(object):
-	def __init__(self, mapper: TypeMapper = None):
+	def __init__(
+		self,
+		mapper: Optional[TypeMapper] = None,
+	) -> None:
 		self.mapper = mapper
 		return
 	def __value__(
 		self,
-		o: type,
-		format: Union[type, Sequence[type]] = None,
-		description: str = None,
+		o: object,
+		format: Optional[object] = None,
+		description: Optional[str] = None,
 		required: bool = True,
 		default: Any = MISSING,
 		metadata: Any = None,
-	) -> Union[Value, Schema]:
+	) -> Union[Descriptor, Condition, Schema]:
 		args = get_args(o)
-		o = get_origin(o) if get_origin(o) else o
+		origin = get_origin(o)
+		if origin is not None and not args:
+			return self.__value__(
+				origin,
+				format=format,
+				description=description,
+				required=required,
+				default=default,
+				metadata=metadata,
+			)
 		if args:
 			if len(args) == 1:
-				if o is list:
+				if origin is list:
 					return self.__value__(
 						list,
 						format=args[0],
@@ -72,7 +97,7 @@ class DataObjectToSchema(object):
 						default=default,
 						metadata=metadata,
 					)
-				if o is tuple:
+				if origin is tuple:
 					return self.__value__(
 						tuple,
 						format=args[0],
@@ -81,7 +106,7 @@ class DataObjectToSchema(object):
 						default=default,
 						metadata=metadata,
 					)
-				if o is set:
+				if origin is set:
 					return self.__value__(
 						set,
 						format=args[0],
@@ -90,7 +115,7 @@ class DataObjectToSchema(object):
 						default=default,
 						metadata=metadata,
 					)
-				if o is Union:
+				if origin is Union:
 					return self.__value__(
 						Union,
 						format=args[0],
@@ -101,7 +126,7 @@ class DataObjectToSchema(object):
 					)
 				raise TypeError('{} is not a supported type'.format(o))
 			if len(args) == 2:
-				if o is Union:
+				if origin is Union:
 					if args[0] is type(None): # Union[type, None]
 						return self.__value__(
 							args[1],
@@ -120,14 +145,14 @@ class DataObjectToSchema(object):
 						)
 					# Union[type, type]
 					return self.__value__(
-						o,
+						origin,
 						format=(args[0], args[1]),
 						description=description,
 						required=required,
 						default=default,
 						metadata=metadata,
 					)
-				if o is dict: # Dict[type, type]
+				if origin is dict: # Dict[type, type]
 					return self.__value__(
 						dict,
 						description=description,
@@ -135,7 +160,7 @@ class DataObjectToSchema(object):
 						default=default,
 						metadata=metadata,
 					)
-				if o is Annotated:
+				if origin is Annotated:
 					if isinstance(args[1], str):
 						return self.__value__(
 							args[0],
@@ -151,10 +176,10 @@ class DataObjectToSchema(object):
 						metadata=args[1],
 					)
 				raise TypeError('{} is not a supported type'.format(o))	
-			if o is Union:
+			if origin is Union:
 				fs= [self.__value__(f) for f in args]
 				return OneOf(*fs, required=required)
-			if o is Annotated:
+			if origin is Annotated:
 				if isinstance(args[1], str):
 					return self.__value__(
 						args[0],
@@ -180,7 +205,7 @@ class DataObjectToSchema(object):
 				)
 			raise TypeError('{} is not a supported type'.format(o))	
 		if o is bool:
-			kwargs = {
+			kwargs: Dict[str, Any] = {
 				'description': description,
 				'required': required,
 			}
@@ -256,23 +281,13 @@ class DataObjectToSchema(object):
 			if metadata and isinstance(metadata, dict):
 				if 'description' in metadata.keys(): kwargs['description'] = metadata['description']
 				if 'required' in metadata.keys(): kwargs['required'] = metadata['required']
-				if 'format' in metadata.keys():
-					if not isinstance(metadata['format'], Iterable):
-						metadata['format'] = [metadata['format']]
-					if len(metadata['format']) == 1:
-						metadata['format'] = self.__value__(metadata['format'][0])
-					fs = [self.__value__(f) for f in metadata['format']]
-					kwargs['format'] = OneOf(*fs)
-			if format:
-				if not isinstance(format, Iterable):
-					format = [format]
-				if len(format) == 1:
-					f = self.__value__(format[0])
-					return Array(format=f, **kwargs)
-				fs = [self.__value__(f) for f in format]
-				return Array(format=OneOf(*fs), **kwargs)
-			else:
-				return Array(**kwargs)
+				if format is None and 'format' in metadata:
+					format = metadata['format']
+			if format is not None:
+				candidates = tuple(format) if isinstance(format, Iterable) else (format,)
+				nodes = [self.__value__(candidate) for candidate in candidates]
+				kwargs['format'] = nodes[0] if len(nodes) == 1 else OneOf(*nodes)
+			return Array(**kwargs)
 		if o is tuple:
 			kwargs = {
 				'description': description,
@@ -312,10 +327,9 @@ class DataObjectToSchema(object):
 				kwargs['default'] = default
 			if not format:
 				raise TypeError('Union type must have format')
-			if not isinstance(format, Iterable):
-				format = [format]
-			return OneOf(*[self.__value__(f) for f in format], **kwargs)
-		if is_dataclass(o):
+			candidates = tuple(format) if isinstance(format, Iterable) else (format,)
+			return OneOf(*[self.__value__(f) for f in candidates], **kwargs)
+		if isinstance(o, type) and is_dataclass(o):
 			return self.__call__(o, required=required)
 		if isinstance(o, ForwardRef):
 			if o.__forward_arg__ in globals():
@@ -323,7 +337,7 @@ class DataObjectToSchema(object):
 			if o.__forward_arg__ in locals():
 				return self.__value__(locals()[o.__forward_arg__], description=description, required=required, default=default, metadata=metadata)
 			raise TypeError('Cannot resolve schema forward reference: ' + o.__forward_arg__)
-		if self.mapper:
+		if self.mapper and isinstance(o, type):
 			V, kws = self.mapper(o)
 			if V:
 				if not issubclass(V, Value):
@@ -346,7 +360,12 @@ class DataObjectToSchema(object):
 				return V(**kwargs)
 		raise TypeError('{} is not a supported type'.format(o))
 
-	def __call__(self, o: Type[object], description: str = None, required: bool = True) -> Schema:
+	def __call__(
+		self,
+		o: Type[object],
+		description: Optional[str] = None,
+		required: bool = True,
+	) -> Schema:
 		if not is_dataclass(o):
 			raise TypeError('{} is not a DataObject(dataclass).'.format(o.__name__))
 		hints = get_type_hints(o, include_extras=True)
@@ -369,13 +388,19 @@ class DataObjectToSchema(object):
 
 
 class DataObjectToObject(object):
-	def __init__(self, encoder: TypeEncoder = None):
+	def __init__(
+		self,
+		encoder: Optional[TypeEncoder] = None,
+	) -> None:
 		self.encoder = encoder
 		return
 
-	def __call__(self, o: object):
-		if not is_dataclass(o):
-			raise TypeError('{} is not a DataObject(dataclass).'.format(o.__class__.__name__))
+	def __call__(
+		self,
+		o: object,
+	) -> Dict[str, Any]:
+		if not is_dataclass(o) or isinstance(o, type):
+			raise TypeError('{} is not a DataObject(dataclass) instance.'.format(type(o).__name__))
 		_ = dumps(
 			asdict(o),
 			default=self.encoder,
