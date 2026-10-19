@@ -231,7 +231,7 @@ class ReleaseWorkflowTests(TestCase):
 			}))
 			if not published:
 				response.close()
-				response = HTTPError('https://example.invalid', 404, 'not found', None, None)
+				response = HTTPError('https://example.invalid', 404, 'not found', None, BytesIO())
 			with (
 				closing(response),
 				patch.dict(environ, {
