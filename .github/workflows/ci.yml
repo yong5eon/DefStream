@@ -27,6 +27,9 @@ jobs:
     outputs:
       release: ${{ steps.changes.outputs.release }}
       version: ${{ steps.changes.outputs.version }}
+      core_ref: ${{ steps.refs.outputs.core_ref }}
+      rabbitmq_ref: ${{ steps.refs.outputs.rabbitmq_ref }}
+      redis_ref: ${{ steps.refs.outputs.redis_ref }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -37,6 +40,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Validate PR branch changelog
+        id: changelog
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -77,6 +81,45 @@ jobs:
           notes.parent.mkdir(parents=True, exist_ok=True)
           notes.write_bytes(body)
           print(f'Customer changelog: {path}')
+          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              output.write(f'branch={branch}\n')
+          PY
+      - name: Resolve dependency refs
+        id: refs
+        env:
+          BRANCH: ${{ steps.changelog.outputs.branch }}
+        run: |
+          python - <<'PY'
+          from json import loads
+          from os import environ
+          from pathlib import Path
+          from subprocess import check_output, run
+
+          head = environ['GITHUB_SHA']
+          path = f'issues/{environ["BRANCH"]}/ci.refs.json'
+          entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
+          refs = {}
+          if entry:
+              if entry[0] not in ('100644', '100755'):
+                  raise ValueError(f'Dependency refs must be a regular file: {path}')
+              refs = loads(check_output(['git', 'show', f'{head}:{path}']).decode('utf-8'))
+          else:
+              print(f'{path} not found: dependency refs default to master')
+          projects = {
+              'DefStream': 'core_ref',
+              'DefStream-RabbitMQ': 'rabbitmq_ref',
+              'DefStream-Redis': 'redis_ref',
+          }
+          if not isinstance(refs, dict) or refs.keys() - projects.keys():
+              raise ValueError(f'Expected an object with only supported project names: {path}')
+          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              for project, key in projects.items():
+                  ref = refs.get(project, 'master')
+                  if not isinstance(ref, str) or not ref or ref.startswith('-'):
+                      raise ValueError(f'Invalid dependency ref for {project}: {ref!r}')
+                  run(['git', 'check-ref-format', '--allow-onelevel', ref], check=True)
+                  output.write(f'{key}={ref}\n')
+                  print(f'{project} dependency ref: {ref}')
           PY
       - name: Preserve customer release notes
         uses: actions/upload-artifact@v7
@@ -185,7 +228,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: yong5eon/DefStream
-          ref: ${{ github.event.repository.name == 'DefStream' && github.sha || 'master' }}
+          ref: ${{ github.event.repository.name == 'DefStream' && github.sha || needs.changes.outputs.core_ref }}
           path: packages/DefStream
           fetch-depth: 0
           persist-credentials: false
@@ -194,7 +237,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: yong5eon/DefStream-RabbitMQ
-          ref: ${{ github.event.repository.name == 'DefStream-RabbitMQ' && github.sha || 'master' }}
+          ref: ${{ github.event.repository.name == 'DefStream-RabbitMQ' && github.sha || needs.changes.outputs.rabbitmq_ref }}
           path: packages/DefStream-RabbitMQ
           fetch-depth: 0
           persist-credentials: false
@@ -203,7 +246,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: yong5eon/DefStream-Redis
-          ref: ${{ github.event.repository.name == 'DefStream-Redis' && github.sha || 'master' }}
+          ref: ${{ github.event.repository.name == 'DefStream-Redis' && github.sha || needs.changes.outputs.redis_ref }}
           path: packages/DefStream-Redis
           fetch-depth: 0
           persist-credentials: false
