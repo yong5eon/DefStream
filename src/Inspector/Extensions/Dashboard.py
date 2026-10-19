@@ -1,6 +1,7 @@
 from html import escape
 from importlib.resources import files
 from json import dumps
+from logging import getLogger
 from re import sub
 from typing import (
 	Optional,
@@ -20,6 +21,8 @@ __all__ = (
 
 
 class Dashboard(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.Dashboard')
+
 	def __init__(
 		self,
 		path: str,
@@ -56,6 +59,10 @@ class Dashboard(Extension):
 		if len(metrics) != 1:
 			raise ValueError('Dashboard requires exactly one registered Metrics extension')
 		self.metrics = metrics[0]
+		self.logger.debug(
+			'Dashboard Metrics extension attached: path=%s',
+			self.metrics.path,
+		)
 
 	def handle(
 		self,
@@ -65,6 +72,7 @@ class Dashboard(Extension):
 		if environ.get('HTTP_ACCEPT') == 'application/json':
 			if self.metrics is None:
 				raise RuntimeError('Dashboard has not been started')
+			self.logger.debug('Building Dashboard JSON response')
 			return Response(
 				'200 OK',
 				dumps(
@@ -78,12 +86,14 @@ class Dashboard(Extension):
 					'nosniff',
 				),),
 			)
+		self.logger.debug('Dashboard HTML response requested')
 		return self(inspector)
 
 	def __call__(
 		self,
 		inspector: 'Inspector',
 	) -> Response:
+		self.logger.debug('Reading Dashboard HTML resource')
 		values = {
 			'title': escape(self.title),
 			'description': escape(self.description) if self.description is not None else '',

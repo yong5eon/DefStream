@@ -5,6 +5,7 @@ from concurrent.futures import (
 	ThreadPoolExecutor,
 )
 from multiprocessing import get_context
+from logging import getLogger
 from multiprocessing.managers import SyncManager
 from pickle import (
 	dumps,
@@ -42,7 +43,7 @@ Result = TypeVar('Result')
 
 
 def initialize_process() -> None:
-	# The parent coordinates draining and cleanup after Ctrl+C.
+	# 부모 프로세스가 종료 요청과 정리를 조정한다.
 	signal(
 		SIGINT,
 		SIG_IGN,
@@ -56,16 +57,33 @@ def execute_loop(
 	cleanups: Sequence[Callable[[], None]],
 	serialized: bool,
 ) -> None:
+	logger = Executor.logger
 	ready = False
 	try:
 		for setup in setups:
+			logger.debug(
+				'Starting execution environment setup: hook=%s',
+				type(setup).__qualname__,
+			)
 			setup()
+			logger.debug(
+				'Execution environment setup completed: hook=%s',
+				type(setup).__qualname__,
+			)
 		ready = True
+		logger.debug(
+			'Execution unit ready: serialized=%s',
+			serialized,
+		)
 		while True:
 			item = incoming.get()
 			if item is None:
 				return
 			key, payload = item
+			logger.debug(
+				'Execution unit task received: key=%s',
+				key,
+			)
 			try:
 				function, args, kwargs = loads(payload) if serialized else payload
 				result = function(
@@ -73,6 +91,11 @@ def execute_loop(
 					**kwargs,
 				)
 			except BaseException as error:
+				logger.debug(
+					'Execution unit task failed: key=%s error_type=%s',
+					key,
+					type(error).__qualname__,
+				)
 				outcome = (
 					False,
 					error,
@@ -88,6 +111,11 @@ def execute_loop(
 				try:
 					outcome = dumps(outcome)
 				except Exception as error:
+					logger.error(
+						'Task outcome serialization failed: key=%s error_type=%s',
+						key,
+						type(error).__qualname__,
+					)
 					outcome = dumps((
 						False,
 						RuntimeError('Cannot serialize task outcome: ' + repr(error)),
@@ -97,9 +125,18 @@ def execute_loop(
 				key,
 				outcome,
 			))
+			logger.debug(
+				'Execution unit result sent: key=%s',
+				key,
+			)
 	finally:
 		if ready:
+			logger.debug(
+				'Starting execution environment cleanup: hooks=%s',
+				len(cleanups),
+			)
 			run_cleanups(cleanups)
+			logger.debug('Execution environment cleanup completed')
 
 
 def run_cleanups(
@@ -119,6 +156,8 @@ def run_cleanups(
 
 
 class Executor(PyExecutor):
+	logger = getLogger('DefStream.Executor')
+
 	def __init__(
 		self,
 		size: int,
@@ -143,6 +182,11 @@ class Executor(PyExecutor):
 		self.sequence = 0
 
 	def start(self) -> None:
+		self.logger.info(
+			'Starting Executor: concurrency=%s process=%s',
+			self.size,
+			self.process,
+		)
 		try:
 			if self.process:
 				context = get_context('spawn')
@@ -171,7 +215,9 @@ class Executor(PyExecutor):
 			monitor = Thread(target=self.collect)
 			monitor.start()
 			self.monitor = monitor
+			self.logger.info('Executor execution environment ready')
 		except BaseException:
+			self.logger.exception('Executor startup failed')
 			self.closed = True
 			try:
 				for worker in self.workers:
@@ -211,6 +257,11 @@ class Executor(PyExecutor):
 			future: Future[Result] = Future()
 			future.set_running_or_notify_cancel()
 			self.pending[key] = future
+			self.logger.debug(
+				'Dispatching task to execution environment: key=%s pending=%s',
+				key,
+				len(self.pending),
+			)
 			try:
 				self.incoming.put((
 					key,
@@ -232,9 +283,20 @@ class Executor(PyExecutor):
 		error: BaseException,
 	) -> None:
 		with self.lock:
+			first_failure = self.failure is None
 			self.failure = error
 			pending = tuple(self.pending.values())
 			self.pending.clear()
+		if first_failure:
+			self.logger.error(
+				'Executor execution environment failed: pending=%s',
+				len(pending),
+				exc_info=(
+					type(error),
+					error,
+					error.__traceback__,
+				),
+			)
 		for future in pending:
 			future.set_exception(error)
 
@@ -246,6 +308,11 @@ class Executor(PyExecutor):
 				pass
 			else:
 				success, value, traceback = loads(outcome) if self.process else outcome
+				self.logger.debug(
+					'Execution result collected: key=%s success=%s',
+					key,
+					success,
+				)
 				with self.lock:
 					future = self.pending.pop(
 						key,
@@ -279,6 +346,10 @@ class Executor(PyExecutor):
 		*,
 		cancel_futures: bool = False,
 	) -> None:
+		self.logger.info(
+			'Executor shutdown requested: wait=%s',
+			wait,
+		)
 		with self.lock:
 			if not self.closed:
 				self.closed = True
@@ -287,6 +358,7 @@ class Executor(PyExecutor):
 						self.incoming.put(None)
 			executor = self.executor
 		if executor is None:
+			self.logger.debug('Closing an unstarted Executor')
 			return
 		executor.shutdown(wait=wait)
 		if wait:
@@ -296,3 +368,4 @@ class Executor(PyExecutor):
 				self.manager.shutdown()
 			if self.failure is not None:
 				raise RuntimeError('Pool execution environment failed') from self.failure
+			self.logger.info('Executor shutdown completed')

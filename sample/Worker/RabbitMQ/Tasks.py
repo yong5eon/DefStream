@@ -1,3 +1,11 @@
+from logging import (
+	DEBUG,
+	Filter,
+	Formatter,
+	StreamHandler,
+	getLogger,
+)
+
 from DefStream.Broker.Implements.RabbitMQ import (
 	Reject,
 	Requeue,
@@ -20,6 +28,7 @@ from DefStream.Validator.Patterns.Object import (
 	IsRequiredIn,
 )
 from DefStream.Worker import (
+	PoolSetup,
 	Run,
 	Specification,
 )
@@ -28,6 +37,26 @@ __all__ = (
 	'Add',
 	'Divide',
 )
+
+
+logger = getLogger('Sample')
+
+
+class LoggingSetup(PoolSetup):
+	"""부모와 spawn 자식 프로세스의 샘플 로그 출력을 설정한다."""
+
+	def __call__(self) -> None:
+		handler = StreamHandler()
+		handler.setFormatter(Formatter('%(asctime)s %(processName)s %(name)s %(levelname)s %(message)s'))
+		sources = (
+			Filter('Sample'),
+			Filter('DefStream'),
+		)
+		handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+		root = getLogger()
+		root.setLevel(DEBUG)
+		root.addHandler(handler)
+		return
 
 
 class Add(
@@ -71,7 +100,12 @@ class Add(
 		a: int,
 		b: int,
 	):
-		print(f'{a} + {b} = {a + b}')
+		logger.info(
+			'%s + %s = %s',
+			a,
+			b,
+			a + b,
+		)
 		return a + b
 
 
@@ -116,5 +150,10 @@ class Divide(
 		a: int,
 		b: int,
 	):
-		print(f'{a} / {b} = {a / b}')
+		logger.info(
+			'%s / %s = %s',
+			a,
+			b,
+			a / b,
+		)
 		return a / b

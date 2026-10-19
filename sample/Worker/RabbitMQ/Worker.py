@@ -7,6 +7,8 @@ from signal import (
 from Tasks import (
 	Add,
 	Divide,
+	LoggingSetup,
+	logger,
 )
 
 from DefStream.Broker.Implements.RabbitMQ import (
@@ -62,7 +64,7 @@ class Prepare(WorkerSetup):
 					task=run,
 					broker=broker,
 				)
-		print('Prepared 5 messages per queue')
+		logger.info('Prepared 5 messages per queue')
 
 
 class Cleanup(WorkerCleanup):
@@ -70,10 +72,11 @@ class Cleanup(WorkerCleanup):
 		self,
 		worker: Worker,
 	) -> None:
-		print('Worker cleanup')
+		logger.info('Worker cleanup')
 
 
 if __name__ == '__main__':
+	LoggingSetup()()
 	worker = Worker(
 		Connection(Configuration(
 			host='127.0.0.1',
@@ -81,7 +84,10 @@ if __name__ == '__main__':
 			username='guest',
 			password='guest',
 		)),
-		ProcessPool(10),
+		ProcessPool(
+			10,
+			setups=LoggingSetup(),
+		),
 		setups=Prepare(),
 		cleanups=Cleanup(),
 		inspector=Inspector(

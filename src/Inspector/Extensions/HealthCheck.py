@@ -20,10 +20,9 @@ __all__ = (
 	'HealthCheck',
 )
 
-logger = getLogger(__name__)
-
-
 class HealthCheck(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.HealthCheck')
+
 	def __init__(
 		self,
 		path: str,
@@ -67,13 +66,24 @@ class HealthCheck(Extension):
 			if self.probe is None or self.probe.is_set():
 				self.probe = Event()
 				try:
+					self.logger.debug('Scheduling HealthCheck Consumer probe')
 					worker.consumer.call(self.probe.set)
-				except Exception:
+				except Exception as error:
 					self.probe = None
-					logger.exception('HealthCheck could not schedule the consumer health probe')
+					self.logger.error(
+						'HealthCheck Consumer probe scheduling failed: error=%s',
+						type(error).__name__,
+					)
 					return False
 			probe = self.probe
-		return probe.wait(self.timeout) and self.state(inspector) == 'running'
+		responded = probe.wait(self.timeout)
+		healthy = responded and self.state(inspector) == 'running'
+		self.logger.debug(
+			'HealthCheck Consumer probe completed: responded=%s healthy=%s',
+			responded,
+			healthy,
+		)
+		return healthy
 
 	def __call__(
 		self,
@@ -83,6 +93,11 @@ class HealthCheck(Extension):
 		state = 'running' if healthy else self.state(inspector)
 		if not healthy and state == 'running':
 			state = 'unresponsive'
+		self.logger.debug(
+			'Building HealthCheck response: status=%s state=%s',
+			'200' if healthy else '503',
+			state,
+		)
 		return Response(
 			'200 OK' if healthy else '503 Service Unavailable',
 			dumps({

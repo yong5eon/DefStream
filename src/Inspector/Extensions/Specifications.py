@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from json import dumps
+from logging import getLogger
 from re import fullmatch
 from typing import (
 	TYPE_CHECKING,
@@ -30,6 +31,8 @@ def reference(
 
 
 class Specifications(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.Specifications')
+
 	def __init__(
 		self,
 		path: str,
@@ -59,6 +62,7 @@ class Specifications(Extension):
 		self,
 		inspector: 'Inspector',
 	) -> dict:
+		self.logger.debug('Building Specifications AsyncAPI document')
 		worker = inspector.worker
 		if worker is None:
 			raise RuntimeError('Specifications requires an attached Worker')
@@ -136,25 +140,36 @@ class Specifications(Extension):
 					)],
 				}
 			operations[key] = operation
-		return {
+		document = {
 			'asyncapi': '3.1.0',
 			'info': info,
 			'defaultContentType': self.format,
 			'channels': channels,
 			'operations': operations,
 		}
+		self.logger.debug(
+			'Specifications AsyncAPI document built: tasks=%d channels=%d',
+			len(operations),
+			len(channels),
+		)
+		return document
 
 	def __call__(
 		self,
 		inspector: 'Inspector',
 	) -> Response:
+		body = dumps(
+			self.document(inspector),
+			ensure_ascii=False,
+			allow_nan=False,
+			indent=2,
+		).encode('utf-8')
+		self.logger.debug(
+			'Specifications HTTP response built: bytes=%d',
+			len(body),
+		)
 		return Response(
 			'200 OK',
-			dumps(
-				self.document(inspector),
-				ensure_ascii=False,
-				allow_nan=False,
-				indent=2,
-			).encode('utf-8'),
+			body,
 			'application/json; charset=utf-8',
 		)

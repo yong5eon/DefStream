@@ -303,7 +303,7 @@ class WorkerTests(TestCase):
 					worker.stop()
 
 				consumer.on_run = receive
-				with self.assertLogs('DefStream.Worker.Worker', level='ERROR'):
+				with self.assertLogs('DefStream.Worker', level='ERROR'):
 					worker.run()
 				self.assertEqual(threads, [consumer.owner])
 				delivery.ack.assert_not_called()
@@ -334,7 +334,7 @@ class WorkerTests(TestCase):
 			worker.stop()
 
 		consumer.on_run = receive
-		with self.assertLogs('DefStream.Worker.Worker', level='ERROR'):
+		with self.assertLogs('DefStream.Worker', level='WARNING'):
 			worker.run()
 		delivery.reject.assert_called_once_with()
 		worker.pool.submit.assert_not_called()

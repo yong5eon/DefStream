@@ -1,4 +1,11 @@
 from random import randint
+from logging import (
+	DEBUG,
+	Filter,
+	Formatter,
+	StreamHandler,
+	getLogger,
+)
 from signal import (
 	SIGINT,
 	signal,
@@ -29,6 +36,23 @@ from DefStream.Worker import (
 )
 
 
+logger = getLogger('Sample')
+
+
+def configure_logging() -> None:
+	handler = StreamHandler()
+	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
+	sources = (
+		Filter('Sample'),
+		Filter('DefStream'),
+	)
+	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+	root = getLogger()
+	root.setLevel(DEBUG)
+	root.addHandler(handler)
+	return
+
+
 class Add(
 	Run,
 	parameters=Subscription('add'),
@@ -39,7 +63,12 @@ class Add(
 		b: int,
 	):
 		result = a + b
-		print(f'{a} + {b} = {result}')
+		logger.info(
+			'%s + %s = %s',
+			a,
+			b,
+			result,
+		)
 		return result
 
 
@@ -54,7 +83,12 @@ class Divide(
 		b: int,
 	):
 		result = a / b
-		print(f'{a} / {b} = {result}')
+		logger.info(
+			'%s / %s = %s',
+			a,
+			b,
+			result,
+		)
 		return result
 
 
@@ -89,7 +123,7 @@ class Prepare(WorkerSetup):
 					task=run,
 					broker=broker,
 				)
-		print('Prepared 5 messages per queue')
+		logger.info('Prepared 5 messages per queue')
 
 
 class Cleanup(WorkerCleanup):
@@ -97,10 +131,11 @@ class Cleanup(WorkerCleanup):
 		self,
 		worker: Worker,
 	) -> None:
-		print('Worker cleanup')
+		logger.info('Worker cleanup')
 
 
 def main() -> None:
+	configure_logging()
 	worker = Worker(
 		Connection(Configuration()),
 		ThreadPool(10),

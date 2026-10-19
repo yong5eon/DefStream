@@ -39,9 +39,6 @@ __all__ = (
 	'WorkerCleanup',
 )
 
-logger = getLogger(__name__)
-
-
 class WorkerSetup(ABC):
 	@abstractmethod
 	def __call__(
@@ -73,6 +70,8 @@ def worker_hooks(
 
 
 class Worker:
+	logger = getLogger('DefStream.Worker')
+
 	def __init__(
 		self,
 		broker: Connection,
@@ -104,6 +103,11 @@ class Worker:
 		if run in self.tasks:
 			raise ValueError('Run is already registered')
 		self.tasks.append(run)
+		self.logger.debug(
+			'Task registered: task=%s.%s',
+			run.__module__,
+			run.__qualname__,
+		)
 
 	def run(self) -> None:
 		if self.started:
@@ -111,17 +115,37 @@ class Worker:
 		if not self.tasks:
 			raise RuntimeError('Register at least one Run before starting')
 		self.started = True
+		self.logger.info(
+			'Starting Worker: tasks=%s',
+			len(self.tasks),
+		)
 		try:
 			startup(self)
 			if self.inspector is not None:
 				self.inspector.start(self)
+			self.logger.debug('Connecting to broker')
 			self.broker.connect()
+			self.logger.debug('Broker connected')
 			for setup in self.setups:
+				self.logger.debug(
+					'Starting Worker setup: hook=%s',
+					type(setup).__qualname__,
+				)
 				setup(self)
+				self.logger.debug(
+					'Worker setup completed: hook=%s',
+					type(setup).__qualname__,
+				)
 			if not isinstance(self.broker, GetConsumer):
 				raise TypeError('Worker broker must support consumer creation')
 			self.consumer = self.broker.consumer()
+			self.logger.debug('Consumer created')
 			for run in self.tasks:
+				self.logger.debug(
+					'Subscribing task: task=%s.%s',
+					run.__module__,
+					run.__qualname__,
+				)
 				self.consumer.subs(
 					run.parameters,
 					Handler(
@@ -129,18 +153,28 @@ class Worker:
 						run,
 					),
 				)
+				self.logger.debug(
+					'Task subscribed: task=%s.%s',
+					run.__module__,
+					run.__qualname__,
+				)
 			if not self.stopping.is_set():
 				self.running.set()
+				self.logger.info('Worker ready to consume')
 				self.consumer.run()
 		finally:
 			self.running.clear()
 			self.finished.set()
 			if self.pending:
-				logger.error(
-					'Consumer exited with %s unconfirmed deliveries',
+				self.logger.error(
+					'Consumer exited with unconfirmed deliveries: pending=%s',
 					self.pending,
 				)
 			try:
+				self.logger.info(
+					'Draining Worker tasks: pending=%s',
+					self.pending,
+				)
 				self.pool.stop()
 			finally:
 				try:
@@ -155,20 +189,32 @@ class Worker:
 						finally:
 							if self.inspector is not None and self.inspector.worker is self:
 								self.inspector.stop()
+			self.logger.info('Worker shutdown completed')
 
 	def cleanup(self) -> None:
+		self.logger.debug(
+			'Starting Worker cleanup: hooks=%s',
+			len(self.cleanups),
+		)
 		run_cleanups(
 			self.cleanups,
 			self,
 		)
+		self.logger.debug('Worker cleanup completed')
 
 	def stop(self) -> None:
+		if not self.stopping.is_set():
+			self.logger.info(
+				'Worker shutdown requested: pending=%s',
+				self.pending,
+			)
 		self.stopping.set()
 		if self.consumer is not None and not self.finished.is_set():
 			self.consumer.call(self.try_stop)
 
 	def try_stop(self) -> None:
 		if self.stopping.is_set() and self.pending == 0 and self.consumer is not None:
+			self.logger.debug('No pending tasks; requesting Consumer stop')
 			self.consumer.stop()
 
 	def receive(
@@ -177,6 +223,11 @@ class Worker:
 		event: Event,
 	) -> None:
 		if self.stopping.is_set():
+			self.logger.debug(
+				'Requeuing message received during shutdown: task=%s.%s',
+				run.__module__,
+				run.__qualname__,
+			)
 			event.nack()
 			return
 		if not isinstance(
@@ -196,6 +247,11 @@ class Worker:
 			raise RuntimeError('Worker consumer is not initialized')
 		inspector = self.inspector
 		task = run.__module__ + '.' + run.__qualname__
+		self.logger.debug(
+			'Task message received: task=%s pending=%s',
+			task,
+			self.pending,
+		)
 		contexts = inspector.begin(task) if inspector is not None else ()
 
 		def schedule(
@@ -209,11 +265,16 @@ class Worker:
 					error is None,
 				)
 			if self.finished.is_set():
-				logger.error(
-					'Consumer exited before Run %s delivery could be confirmed',
-					run.__name__,
+				self.logger.error(
+					'Cannot confirm delivery after Consumer exit: task=%s',
+					task,
 				)
 				return
+			self.logger.debug(
+				'Scheduling task result callback: task=%s success=%s',
+				task,
+				error is None,
+			)
 			consumer.call(lambda: self.complete(
 				run,
 				event,
@@ -222,13 +283,25 @@ class Worker:
 			))
 
 		try:
+			self.logger.debug(
+				'Submitting task to Pool: task=%s',
+				task,
+			)
 			self.pool.submit(
 				run,
 				dict(event.body),
 				callback=lambda result: schedule(result=result),
 				error_callback=schedule,
 			)
+			self.logger.debug(
+				'Pool task submission accepted: task=%s',
+				task,
+			)
 		except PoolFull:
+			self.logger.debug(
+				'Requeuing message because Pool is full: task=%s',
+				task,
+			)
 			if inspector is not None:
 				inspector.end(
 					task,
@@ -269,8 +342,17 @@ class Worker:
 					event,
 					result,
 				)
+				self.logger.debug(
+					'Consumer completion returned: task=%s.%s',
+					run.__module__,
+					run.__qualname__,
+				)
 		finally:
 			self.pending -= 1
+			self.logger.debug(
+				'Task completion handling finished: pending=%s',
+				self.pending,
+			)
 			self.try_stop()
 
 	def failed(
@@ -279,20 +361,39 @@ class Worker:
 		event: Event,
 		error: BaseException,
 	) -> None:
-		logger.error(
-			'Run %s failed',
-			run.__name__,
-			exc_info=(
-				type(error),
-				error,
-				error.__traceback__,
-			),
-		)
+		if isinstance(
+			error,
+			TypeError,
+		) and not isinstance(
+			event.body,
+			Mapping,
+		):
+			self.logger.warning(
+				'Rejected a non-mapping task message: task=%s.%s',
+				run.__module__,
+				run.__qualname__,
+			)
+		else:
+			self.logger.error(
+				'Task failed: task=%s.%s',
+				run.__module__,
+				run.__qualname__,
+				exc_info=(
+					type(error),
+					error,
+					error.__traceback__,
+				),
+			)
 		if self.consumer is None:
 			raise RuntimeError('Worker consumer is not initialized')
 		self.consumer.fail(
 			event,
 			run.on_error,
+		)
+		self.logger.debug(
+			'Consumer failure policy returned: task=%s.%s',
+			run.__module__,
+			run.__qualname__,
 		)
 
 

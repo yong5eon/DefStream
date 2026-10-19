@@ -444,7 +444,7 @@ class InspectorTests(TestCase):
 		))
 		self.assertTrue(acked.wait(5))
 		with self.assertLogs(
-			'DefStream.Worker.Worker',
+			'DefStream.Worker',
 			level='ERROR',
 		):
 			consumer.call(lambda: worker.receive(
@@ -723,7 +723,7 @@ class InspectorTests(TestCase):
 			)
 			task = Divide.__module__ + '.' + Divide.__qualname__
 			with self.assertLogs(
-				'DefStream.Worker.Worker',
+				'DefStream.Worker',
 				level='ERROR',
 			):
 				for divisor in (

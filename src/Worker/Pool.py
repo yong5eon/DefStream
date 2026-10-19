@@ -8,6 +8,7 @@ from concurrent.futures import (
 	wait,
 )
 from os import cpu_count
+from logging import getLogger
 from threading import (
 	BoundedSemaphore,
 	Lock,
@@ -42,6 +43,8 @@ class PoolFull(RuntimeError):
 
 
 class Pool:
+	logger = getLogger('DefStream.Pool')
+
 	def __init__(
 		self,
 		executor: PyExecutor,
@@ -53,6 +56,10 @@ class Pool:
 		self.lock = Lock()
 		self.futures: Set[Future] = set()
 		self.closed = False
+		self.logger.info(
+			'Pool configured: concurrency=%s',
+			max,
+		)
 
 	def submit(
 		self,
@@ -65,6 +72,11 @@ class Pool:
 			if self.closed:
 				raise RuntimeError('Pool is closed')
 			if not self.slots.acquire(blocking=False):
+				self.logger.debug(
+					'Pool capacity exhausted: active=%s capacity=%s',
+					len(self.futures),
+					self.max,
+				)
 				raise PoolFull('Pool capacity is exhausted')
 			try:
 				future = self.pool.submit(
@@ -75,6 +87,12 @@ class Pool:
 				self.slots.release()
 				raise
 			self.futures.add(future)
+			self.logger.debug(
+				'Task submission accepted: task=%s.%s active=%s',
+				run.__module__,
+				run.__qualname__,
+				len(self.futures),
+			)
 		future.add_done_callback(lambda completed: self.complete(
 			completed,
 			callback,
@@ -91,12 +109,21 @@ class Pool:
 		with self.lock:
 			self.futures.remove(future)
 			self.slots.release()
+			self.logger.debug(
+				'Task slot released: active=%s',
+				len(self.futures),
+			)
 		try:
 			result = future.result()
 		except BaseException as error:
+			self.logger.debug(
+				'Delivering failed result: error_type=%s',
+				type(error).__qualname__,
+			)
 			if error_callback is not None:
 				error_callback(error)
 		else:
+			self.logger.debug('Delivering successful result')
 			if callback is not None:
 				callback(result)
 
@@ -106,16 +133,27 @@ class Pool:
 	) -> None:
 		with self.lock:
 			tasks = tuple(self.futures)
+		self.logger.debug(
+			'Waiting for Pool tasks: active=%s timeout=%s',
+			len(tasks),
+			timeout,
+		)
 		if tasks and wait(
 			tasks,
 			timeout=timeout,
 		).not_done:
+			self.logger.warning(
+				'Pool task wait timed out: timeout=%s',
+				timeout,
+			)
 			raise TimeoutError('Pool tasks did not complete in time')
 
 	def stop(self) -> None:
+		self.logger.info('Stopping Pool')
 		with self.lock:
 			self.closed = True
 		self.pool.shutdown(wait=True)
+		self.logger.info('Pool shutdown completed')
 
 	def shutdown(self) -> None:
 		self.stop()
@@ -167,6 +205,8 @@ def pool_size(max: Optional[int]) -> int:
 
 
 class ThreadPool(Pool):
+	logger = getLogger('DefStream.ThreadPool')
+
 	def __init__(
 		self,
 		max: Optional[int] = None,
@@ -185,6 +225,8 @@ class ThreadPool(Pool):
 
 
 class ProcessPool(Pool):
+	logger = getLogger('DefStream.ProcessPool')
+
 	def __init__(
 		self,
 		max: Optional[int] = None,
