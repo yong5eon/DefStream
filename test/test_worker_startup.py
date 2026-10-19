@@ -43,7 +43,7 @@ class StartupTests(TestCase):
 		pool = Mock()
 		pool.size.return_value = 4
 		worker = Worker(
-			Mock(),
+			Mock(consumer=Mock()),
 			pool,
 		)
 		worker.add(Task)

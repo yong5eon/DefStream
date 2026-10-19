@@ -136,8 +136,7 @@ class HookTests(TestCase):
 				with self.subTest(pool=pool_cls, failure=failure), TemporaryDirectory() as directory:
 					path = str(Path(directory) / 'trace')
 					consumer = FakeConsumer()
-					broker = Mock()
-					broker.consumer.return_value = consumer
+					broker = Mock(consumer=Mock(return_value=consumer))
 					worker = Worker(broker, pool_cls(1))
 					worker.add(HookRunner)
 					delivery = Mock()

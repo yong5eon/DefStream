@@ -360,7 +360,7 @@ class WorkerLifecycleTests(TestCase):
 			def run(self):
 				pass
 
-		broker = Mock()
+		broker = Mock(consumer=Mock())
 		pool = Mock()
 		worker = Worker(
 			broker,

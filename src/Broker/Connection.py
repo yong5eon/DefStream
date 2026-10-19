@@ -60,6 +60,7 @@ class GetStream(Protocol):
 	) -> Sendable: ...
 
 
+@runtime_checkable
 class GetConsumer(Protocol):
 	@abstractmethod
 	def consumer(

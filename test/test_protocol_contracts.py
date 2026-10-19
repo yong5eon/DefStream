@@ -1,6 +1,7 @@
 from inspect import isabstract
 from typing import (
 	Optional,
+	get_type_hints,
 )
 from unittest import (
 	TestCase,
@@ -45,13 +46,11 @@ from DefStream.Broker.Policies import (
 	Reject,
 	Requeue,
 )
-from DefStream.Worker import WorkerConnection
-
-
-def worker_connection(
-	connection: WorkerConnection,
-) -> WorkerConnection:
-	return connection
+from DefStream.Worker import (
+	Run,
+	Worker,
+)
+from DefStream.Worker import __all__ as worker_exports
 
 
 def queue_provider(
@@ -109,7 +108,7 @@ class ProtocolContractTests(TestCase):
 		Handler()(event)
 		event.ack.assert_called_once()
 
-	def test_protocols_are_independent_and_abstract(self):
+	def test_protocols_are_abstract(self):
 		self.assertNotIn(
 			'Broker',
 			connection_exports,
@@ -120,7 +119,6 @@ class ProtocolContractTests(TestCase):
 			GetQueue,
 			GetStream,
 			GetConsumer,
-			WorkerConnection,
 		):
 			with self.subTest(protocol=protocol):
 				self.assertTrue(protocol._is_protocol)
@@ -186,6 +184,14 @@ class ProtocolContractTests(TestCase):
 		))
 
 	def test_worker_accepts_minimal_structural_and_concrete_connections(self):
+		self.assertIs(
+			get_type_hints(Worker.__init__)['broker'],
+			Connection,
+		)
+		self.assertNotIn(
+			'WorkerConnection',
+			worker_exports,
+		)
 		connections = (
 			StructuralConnection(),
 			RabbitConnection(RabbitConfiguration(
@@ -195,14 +201,58 @@ class ProtocolContractTests(TestCase):
 			RedisConnection(RedisConfiguration()),
 		)
 		for connection in connections:
+			broker: Connection = connection
+			worker = Worker(
+				broker,
+				Mock(),
+			)
 			self.assertIs(
-				worker_connection(connection),
+				worker.broker,
 				connection,
+			)
+			self.assertIsInstance(
+				connection,
+				GetConsumer,
 			)
 		self.assertIs(
 			queue_provider(RedisConnection(RedisConfiguration())).__class__,
 			RedisConnection,
 		)
+
+	def test_worker_rejects_connection_without_consumer_creation(self):
+		class ProducerConnection(Connection):
+			def connect(self) -> None:
+				return
+
+			def close(self) -> None:
+				return
+
+		class Task(
+			Run,
+			parameters={'queue': 'protocol-test'},
+		):
+			def run(self):
+				return
+
+		connection = ProducerConnection()
+		self.assertNotIsInstance(
+			connection,
+			GetConsumer,
+		)
+		pool = Mock()
+		worker = Worker(
+			connection,
+			pool,
+		)
+		worker.add(Task)
+		with self.assertRaisesRegex(
+			TypeError,
+			'Worker broker must support consumer creation',
+		):
+			worker.run()
+		pool.stop.assert_called_once_with()
+		self.assertTrue(worker.finished.is_set())
+		return
 
 	def test_existing_event_codec_and_policy_protocols_are_explicit(self):
 		for implementation, contract in (

@@ -91,6 +91,11 @@ class Add(
 
 ### 2. Worker 실행: `worker.py`
 
+`Worker`는 `DefStream.Broker.Connection`을 직접 받습니다.
+연결 계약은 `connect()`, `close()`만 요구하며, 워커 실행 시 내부에서
+`GetConsumer` 지원 여부를 검사합니다. 컨슈머를 생성할 수 없는 브로커는 `TypeError`를 발생시키며,
+워커 전용 연결 타입은 필요하지 않습니다.
+
 ```python
 from signal import SIGINT, signal
 
