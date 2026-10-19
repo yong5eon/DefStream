@@ -48,7 +48,7 @@ result = request(
 
 RPC 결과를 받으려면 해당 작업을 처리하는 Worker가 실행 중이어야 합니다.
 전체 작업 정의와 큐 전환 방법은
-[RabbitMQ 우선순위 사용 안내](../../../../DefStream-RabbitMQ/issues/feature/1/README.md)를 참고하세요.
+[RabbitMQ 우선순위 사용 안내](https://github.com/yong5eon/DefStream-RabbitMQ/blob/master/issues/feature/1/README.md)를 참고하세요.
 
 ## 기존 코드에 미치는 영향
 

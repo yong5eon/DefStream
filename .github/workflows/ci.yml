@@ -19,6 +19,9 @@ concurrency:
 jobs:
   changes:
     name: Plan release version
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -33,6 +36,56 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - name: Validate PR branch changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          from json import loads
+          from os import environ
+          from pathlib import Path
+          from subprocess import check_output
+
+          head = environ['GITHUB_SHA']
+          if environ['GITHUB_EVENT_NAME'] == 'pull_request':
+              event = loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+              branch = event['pull_request']['head']['ref']
+          else:
+              repository = environ['GITHUB_REPOSITORY']
+              pages = loads(check_output([
+                  'gh', 'api', '--paginate', '--slurp',
+                  f'repos/{repository}/commits/{head}/pulls?per_page=100',
+              ]))
+              pulls = [
+                  pull for page in pages for pull in page
+                  if pull['merged_at'] is not None
+                  and pull['merge_commit_sha'] == head
+                  and pull['base']['ref'] == 'master'
+                  and pull['base']['repo']['full_name'] == repository
+              ]
+              if len(pulls) != 1:
+                  raise ValueError('Expected exactly one merged PR for the release commit')
+              branch = pulls[0]['head']['ref']
+          path = f'issues/{branch}/README.md'
+          entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
+          if not entry or entry[0] not in ('100644', '100755'):
+              raise ValueError(f'Changelog must exist as a regular file: {path}')
+          body = check_output(['git', 'show', f'{head}:{path}'])
+          if not body.decode('utf-8').strip():
+              raise ValueError(f'Customer changelog is empty: {path}')
+          notes = Path(environ['RUNNER_TEMP'], 'release-notes', 'README.md')
+          notes.parent.mkdir(parents=True, exist_ok=True)
+          notes.write_bytes(body)
+          print(f'Customer changelog: {path}')
+          PY
+      - name: Preserve customer release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes/README.md
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
       - name: Check complete push range and plan version
         id: changes
         env:
@@ -267,6 +320,12 @@ jobs:
           name: distributions
           path: dist
 
+      - name: Download customer release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+          path: release-notes
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -371,6 +430,9 @@ jobs:
 
           repository = environ['GITHUB_REPOSITORY']
           version = environ['VERSION']
+          notes = Path('release-notes/README.md')
+          if not notes.read_text(encoding='utf-8').strip():
+              raise ValueError('Customer release notes are empty')
           request = Request(
               f'{environ["GITHUB_API_URL"]}/repos/{repository}/releases/tags/{quote(version, safe="")}',
               headers={
@@ -387,7 +449,7 @@ jobs:
                   raise
               run([
                   'gh', 'release', 'create', version, '--repo', repository,
-                  '--verify-tag', '--title', version, '--generate-notes', '--draft',
+                  '--verify-tag', '--title', version, '--notes-file', str(notes), '--draft',
               ], check=True)
           else:
               if release['tag_name'] != version:
@@ -398,6 +460,7 @@ jobs:
               '--clobber', *artifacts,
           ], check=True)
           run([
-              'gh', 'release', 'edit', version, '--repo', repository, '--draft=false',
+              'gh', 'release', 'edit', version, '--repo', repository,
+              '--notes-file', str(notes), '--draft=false',
           ], check=True)
           PY
