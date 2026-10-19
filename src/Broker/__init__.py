@@ -3,12 +3,13 @@
 from .Configuration import Configuration
 from .Connection import (
 	Connection,
+	BrokerFactory,
 	GetExchange,
 	GetQueue,
 	GetStream,
 	GetConsumer,
 	Declarable,
-	TaskSender,
+	Emittable,
 	Requestable,
 	PrioritySupport,
 )
@@ -34,12 +35,13 @@ from .Event import (
 __all__ = (
 	'Configuration',
 	'Connection',
+	'BrokerFactory',
 	'GetExchange',
 	'GetQueue',
 	'GetStream',
 	'GetConsumer',
 	'Declarable',
-	'TaskSender',
+	'Emittable',
 	'Requestable',
 	'PrioritySupport',
 	'Sendable',

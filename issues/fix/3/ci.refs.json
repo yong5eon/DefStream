@@ -1,0 +1,4 @@
+{
+  "DefStream-RabbitMQ": "fix/3",
+  "DefStream-Redis": "fix/3"
+}

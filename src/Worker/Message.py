@@ -7,8 +7,9 @@ from typing import (
 )
 
 from ..Broker.Connection import (
+	Connection,
 	Declarable,
-	TaskSender,
+	Emittable,
 	Requestable,
 	PrioritySupport,
 )
@@ -19,7 +20,7 @@ from .Run import (
 
 __all__ = (
 	'declare',
-	'send',
+	'emit',
 	'request',
 )
 
@@ -55,7 +56,7 @@ def message_body(
 
 
 def priority_parameters(
-	broker: Any,
+	broker: Connection,
 	parameters: Any,
 	priority: Optional[int],
 ) -> Any:
@@ -80,7 +81,7 @@ def priority_parameters(
 def declare(
 	*,
 	task: Type[Run],
-	broker: Declarable,
+	broker: Connection,
 ) -> None:
 	parameters = task_parameters(task)
 	if not isinstance(
@@ -96,20 +97,20 @@ def declare(
 	return
 
 
-def send(
+def emit(
 	body: Mapping,
 	*,
 	task: Type[Run],
-	broker: TaskSender,
+	broker: Connection,
 	priority: Optional[int] = None,
 ) -> Any:
 	parameters = task_parameters(task)
 	payload = message_body(body)
 	if not isinstance(
 		broker,
-		TaskSender,
+		Emittable,
 	):
-		raise NotImplementedError('This connection does not support task sending')
+		raise NotImplementedError('This connection does not support task emission')
 	parameters = priority_parameters(
 		broker,
 		parameters,
@@ -125,12 +126,12 @@ def send(
 			PrioritySupport,
 		):
 			raise NotImplementedError('This connection does not support task priorities')
-		return broker.send(
+		return broker.emit(
 			payload,
 			parameters,
 			priority=effective,
 		)
-	return broker.send(
+	return broker.emit(
 		payload,
 		parameters,
 	)
@@ -140,12 +141,17 @@ def request(
 	body: Mapping,
 	*,
 	task: Type[Run],
-	broker: TaskSender,
+	broker: Connection,
 	timeout: float = 5,
 	priority: Optional[int] = None,
 ) -> Any:
 	parameters = task_parameters(task)
 	payload = message_body(body)
+	if not isinstance(
+		broker,
+		Requestable,
+	):
+		raise NotImplementedError('This connection does not support task RPC requests')
 	parameters = priority_parameters(
 		broker,
 		parameters,
@@ -167,11 +173,6 @@ def request(
 			timeout=timeout,
 			priority=effective,
 		)
-	if not isinstance(
-		broker,
-		Requestable,
-	):
-		raise NotImplementedError('This connection does not support task RPC requests')
 	return broker.request(
 		payload,
 		parameters,

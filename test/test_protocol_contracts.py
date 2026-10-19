@@ -11,15 +11,20 @@ from unittest.mock import Mock
 
 from DefStream.Broker import (
 	Connection,
+	BrokerFactory,
 	Consumer,
 	Event,
 	EventError,
+	Emittable,
 	GetConsumer,
 	GetExchange,
 	GetQueue,
 	GetStream,
+	Declarable,
+	Requestable,
 )
 from DefStream.Broker.Connection import __all__ as connection_exports
+from DefStream.Inspector.Extensions import Console
 from DefStream.Broker.Implements.RabbitMQ import __all__ as rabbit_exports
 from DefStream.Broker.Implements.Redis import __all__ as redis_exports
 from DefStream.Broker.Event import EventHandler
@@ -77,6 +82,117 @@ class StructuralConnection:
 
 
 class ProtocolContractTests(TestCase):
+	def test_broker_factory_contract_and_console_annotation(self):
+		from DefStream.Broker.Connection import BrokerFactory as FactoryContract
+
+		self.assertIs(
+			BrokerFactory,
+			FactoryContract,
+		)
+		self.assertIn(
+			'BrokerFactory',
+			connection_exports,
+		)
+		self.assertIs(
+			get_type_hints(Console.__init__)['broker'],
+			BrokerFactory,
+		)
+		self.assertIs(
+			get_type_hints(BrokerFactory.__call__)['return'],
+			Connection,
+		)
+
+		class IncompleteFactory(BrokerFactory):
+			pass
+
+		self.assertTrue(isabstract(IncompleteFactory))
+		with self.assertRaises(TypeError):
+			IncompleteFactory()
+
+		def factory_function() -> Connection:
+			return StructuralConnection()
+
+		class Factory(BrokerFactory):
+			def __call__(self) -> Connection:
+				return StructuralConnection()
+
+		class StructuralFactory:
+			def __call__(self) -> Connection:
+				return StructuralConnection()
+
+		factories: tuple[BrokerFactory, ...] = (
+			factory_function,
+			lambda: StructuralConnection(),
+			Factory(),
+			StructuralFactory(),
+		)
+		for factory in factories:
+			with self.subTest(factory=factory):
+				console = Console(
+					'/console',
+					broker=factory,
+				)
+				first = console.broker()
+				second = console.broker()
+				self.assertIsInstance(
+					first,
+					StructuralConnection,
+				)
+				self.assertIsNot(
+					first,
+					second,
+				)
+		return
+
+	def test_resource_capabilities_support_runtime_checks(self):
+		for implementation, capabilities in (
+			(
+				RabbitConnection,
+				(
+					GetExchange,
+					GetQueue,
+					GetStream,
+					GetConsumer,
+					Declarable,
+					Emittable,
+					Requestable,
+				),
+			),
+			(
+				RedisConnection,
+				(
+					GetQueue,
+					GetStream,
+					GetConsumer,
+					Declarable,
+					Emittable,
+				),
+			),
+		):
+			for capability in capabilities:
+				with self.subTest(implementation=implementation, capability=capability):
+					self.assertTrue(issubclass(
+						implementation,
+						capability,
+					))
+					self.assertNotIsInstance(
+						object(),
+						capability,
+					)
+		self.assertFalse(issubclass(
+			RedisConnection,
+			GetExchange,
+		))
+		self.assertNotIn(
+			'TaskSender',
+			connection_exports,
+		)
+		self.assertIn(
+			'Emittable',
+			connection_exports,
+		)
+		return
+
 	def test_event_handler_protocol_and_public_exports(self):
 		from DefStream.Broker import EventHandler as PublicEventHandler
 		from DefStream.Broker.Implements.Redis import EventHandler as RedisEventHandler

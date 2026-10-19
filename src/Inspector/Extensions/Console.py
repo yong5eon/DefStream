@@ -12,23 +12,20 @@ from re import sub
 from threading import BoundedSemaphore
 from time import monotonic
 from typing import (
-	Callable,
 	Optional,
-	Protocol,
 	TYPE_CHECKING,
 )
 from urllib.parse import urlsplit
 
 from ...Broker.Connection import (
-	Connection,
+	BrokerFactory,
 	Requestable,
-	TaskSender,
 )
 from ...Broker.Errors import RemoteError
 from ...Worker.Message import (
 	message_body,
 	request,
-	send,
+	emit,
 )
 from ..Extension import Extension
 from ..Response import Response
@@ -42,14 +39,6 @@ __all__ = (
 )
 
 logger = getLogger(__name__)
-
-
-class Producer(
-	Connection,
-	TaskSender,
-	Protocol,
-):
-	pass
 
 
 def json_response(
@@ -84,7 +73,7 @@ class Console(Extension):
 		self,
 		path: str,
 		*,
-		broker: Callable[[], Producer],
+		broker: BrokerFactory,
 		token: Optional[str] = None,
 		timeout: float = 5,
 		title: str = 'DefStream',
@@ -361,7 +350,7 @@ class Console(Extension):
 						timeout=self.timeout,
 					)
 				else:
-					result = send(
+					result = emit(
 						body,
 						task=task,
 						broker=producer,

@@ -151,7 +151,7 @@ Run this in another terminal while the Worker is running.
 
 ```python
 from DefStream.Broker.Implements.RabbitMQ import Configuration, Connection
-from DefStream.Worker import request, send
+from DefStream.Worker import emit, request
 from tasks import Add
 
 
@@ -163,7 +163,7 @@ connection = Connection(Configuration(
 ))
 try:
   connection.connect()
-  message_id = send(
+  message_id = emit(
     {'a': 10, 'b': 20},
     task=Add,
     broker=connection,
@@ -184,7 +184,7 @@ finally:
 python client.py
 ```
 
-`send()` and `request()` **each publish a separate task**. This example performs
+`emit()` and `request()` **each publish a separate task**. This example performs
 the addition twice; `request()` returns `30`. The request timeout is in seconds
 and does not cancel work that has already been delivered.
 
@@ -195,13 +195,20 @@ and does not cancel work that has already been delivered.
 | Function | Purpose | Connection ownership |
 | --- | --- | --- |
 | `declare(task=..., broker=...)` | Declare task queues and subscription resources | Caller connects and closes |
-| `send(body, task=..., broker=...)` | Publish a one-way message to a task | Caller connects and closes |
+| `emit(body, task=..., broker=...)` | Publish a one-way message to a task | Caller connects and closes |
 | `request(body, task=..., broker=..., timeout=5)` | Request a task result synchronously | Caller connects and closes; RabbitMQ only |
 
 Import these functions from `DefStream.Worker`. They do not connect or close
-the supplied connection. Neither `send()` nor `request()` declares destinations.
+the supplied connection. Neither `emit()` nor `request()` declares destinations.
 Call `declare()` in the receiving Worker's setup or a separate provisioning step.
 Reuse a connection for multiple publications on its owning thread.
+
+All three helpers accept the common `Connection` type and check declaration,
+emission, or RPC support internally. Unsupported operations raise `NotImplementedError`.
+The task helper and connection method previously named `send` are now named `emit`.
+Custom brokers should use `Emittable.emit` instead of `TaskSender.send` for task emission.
+Low-level `Sendable.send()` and RPC `Callable.call()` on queues, exchanges, and streams
+remain unchanged.
 
 Task bodies must be **mappings with string keys**. Return values must be
 serializable by the adapter. A Worker cannot register multiple tasks for the
@@ -220,7 +227,7 @@ from DefStream.Worker import (
   Run,
   declare,
   request,
-  send,
+  emit,
 )
 
 
@@ -245,7 +252,7 @@ declare(
   task=Add,
   broker=broker,
 )
-send(
+emit(
   {'a': 10, 'b': 20},
   task=Add,
   broker=broker,
@@ -286,6 +293,10 @@ result = request(
 
 The common resource operations below apply when accessing a broker directly.
 Not every resource supports every operation.
+
+Use `isinstance` or `issubclass` with `GetExchange`, `GetQueue`, `GetStream`,
+or `GetConsumer` to check whether a connection provides `exchange()`, `queue()`,
+`stream()`, or `consumer()`, respectively. Import these contracts from `DefStream.Broker`.
 
 | Method | Purpose | Timeout unit |
 | --- | --- | --- |
@@ -560,6 +571,11 @@ HTTPS reverse proxy with additional access control for remote access.
 Inspector has no built-in TLS and is not a public web server.
 The console's connection factory must return a new connection on every call,
 never the Worker's connection.
+
+Console's `broker` parameter uses the `DefStream.Broker.BrokerFactory` contract.
+Its `__call__() -> Connection` takes no arguments and returns a new connection.
+Functions such as `create_connection` above and lambdas remain valid without changes.
+For a class-based factory, you can inherit `BrokerFactory` and implement `__call__`.
 
 ## Broker selection and operational considerations
 
