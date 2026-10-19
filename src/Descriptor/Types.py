@@ -1,7 +1,20 @@
 # -*- coding: utf-8 -*-
 
-from .Value import Descriptor, Type, Value, Condition, Schema
-from typing import Optional, Union, Sequence, Any, Dict, Iterable 
+from .Value import (
+	Descriptor,
+	Type,
+	Value,
+	Condition,
+	Schema,
+)
+from typing import (
+	Optional,
+	Union,
+	Sequence,
+	Any,
+	Dict,
+	Iterable,
+)
 from enum import Enum
 
 __all__ = (
@@ -23,10 +36,10 @@ __all__ = (
 class Boolean(Value):
 	def __init__(
 		self, 
-		description: str = None,
+		description: Optional[str] = None,
 		default: Any = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			type=Type.Boolean,
 			description=description,
@@ -50,14 +63,14 @@ class IntegerFormat(str, Enum):
 class Integer(Value):
 	def __init__(
 		self, 
-		description: str = None,
-		format: Union[str, IntegerFormat] = None,
+		description: Optional[str] = None,
+		format: Optional[Union[str, IntegerFormat]] = None,
 		min: Any = None,
 		max: Any = None,
 		default: Any = None,
 		enum: Optional[Sequence[str]] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			type=Type.Integer,
 			description=description,
@@ -81,14 +94,14 @@ class NumberFormat(str, Enum):
 class Number(Value):
 	def __init__(
 		self, 
-		description: str = None,
-		format: Union[str, NumberFormat] = None,
+		description: Optional[str] = None,
+		format: Optional[Union[str, NumberFormat]] = None,
 		min: Any = None,
 		max: Any = None,
 		default: Any = None,
 		enum: Optional[Sequence[str]] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			type=Type.Number,
 			description=description,
@@ -123,14 +136,14 @@ class StringFormat(str, Enum):
 class String(Value):
 	def __init__(
 		self, 
-		description: str = None,
-		format: Union[str, StringFormat] = None,
+		description: Optional[str] = None,
+		format: Optional[Union[str, StringFormat]] = None,
 		min: Any = None,
 		max: Any = None,
 		default: Any = None,
 		enum: Optional[Sequence[str]] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			type=Type.String,
 			description=description,
@@ -153,10 +166,10 @@ class String(Value):
 class BinaryBase64Encoded(String):
 	def __init__(
 		self, 
-		description: str = None,
-		default: str = None,
+		description: Optional[str] = None,
+		default: Optional[str] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			description=description,
 			format=StringFormat.byte,
@@ -169,10 +182,10 @@ class BinaryBase64Encoded(String):
 class Binary(String):
 	def __init__(
 		self, 
-		description: str = None,
-		default: bytes = None,
+		description: Optional[str] = None,
+		default: Optional[bytes] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			description=description,
 			format=StringFormat.binary,
@@ -183,19 +196,25 @@ class Binary(String):
 
 
 class Properties(Descriptor):
-	def __init__(self, **kwargs: Dict[str, Union[Value, Condition, Schema]]):
-		for k, v in kwargs.items():
-			kwargs[k] = v.format if isinstance(v, Schema) else v
-		super().__init__(**kwargs)
-		return 
+	def __init__(
+		self,
+		**kwargs: Union[Descriptor, Condition, Schema],
+	) -> None:
+		super().__init__(**{
+			k: v.format if isinstance(v, Schema) else v
+			for k, v in kwargs.items()
+		})
+		return
+
+
 class Object(Descriptor):
 	def __init__(
 		self,
 		description: Optional[str] = None,
 		properties: Optional[Properties] = None,
-		default: Dict = None,
+		default: Optional[Dict[str, Any]] = None,
 		required: bool = True,
-	):
+	) -> None:
 		properties = properties if properties is not None else Properties()
 		super().__init__(
 			type=Type.Object,
@@ -214,11 +233,11 @@ class Object(Descriptor):
 class Array(Descriptor):
 	def __init__(
 		self,
-		description: str = None,
-		format: Optional[Union[Value, Condition, Schema]] = None,
-		default: Iterable = None,
+		description: Optional[str] = None,
+		format: Optional[Union[Descriptor, Condition, Schema]] = None,
+		default: Optional[Iterable[Any]] = None,
 		required: bool = True,
-	):
+	) -> None:
 		super().__init__(
 			type=Type.Array,
 		)
