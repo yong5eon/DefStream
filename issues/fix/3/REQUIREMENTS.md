@@ -34,7 +34,7 @@
 ## 4. 범위와 제한
 
 - 변경 대상은 코어의 연결 계약, 워커, 직접 관련된 테스트와 문서이다.
-- RabbitMQ·Redis 어댑터의 공개 API나 구현은 변경하지 않는다.
+- RabbitMQ·Redis 어댑터는 아래 추가 요구사항에 따라 작업 발행 이름을 함께 변경한다.
 - 사용자 정의 연결에 `GetConsumer`의 명시적 상속을 강제하지 않는다.
 - 런타임 Protocol 검사는 기능의 구조적 지원 여부를 확인한다.
   메서드 매개변수·반환 타입이나 실제 실행 성공까지 검증하는 기능은 아니다.
@@ -50,3 +50,29 @@
 | WCAT-04 | 기존 워커 수명 주기, setup·cleanup, 스레드·프로세스 실행 테스트가 통과한다. |
 | WCAT-05 | Docker의 `defstream-rabbitmq`를 사용하여 실제 소비·재전달·거부·종료, RPC, Inspector 연동을 검증한다. RabbitMQ 테스트를 건너뛴 결과를 실서버 검증으로 간주하지 않는다. |
 | WCAT-06 | 설치된 과거 패키지가 아니라 현재 브랜치의 코어 소스와 로컬 RabbitMQ 어댑터를 로드해 검증한다. |
+
+## 6. 연결 기능 검사와 작업 발행 이름 추가 요구사항
+
+- `GetExchange`, `GetQueue`, `GetStream`에도 `@runtime_checkable`을 적용한다.
+- `TaskSender`는 `Emittable`로, 작업 발행 메서드와 워커 도우미 `send`는
+  `emit`으로 변경한다. 기존 이름의 호환 별칭은 추가하지 않는다.
+- `declare`, `emit`, `request`는 모두 `broker: Connection`을 받고 내부에서
+  각각 `Declarable`, `Emittable`, `Requestable`을 검사한다.
+- 미지원 기능은 기존 방식의 `NotImplementedError`로 명시적으로 실패한다.
+  RPC 검사는 우선순위 유무와 무관하게 수행한다.
+- 우선순위 기능 계약과 RabbitMQ·Redis 구현체의 작업 발행 이름도 `emit`으로 맞춘다.
+- 큐·Exchange·Stream의 저수준 `Sendable.send()`와 `Callable.call()`은 유지한다.
+- Inspector Console의 브로커 팩터리도 공통 `Connection`을 반환하도록 단순화한다.
+  기존 HTTP `mode="send"`와 화면 동작은 유지하고 내부 호출만 `emit`으로 바꾼다.
+- 테스트, 예제, 한영 사용 설명서 및 각 프로젝트 현재 브랜치 문서를 갱신한다.
+- 생성자와 도우미 타입 힌트, 기능별 성공·실패, 우선순위, 실제 RabbitMQ 연동과
+  Redis 회귀 테스트로 검증한다.
+
+## 7. 브로커 팩터리 계약
+
+- 공통 브로커에 `BrokerFactory` Protocol을 공개하며 `__call__(self) -> Connection`을 정의한다.
+- Console의 `broker` 입력 타입은 `Callable[[], Connection]` 대신 `BrokerFactory`를 사용한다.
+- 기존 함수·람다와 호출 가능한 클래스도 구조적으로 사용할 수 있어야 한다.
+  명시적 상속이나 어댑터를 호출자에게 강제하지 않는다.
+- 호출마다 독립적인 새 연결을 반환하는 계약을 문서화한다.
+  Console의 기존 호출 가능 여부 검사와 연결 생성·종료 동작은 유지한다.

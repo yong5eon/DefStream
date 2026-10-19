@@ -14,12 +14,13 @@ from .Protocol import Sendable
 
 __all__ = (
 	'Connection',
+	'BrokerFactory',
 	'GetExchange',
 	'GetQueue',
 	'GetStream',
 	'GetConsumer',
 	'Declarable',
-	'TaskSender',
+	'Emittable',
 	'Requestable',
 	'PrioritySupport',
 )
@@ -33,6 +34,14 @@ class Connection(Protocol):
 	def close(self) -> None: ...
 
 
+class BrokerFactory(Protocol):
+	"""호출마다 독립적인 새 브로커 연결을 반환하는 팩터리 계약."""
+
+	@abstractmethod
+	def __call__(self) -> Connection: ...
+
+
+@runtime_checkable
 class GetExchange(Protocol):
 	@abstractmethod
 	def exchange(
@@ -42,6 +51,7 @@ class GetExchange(Protocol):
 	) -> Sendable: ...
 
 
+@runtime_checkable
 class GetQueue(Protocol):
 	@abstractmethod
 	def queue(
@@ -51,6 +61,7 @@ class GetQueue(Protocol):
 	) -> Sendable: ...
 
 
+@runtime_checkable
 class GetStream(Protocol):
 	@abstractmethod
 	def stream(
@@ -79,9 +90,9 @@ class Declarable(Protocol):
 
 
 @runtime_checkable
-class TaskSender(Protocol):
+class Emittable(Protocol):
 	@abstractmethod
-	def send(
+	def emit(
 		self,
 		body: Any,
 		parameters: Any,
@@ -100,7 +111,11 @@ class Requestable(Protocol):
 
 
 @runtime_checkable
-class PrioritySupport(Protocol):
+class PrioritySupport(
+	Emittable,
+	Requestable,
+	Protocol,
+):
 	"""작업 구독 설정의 우선순위 처리와 우선순위 발행을 지원하는 계약."""
 
 	def priority_parameters(
@@ -108,7 +123,7 @@ class PrioritySupport(Protocol):
 		parameters: Any,
 	) -> Any: ...
 
-	def send(
+	def emit(
 		self,
 		body: Any,
 		parameters: Any,

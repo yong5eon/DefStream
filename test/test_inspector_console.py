@@ -70,7 +70,7 @@ class Producer:
 	def close(self):
 		self.closed += 1
 
-	def send(
+	def emit(
 		self,
 		body,
 		parameters,
@@ -555,7 +555,7 @@ class ConsoleExtensionTests(TestCase):
 				raise RuntimeError('Connection failed')
 
 		class BrokenResponse(Producer):
-			def send(
+			def emit(
 				self,
 				body,
 				parameters,

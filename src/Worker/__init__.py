@@ -5,7 +5,7 @@ from .Worker import (
 )
 from .Message import (
 	declare,
-	send,
+	emit,
 	request,
 )
 from .Run import (
@@ -28,7 +28,7 @@ from .Pool import (
 __all__ = (
 	'Worker',
 	'declare',
-	'send',
+	'emit',
 	'request',
 	'WorkerSetup',
 	'WorkerCleanup',

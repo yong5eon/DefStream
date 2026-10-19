@@ -730,7 +730,7 @@ class InspectorTests(TestCase):
 					2,
 					0,
 				):
-					producer.send(
+					producer.emit(
 						{
 							'a': 10,
 							'b': divisor,

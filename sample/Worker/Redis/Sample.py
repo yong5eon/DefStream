@@ -20,7 +20,7 @@ from DefStream.Inspector.Extensions import (
 )
 from DefStream.Worker import (
 	declare,
-	send,
+	emit,
 	Run,
 	ThreadPool,
 	Worker,
@@ -75,7 +75,7 @@ class Prepare(WorkerSetup):
 				broker=broker,
 			)
 			for index in range(5):
-				send(
+				emit(
 					{
 						'a': randint(
 							0,

@@ -148,7 +148,7 @@ Worker가 실행 중인 상태에서 다른 터미널에서 실행하세요.
 
 ```python
 from DefStream.Broker.Implements.RabbitMQ import Configuration, Connection
-from DefStream.Worker import request, send
+from DefStream.Worker import emit, request
 from tasks import Add
 
 
@@ -160,7 +160,7 @@ connection = Connection(Configuration(
 ))
 try:
   connection.connect()
-  message_id = send(
+  message_id = emit(
     {'a': 10, 'b': 20},
     task=Add,
     broker=connection,
@@ -181,7 +181,7 @@ finally:
 python client.py
 ```
 
-`send()`와 `request()`는 **각각 별도의 작업을 발행**합니다. 위 예제는 덧셈을 두 번 실행하며,
+`emit()`와 `request()`는 **각각 별도의 작업을 발행**합니다. 위 예제는 덧셈을 두 번 실행하며,
 `request()`의 결과는 `30`입니다. `request()`의 제한 시간은 초 단위이고,
 시간이 초과되어도 이미 전달된 작업은 취소되지 않습니다.
 
@@ -192,13 +192,19 @@ python client.py
 | 함수 | 역할 | 연결 관리 |
 | --- | --- | --- |
 | `declare(task=..., broker=...)` | 작업의 큐·구독 리소스 선언 | 호출자가 연결·종료 |
-| `send(body, task=..., broker=...)` | 작업 목적지로 단방향 메시지 발행 | 호출자가 연결·종료 |
+| `emit(body, task=..., broker=...)` | 작업 목적지로 단방향 메시지 발행 | 호출자가 연결·종료 |
 | `request(body, task=..., broker=..., timeout=5)` | 작업 결과를 동기 RPC로 요청 | 호출자가 연결·종료; RabbitMQ만 지원 |
 
 세 함수는 `DefStream.Worker`에서 가져옵니다. 전달된 연결을 자동으로 열거나 닫지 않으며,
-`send()`와 `request()`는 목적지를 자동 선언하지 않습니다.
+`emit()`와 `request()`는 목적지를 자동 선언하지 않습니다.
 수신 Worker 또는 별도의 준비 단계에서 먼저 `declare()`를 호출하세요.
 하나의 연결을 같은 소유 스레드에서 여러 발행에 재사용할 수 있습니다.
+
+세 함수 모두 공통 `Connection`을 받고, 내부에서 선언·발행·RPC 지원 여부를 확인합니다.
+지원하지 않는 기능은 `NotImplementedError`로 실패합니다.
+기존 작업 발행 함수와 연결의 `send`는 `emit`으로 이름이 바뀌었습니다.
+사용자 정의 브로커의 작업 발행 계약도 `TaskSender.send` 대신 `Emittable.emit`을 사용하세요.
+큐·Exchange·Stream의 저수준 `Sendable.send()`와 RPC `Callable.call()`은 그대로입니다.
 
 작업 본문은 **문자열 키를 가진 매핑**이어야 하며, 반환값은 어댑터가 직렬화할 수 있어야 합니다.
 하나의 Worker에서는 같은 큐에 여러 작업을 중복 등록할 수 없습니다.
@@ -217,7 +223,7 @@ from DefStream.Worker import (
   Run,
   declare,
   request,
-  send,
+  emit,
 )
 
 
@@ -242,7 +248,7 @@ declare(
   task=Add,
   broker=broker,
 )
-send(
+emit(
   {'a': 10, 'b': 20},
   task=Add,
   broker=broker,
@@ -281,6 +287,10 @@ result = request(
 
 브로커 리소스를 직접 사용할 때의 공통 메서드는 다음과 같습니다.
 모든 리소스가 모든 메서드를 지원하는 것은 아닙니다.
+
+연결의 `exchange()`·`queue()`·`stream()`·`consumer()` 지원 여부는 각각
+`GetExchange`·`GetQueue`·`GetStream`·`GetConsumer`로 `isinstance` 또는 `issubclass`
+검사할 수 있습니다. 이 계약들은 `DefStream.Broker`에서 가져옵니다.
 
 | 메서드 | 의미 | 제한 시간 단위 |
 | --- | --- | --- |
@@ -545,6 +555,11 @@ inspector = Inspector(
 원격 접근은 HTTPS 역방향 프록시 및 별도 접근 제어를 사용하세요.
 Inspector 자체는 TLS를 제공하지 않으며 공개 웹 서버가 아닙니다.
 콘솔의 연결 팩터리는 호출마다 새 연결을 반환해야 하고 Worker 연결을 공유하면 안 됩니다.
+
+Console의 `broker` 인자는 `DefStream.Broker.BrokerFactory` 계약을 사용합니다.
+이 계약의 `__call__() -> Connection`은 인자 없이 새 연결을 반환합니다.
+위의 `create_connection` 같은 함수나 람다도 그대로 전달할 수 있으며,
+클래스로 구현할 때는 `BrokerFactory`를 상속하고 `__call__`을 구현할 수 있습니다.
 
 ## 브로커 선택과 운영 주의사항
 

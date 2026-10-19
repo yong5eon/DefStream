@@ -7,7 +7,7 @@
 
 ## 변경 후 (TO-BE)
 
-지원 브로커의 작업 구독 설정에 기본·최대 우선순위를 정의하고, `send`와 `request`에서
+지원 브로커의 작업 구독 설정에 기본·최대 우선순위를 정의하고, `emit`과 `request`에서
 메시지별 우선순위를 재정의할 수 있습니다. 현재 지원 브로커는 RabbitMQ입니다.
 
 ## 사용 방법
@@ -20,7 +20,7 @@ RabbitMQ 작업의 `parameters`에 `Subscription(priority=2, max_priority=5, ...
 from DefStream.Worker import (
   declare,
   request,
-  send,
+  emit,
 )
 
 
@@ -31,7 +31,7 @@ declare(
 )
 
 # 호출값을 생략하면 작업 구독의 기본 우선순위를 사용합니다.
-send(
+emit(
   {'a': 1, 'b': 2},
   task=Add,
   broker=broker,

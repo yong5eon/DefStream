@@ -17,7 +17,7 @@ from DefStream.Worker import (
 	Run,
 	declare,
 	request,
-	send,
+	emit,
 )
 
 
@@ -77,7 +77,7 @@ class TaskPriorityTests(TestCase):
 					0,
 					255,
 				):
-					send(
+					emit(
 						{'value': 1},
 						task=DefaultTask,
 						broker=broker,
@@ -109,7 +109,7 @@ class TaskPriorityTests(TestCase):
 			'priority',
 		))
 		broker = self.broker()
-		send(
+		emit(
 			{},
 			task=MaximumTask,
 			broker=broker,
@@ -121,7 +121,7 @@ class TaskPriorityTests(TestCase):
 		channel = broker.connection.channel.return_value
 		self.assertIsNone(channel.basic_publish.call_args.kwargs['properties'].priority)
 		with self.assertRaises(ValueError):
-			send(
+			emit(
 				{},
 				task=MaximumTask,
 				broker=broker,
@@ -184,7 +184,7 @@ class TaskPriorityTests(TestCase):
 			0,
 			255,
 		):
-			send(
+			emit(
 				{},
 				task=Task,
 				broker=broker,
@@ -207,7 +207,7 @@ class TaskPriorityTests(TestCase):
 				TypeError,
 				ValueError,
 			)):
-				send(
+				emit(
 					{},
 					task=Task,
 					broker=broker,
@@ -253,13 +253,13 @@ class TaskPriorityTests(TestCase):
 						broker=broker,
 					)
 				with self.assertRaises(NotImplementedError):
-					send(
+					emit(
 						{},
 						task=task,
 						broker=broker,
 					)
 		with self.assertRaises(NotImplementedError):
-			send(
+			emit(
 				{},
 				task=Task,
 				broker=broker,
@@ -274,7 +274,7 @@ class TaskPriorityTests(TestCase):
 			pass
 
 		self.assertEqual(
-			send(
+			emit(
 				{},
 				task=RedisTask,
 				broker=broker,

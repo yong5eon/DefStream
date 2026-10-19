@@ -131,3 +131,102 @@ RabbitMQ 선택적 통합 테스트는 활성화되어 실제 서버에 접속�
 `WorkerConnection`을 직접 import하거나 타입 힌트에 쓰던 코드는
 `from DefStream.Broker import Connection`으로 변경해야 한다.
 컨슈머 없는 연결은 워커 생성 시점이 아니라 실행 중 컨슈머 생성 직전에 거부된다.
+
+## 7. 기능별 연결 검사와 작업 발행 이름 통일
+
+추가 요구사항에 따라 다음을 반영했다.
+
+- `GetExchange`, `GetQueue`, `GetStream`에 `@runtime_checkable`을 추가했다.
+- `TaskSender`를 `Emittable`로, `send` 작업 도우미와 브로커 메서드를 `emit`으로
+  변경했다. 공개 export·우선순위 계약·RabbitMQ·Redis 어댑터도 함께 변경했다.
+  기존 이름의 호환 별칭은 제공하지 않는다.
+- `declare`, `emit`, `request`의 입력을 모두 `broker: Connection`으로 통일했다.
+  내부에서 각각 `Declarable`, `Emittable`, `Requestable`을 검사한다.
+- `request`의 잘못된 `TaskSender` 타입을 제거하고 RPC만 가능한 연결도 지원한다.
+  RPC 지원 검사는 우선순위 처리 전에 수행한다.
+- `PrioritySupport`는 이미 제공하던 발행·RPC 계약을 상속 관계로도 표현하도록
+  `Emittable`, `Requestable`을 상속한다. 선택적 `priority` 인자를 정적 분석에서도
+  올바르게 해석하게 하며, RabbitMQ는 중복 상속을 제거했다.
+- Inspector Console의 별도 `Producer` 합성 타입을 제거하고 팩터리가
+  `Connection`을 반환하도록 변경했다. 내부 발행은 `emit`을 사용하지만
+  HTTP의 `mode="send"`와 기존 화면은 유지했다.
+- 저수준 `Sendable.send()`·`Callable.call()`은 유지한다.
+- 관련 테스트와 예제, 코어·어댑터의 한영 README 및 연결된 사용 예제를 갱신했다.
+
+### 추가 검증 결과
+
+현재 소스를 직접 로드하는 동일한 검증 방식으로 Docker `defstream-rabbitmq`를
+재시작하고 `DEFSTREAM_RABBITMQ_TESTS=1`로 실행했다.
+
+| 대상 | 전체 | 통과 | 건너뜀 | 실패·오류 |
+|---|---:|---:|---:|---:|
+| 코어 | 164 | 160 | 4 | 0 |
+| RabbitMQ 어댑터 | 60 | 60 | 0 | 0 |
+| Redis 어댑터 | 36 | 32 | 4 | 0 |
+| 합계 | 260 | 252 | 8 | 0 |
+
+- 건너뛴 8개는 Redis 실서버 전용 테스트이다. Redis 실제 서버 테스트는 실행하지 않았다.
+- 생성자와 도우미 타입, 기능별 지원·거부, RPC 전용 연결, `emit` 공개 이름과
+  기존 작업 `send` 제거, 런타임 Protocol 검사를 검증했다.
+- 기존 우선순위 테스트와 실제 RabbitMQ 발행·RPC·소비·실패 처리·Inspector가 통과했다.
+- `Message.py`, `Broker/Connection.py`와 양쪽 공개 export는 Pylance 오류가 없었다.
+  Console에는 기존 미사용 매개변수 안내만 남아 있다.
+- Pylance가 해석한 `emit` 호출 위치는 시그니처와 호환됐다.
+  테스트 도구에서는 테스트를 찾지 못해 기존 `unittest`로 검증했다.
+- 검증 후 테스트용 RabbitMQ를 종료하고 재사용 가능한 컨테이너는 보존했다.
+
+## 8. Redis·RabbitMQ 동시 실서버 검증
+
+2026-10-19에 Redis 전용 Docker 컨테이너를 추가하고, 이전에 건너뛴 Redis
+통합 테스트까지 모두 실행했다. 위의 Redis 미검증 기록은 이 재검증 이전 결과이다.
+
+- 컨테이너: `defstream-redis`, 이미지: `redis:7`, 실제 Redis 버전: `7.4.11`.
+- 포트는 `127.0.0.1:6379`에만 공개했고 `redis-cli ping`의 `PONG`을 확인했다.
+- `defstream-rabbitmq`도 다시 시작하고 `rabbitmq-diagnostics -q ping`을 확인했다.
+- `DEFSTREAM_REDIS_TESTS=1`과 `DEFSTREAM_RABBITMQ_TESTS=1`을 동시에 설정했다.
+- 가상환경에 설치된 이전 패키지가 아니라 현재 코어·어댑터 소스를 직접 로드해
+  각 프로젝트의 전체 `unittest`를 별도 Python 프로세스에서 실행했다.
+
+```powershell
+docker run -d --name defstream-redis -p 127.0.0.1:6379:6379 redis:7
+docker exec defstream-redis redis-cli ping
+docker start defstream-rabbitmq
+docker exec defstream-rabbitmq rabbitmq-diagnostics -q ping
+$env:DEFSTREAM_REDIS_TESTS = '1'
+$env:DEFSTREAM_RABBITMQ_TESTS = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+$env:PYTHONUTF8 = '1'
+```
+
+| 대상 | 전체 | 통과 | 건너뜀 | 실패·오류 | 소요 시간 |
+|---|---:|---:|---:|---:|---:|
+| 코어 | 164 | 164 | 0 | 0 | 32.319초 |
+| RabbitMQ 어댑터 | 60 | 60 | 0 | 0 | 5.546초 |
+| Redis 어댑터 | 36 | 36 | 0 | 0 | 2.198초 |
+| 합계 | 260 | 260 | 0 | 0 | 40.063초 |
+
+Redis의 발행·소비·이력 읽기·원자적 재전달, QoS·콜백·정상 종료, 방치된 pending
+회수와 실행 풀 연동을 검증했다. 코어의 Redis 발행·완료 훅·Inspector 상태·메트릭·Console
+통합 테스트도 통과했다. RabbitMQ 통합 테스트 역시 활성화된 상태로 통과했다.
+
+검증 후 Redis `DBSIZE`가 `0`임을 확인했다. 두 컨테이너 모두 종료했고
+`exited`, `running=false` 상태를 확인했다. 컨테이너는 보존하여
+`docker start defstream-redis defstream-rabbitmq`로 재사용할 수 있다.
+
+## 9. 브로커 팩터리 계약 명명
+
+- `Broker/Connection.py`에 `BrokerFactory` Protocol을 정의하고
+  `DefStream.Broker`에서 공개했다.
+- `__call__(self) -> Connection`으로 인자 없는 새 연결 생성 계약을 명시했다.
+  독립적인 연결을 매번 반환해야 한다는 책임을 독스트링에 기록했다.
+- Console의 `broker` 타입을 `Callable[[], Connection]`에서 `BrokerFactory`로
+  변경했다. 기존 `callable` 검사와 연결 생성·종료 흐름은 변경하지 않았다.
+- 함수·람다·명시적 상속 클래스·구조적 호출 클래스 모두 사용할 수 있도록 유지했다.
+- 타입 힌트, 공개 export, 불완전한 구현의 인스턴스화 거부, 네 가지 팩터리 형태와
+  호출마다 서로 다른 연결을 반환하는 동작을 테스트했다.
+- 한영 README와 사용자용 변경 로그에 계약과 기존 코드 호환성을 설명했다.
+- 현재 소스를 직접 로드해 계약·Console 테스트 31개 중 29개 통과,
+  실서버 전용 2개 건너뜀을 확인했다. 이번 타입 명명 변경에서는 Docker 실서버
+  테스트를 재실행하지 않았으며, 이전 260개 실서버 검증과 구분한다.
+- `Broker/Connection.py`의 Pylance 진단에 오류가 없었다.
+  Console에는 기존 미사용 매개변수 안내만 남아 있다.
