@@ -27,6 +27,9 @@ jobs:
     outputs:
       release: ${{ steps.changes.outputs.release }}
       version: ${{ steps.changes.outputs.version }}
+      build: ${{ steps.changes.outputs.build }}
+      new_version: ${{ steps.changes.outputs.new_version }}
+      tag: ${{ steps.changes.outputs.tag }}
       core_ref: ${{ steps.refs.outputs.core_ref }}
       rabbitmq_ref: ${{ steps.refs.outputs.rabbitmq_ref }}
       redis_ref: ${{ steps.refs.outputs.redis_ref }}
@@ -39,10 +42,80 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - name: Check complete push range and plan version
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+          RELEASE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        run: |
+          python - <<'PY'
+          from json import loads
+          from os import environ
+          from pathlib import Path
+          from re import fullmatch
+          from subprocess import check_output
+
+          release_push = environ['RELEASE_PUSH'] == 'true'
+          series = environ['RELEASE_SERIES']
+          if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)', series) is None:
+              raise ValueError(f'Invalid RELEASE_SERIES: {series!r}')
+          before = environ['BEFORE']
+          if not release_push:
+              event = loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+              before = event['pull_request']['base']['sha']
+          if not before:
+              raise ValueError('Missing push base commit')
+          first_push = set(before) == {'0'}
+          base = check_output(['git', 'hash-object', '-t', 'tree', '--stdin'], input='', text=True).strip() if first_push else before
+          # 재실행 시 이번 실행에서 만든 태그는 제외한다.
+          tags = [] if first_push else check_output(['git', 'tag', '--merged', before], text=True).splitlines()
+          releases = []
+          release_tags = {}
+          for tag in tags:
+              match = fullmatch(r'v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:\.post(\d+))?', tag)
+              if match and f'{int(match[1])}.{int(match[2])}' == series:
+                  release = tuple(map(int, match.groups()[:3])) + (
+                      int(match[4] or 0), int(match[5] or 0), match[4] is not None or match[5] is not None,
+                  )
+                  releases.append(release)
+                  release_tags[release] = tag
+          latest = max(releases) if releases else None
+          if latest is not None:
+              base = release_tags[latest]
+          changed = check_output(
+              [
+                  'git', 'diff', '--name-only', '--no-renames', base, environ['GITHUB_SHA'],
+                  '--', ':(glob)src/**/*.py', 'setup.py', 'setup.cfg', 'pyproject.toml', 'MANIFEST.in',
+              ],
+              text=True,
+          ).strip()
+          number = int(environ['GITHUB_RUN_NUMBER'])
+          if number < 1:
+              raise ValueError('Build number must be positive')
+          if latest is None and not changed:
+              raise ValueError('No release tag or source/packaging changes; tag the existing release before rebuilding')
+          migrate = latest is not None and latest[5]
+          new_version = bool(changed) or latest is None or migrate
+          if new_version:
+              patch = latest[2] + 1 if latest is not None else 0
+              print(f'New public version: source/packaging changes or initial/migration release\n{changed}')
+          else:
+              patch = latest[2]
+              print('Keeping MAJOR.MINOR.PATCH; publishing a new wheel build')
+          version = f'{series}.{patch}'
+          print(f'Planned version: {version}, wheel build: {number}')
+          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              output.write(f'release={str(release_push).lower()}\nversion={version}\n')
+              output.write(f'build={number}\nnew_version={str(new_version).lower()}\n')
+              output.write(f'tag={version if new_version else release_tags[latest]}\n')
+          PY
       - name: Validate PR branch changelog
         id: changelog
         env:
           GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          NEW_VERSION: ${{ steps.changes.outputs.new_version }}
+          RELEASE_TAG: ${{ steps.changes.outputs.tag }}
         run: |
           python - <<'PY'
           from json import loads
@@ -67,20 +140,38 @@ jobs:
                   and pull['base']['ref'] == 'master'
                   and pull['base']['repo']['full_name'] == repository
               ]
-              if len(pulls) != 1:
-                  raise ValueError('Expected exactly one merged PR for the release commit')
-              branch = pulls[0]['head']['ref']
-          path = f'issues/{branch}/README.md'
-          entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
-          if not entry or entry[0] not in ('100644', '100755'):
-              raise ValueError(f'Changelog must exist as a regular file: {path}')
-          body = check_output(['git', 'show', f'{head}:{path}'])
-          if not body.decode('utf-8').strip():
-              raise ValueError(f'Customer changelog is empty: {path}')
+              if len(pulls) > 1:
+                  raise ValueError('Multiple merged PRs found for the release commit')
+              branch = pulls[0]['head']['ref'] if pulls else 'master'
+          if environ['NEW_VERSION'] == 'false':
+              tag = environ['RELEASE_TAG']
+              release = loads(check_output([
+                  'gh', 'api', f'repos/{environ["GITHUB_REPOSITORY"]}/releases/tags/{tag}',
+              ]))
+              if release['tag_name'] != tag or not release.get('body', '').strip():
+                  raise ValueError(f'Existing release notes are missing or empty: {tag}')
+              body = release['body'].encode('utf-8')
+              print(f'Reusing release notes unchanged: {tag}')
+          elif environ['GITHUB_EVENT_NAME'] == 'push' and not pulls:
+              before = environ['BEFORE']
+              if not before:
+                  raise ValueError('Missing push base commit')
+              revision = head if set(before) == {'0'} else f'{before}..{head}'
+              commits = check_output(['git', 'log', '--reverse', '--format=- %s (%h)', revision])
+              body = '## master 직접 push\n\n'.encode('utf-8') + commits
+              print('Direct master push: generating release notes from commits')
+          else:
+              path = f'issues/{branch}/README.md'
+              entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
+              if not entry or entry[0] not in ('100644', '100755'):
+                  raise ValueError(f'Changelog must exist as a regular file: {path}')
+              body = check_output(['git', 'show', f'{head}:{path}'])
+              if not body.decode('utf-8').strip():
+                  raise ValueError(f'Customer changelog is empty: {path}')
+              print(f'Customer changelog: {path}')
           notes = Path(environ['RUNNER_TEMP'], 'release-notes', 'README.md')
           notes.parent.mkdir(parents=True, exist_ok=True)
           notes.write_bytes(body)
-          print(f'Customer changelog: {path}')
           with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
               output.write(f'branch={branch}\n')
           PY
@@ -129,63 +220,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           overwrite: true
-      - name: Check complete push range and plan version
-        id: changes
-        env:
-          BEFORE: ${{ github.event.before }}
-          RELEASE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-        run: |
-          python - <<'PY'
-          from os import environ
-          from pathlib import Path
-          from re import fullmatch
-          from subprocess import check_output
-
-          if environ['RELEASE_PUSH'] != 'true':
-              with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-                  output.write('release=false\n')
-              raise SystemExit(0)
-          series = environ['RELEASE_SERIES']
-          if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)', series) is None:
-              raise ValueError(f'Invalid RELEASE_SERIES: {series!r}')
-          before = environ['BEFORE']
-          if not before:
-              raise ValueError('Missing push base commit')
-          first_push = set(before) == {'0'}
-          base = check_output(['git', 'hash-object', '-t', 'tree', '--stdin'], input='', text=True).strip() if first_push else before
-          changed = check_output(
-              ['git', 'diff', '--name-only', '--no-renames', base, environ['GITHUB_SHA'], '--', 'src/'],
-              text=True,
-          ).strip()
-          # Anchor to the pre-push history so a rerun ignores its own release tag.
-          tags = [] if first_push else check_output(['git', 'tag', '--merged', before], text=True).splitlines()
-          releases = []
-          for tag in tags:
-              match = fullmatch(r'v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:\.post\d+)?', tag)
-              if match and f'{int(match[1])}.{int(match[2])}' == series:
-                  releases.append(tuple(map(int, match.groups()[:3])) + (int(match[4] or 0),))
-          latest = max(releases) if releases else None
-          number = int(environ['GITHUB_RUN_NUMBER'])
-          if number < 1:
-              raise ValueError('Build number must be positive')
-          if latest is not None and number <= latest[3]:
-              raise ValueError('Build number must exceed the previous build; do not reset the workflow counter')
-          if changed:
-              patch = latest[2] + 1 if latest is not None else 0
-              print(f'Source changes:\n{changed}')
-          else:
-              if latest is None:
-                  raise ValueError(
-                      'No release tag in pre-push history for this series. '
-                      'Tag the exact source commit of the existing PyPI release before retrying.'
-                  )
-              patch = latest[2]
-              print('No src changes: keeping MAJOR.MINOR.PATCH and increasing BUILD')
-          version = f'{series}.{patch}.{number}'
-          print(f'Planned version: {version}')
-          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(f'release=true\nversion={version}\n')
-          PY
 
   test:
     name: Test Python ${{ matrix.python }}
@@ -256,7 +290,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Record source commits and tag candidate locally
+      - name: Record source commits and configure candidate version
         env:
           RELEASE_BUILD: ${{ needs.changes.outputs.release }}
           RELEASE_VERSION: ${{ needs.changes.outputs.version }}
@@ -269,7 +303,6 @@ jobs:
           from os import environ
           from pathlib import Path
           from re import fullmatch
-          from subprocess import check_output, run
 
           project = environ['PROJECT']
           if project not in ('DefStream', 'DefStream-RabbitMQ', 'DefStream-Redis'):
@@ -278,36 +311,69 @@ jobs:
               print('Test-only build: using the existing Git-derived development version.')
               raise SystemExit(0)
           version = environ['RELEASE_VERSION']
-          if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\.[1-9]\d*', version) is None:
+          if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version) is None:
               raise ValueError(f'Invalid planned version: {version!r}')
-          path = Path('packages') / project
-          tag = version
-          tags = check_output(['git', '-C', str(path), 'tag', '--list', tag], text=True).strip()
-          if tags:
-              tagged = check_output(['git', '-C', str(path), 'rev-parse', f'{tag}^{{commit}}'], text=True).strip()
-              if tagged != environ['GITHUB_SHA']:
-                  raise RuntimeError(f'{tag} already points at another commit')
-          else:
-              run(['git', '-C', str(path), 'tag', tag, environ['GITHUB_SHA']], check=True)
-          print(f'{project}: local candidate {tag}')
+          with Path(environ['GITHUB_ENV']).open('a', encoding='utf-8') as output:
+              output.write(f'RELEASE_VERSION={version}\n')
+          print(f'{project}: candidate {version}')
           with Path(environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as summary:
               summary.write(f'## {project} {version}\n\nSource: `{environ["GITHUB_SHA"]}`\n')
           PY
 
       - name: Install build tools
-        run: python -m pip install --upgrade build twine
+        run: python -m pip install --upgrade build twine wheel
 
       - name: Build source distributions and wheels
+        env:
+          RELEASE_BUILD: ${{ needs.changes.outputs.release }}
+          NEW_VERSION: ${{ needs.changes.outputs.new_version }}
+          WHEEL_BUILD: ${{ needs.changes.outputs.build }}
         run: |
           mkdir -p dist dependency-wheels
           for name in DefStream DefStream-RabbitMQ DefStream-Redis; do
             if [ "$name" = "$PROJECT" ]; then
-              python -m build --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
+              if [ "$RELEASE_BUILD" = "true" ]; then
+                if [ "$NEW_VERSION" = "true" ]; then
+                  SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
+                else
+                  SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --wheel --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
+                fi
+                python -m wheel tags --build "$WHEEL_BUILD" --remove dist/*.whl
+              else
+                python -m build --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
+              fi
             else
               python -m build --outdir "$GITHUB_WORKSPACE/dependency-wheels" "packages/$name"
             fi
           done
           python -m twine check --strict dist/*
+
+      - name: Normalize source archive timestamps
+        run: |
+          python - <<'PY'
+          from gzip import GzipFile
+          from io import BytesIO
+          from os import environ
+          from pathlib import Path
+          from tarfile import open as open_tar
+
+          epoch = int(environ['SOURCE_DATE_EPOCH'])
+          for path in Path('dist').glob('*.tar.gz'):
+              with BytesIO() as buffer:
+                  with open_tar(path, 'r:gz') as source:
+                      with GzipFile(fileobj=buffer, mode='wb', filename='', mtime=epoch) as compressed:
+                          with open_tar(fileobj=compressed, mode='w') as target:
+                              for member in sorted(source.getmembers(), key=lambda item: item.name):
+                                  member.mtime = epoch
+                                  member.uid = member.gid = 0
+                                  member.uname = member.gname = ''
+                                  member.pax_headers = {
+                                      key: value for key, value in member.pax_headers.items()
+                                      if key not in ('mtime', 'atime', 'ctime')
+                                  }
+                                  target.addfile(member, source.extractfile(member) if member.isfile() else None)
+                  path.write_bytes(buffer.getvalue())
+          PY
 
       - name: Install built wheels into a clean environment
         run: |
@@ -379,20 +445,27 @@ jobs:
         env:
           PROJECT: ${{ github.event.repository.name }}
           RELEASE_VERSION: ${{ needs.changes.outputs.version }}
+          WHEEL_BUILD: ${{ needs.changes.outputs.build }}
+          NEW_VERSION: ${{ needs.changes.outputs.new_version }}
         run: |
           python - <<'PY'
           from email.parser import BytesParser
+          from hashlib import sha256
           from json import load
           from os import environ
           from pathlib import Path
+          from shutil import copy2
           from urllib.error import HTTPError
           from urllib.request import urlopen
           from zipfile import ZipFile
 
           wheels = list(Path('dist').glob('*.whl'))
           sources = list(Path('dist').glob('*.tar.gz'))
-          if len(wheels) != 1 or len(sources) != 1:
-              raise ValueError('Expected exactly one wheel and one source distribution')
+          expected_sources = 1 if environ['NEW_VERSION'] == 'true' else 0
+          if len(wheels) != 1 or len(sources) != expected_sources:
+              raise ValueError('Unexpected wheel/source distribution count for the release plan')
+          if wheels[0].name.split('-')[2] != environ['WHEEL_BUILD']:
+              raise ValueError('Wheel build tag does not match the release plan')
           with ZipFile(wheels[0]) as archive:
               metadata_path, = (name for name in archive.namelist() if name.endswith('.dist-info/METADATA'))
               metadata = BytesParser().parsebytes(archive.read(metadata_path))
@@ -409,34 +482,42 @@ jobs:
           except HTTPError as error:
               if error.code != 404:
                   raise
-              exists = False
+              published = {}
           else:
-              expected = {wheels[0].name, sources[0].name}
-              published = {file['filename'] for file in release['urls']}
-              if int(environ['GITHUB_RUN_ATTEMPT']) == 1 or not expected.issubset(published):
-                  raise RuntimeError(
-                      f'{project} {version} already exists or is partially published. '
-                      'Do not overwrite it; use a new run/version or repair the release manually.'
-                  )
-              print(f'{project} {version}: already published; skipping this rerun')
-              exists = True
+              published = {file['filename']: file['digests']['sha256'] for file in release['urls']}
+          if environ['NEW_VERSION'] != 'true' and not published:
+              raise RuntimeError('Cannot rebuild a version that has not been published on PyPI')
+          upload = Path('upload')
+          upload.mkdir()
+          for path in [*wheels, *sources]:
+              if path.name in published:
+                  if sha256(path.read_bytes()).hexdigest() != published[path.name]:
+                      raise RuntimeError(f'Published file differs; refusing to overwrite {path.name}')
+                  print(f'Already published: {path.name}')
+              else:
+                  copy2(path, upload / path.name)
           with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(f'publish={str(not exists).lower()}\n')
+              output.write(f'publish={str(any(upload.iterdir())).lower()}\n')
               output.write(f'version={version}\n')
           PY
 
       - name: Record verified release tag
         env:
-          VERSION: ${{ steps.release.outputs.version }}
+          VERSION: ${{ needs.changes.outputs.tag }}
+          NEW_VERSION: ${{ needs.changes.outputs.new_version }}
         run: |
           tag="$VERSION"
           cd release-source
           if git show-ref --verify --quiet "refs/tags/$tag"; then
-            if [ "$(git rev-parse "$tag^{commit}")" != "$GITHUB_SHA" ]; then
+            if [ "$NEW_VERSION" = "true" ] && [ "$(git rev-parse "$tag^{commit}")" != "$GITHUB_SHA" ]; then
               echo "::error::$tag already points at another commit."
               exit 1
             fi
           else
+            if [ "$NEW_VERSION" != "true" ]; then
+              echo "::error::Existing release tag is missing: $tag"
+              exit 1
+            fi
             git tag "$tag" "$GITHUB_SHA"
           fi
           git push origin "refs/tags/$tag"
@@ -455,29 +536,36 @@ jobs:
             echo "::error::Configure PYPI_API_TOKEN in the pypi environment or repository Actions secrets."
             exit 1
           fi
-          python -m twine upload --non-interactive dist/*
+          python -m twine upload --non-interactive upload/*
 
       - name: Publish GitHub Release with verified distributions
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_TAG: ${{ needs.changes.outputs.tag }}
+          WHEEL_BUILD: ${{ needs.changes.outputs.build }}
+          NEW_VERSION: ${{ needs.changes.outputs.new_version }}
         run: |
           python - <<'PY'
           from json import load
+          from hashlib import sha256
           from os import environ
           from pathlib import Path
           from subprocess import run
+          from tempfile import TemporaryDirectory
           from urllib.error import HTTPError
           from urllib.parse import quote
           from urllib.request import Request, urlopen
 
           repository = environ['GITHUB_REPOSITORY']
           version = environ['VERSION']
+          tag = environ['RELEASE_TAG']
+          release = None
           notes = Path('release-notes/README.md')
           if not notes.read_text(encoding='utf-8').strip():
               raise ValueError('Customer release notes are empty')
           request = Request(
-              f'{environ["GITHUB_API_URL"]}/repos/{repository}/releases/tags/{quote(version, safe="")}',
+              f'{environ["GITHUB_API_URL"]}/repos/{repository}/releases/tags/{quote(tag, safe="")}',
               headers={
                   'Authorization': f'Bearer {environ["GH_TOKEN"]}',
                   'Accept': 'application/vnd.github+json',
@@ -490,20 +578,35 @@ jobs:
           except HTTPError as error:
               if error.code != 404:
                   raise
+              if environ['NEW_VERSION'] != 'true':
+                  raise RuntimeError('Existing GitHub Release is missing') from error
               run([
-                  'gh', 'release', 'create', version, '--repo', repository,
+                  'gh', 'release', 'create', tag, '--repo', repository,
                   '--verify-tag', '--title', version, '--notes-file', str(notes), '--draft',
               ], check=True)
           else:
-              if release['tag_name'] != version:
+              if release['tag_name'] != tag:
                   raise ValueError('GitHub Release does not match the verified version')
+              if environ['NEW_VERSION'] != 'true':
+                  if not (release['body'] or '').strip():
+                      raise ValueError('Existing release notes are empty')
+                  notes.write_text(release['body'], encoding='utf-8')
           artifacts = sorted(str(path) for path in Path('dist').iterdir() if path.is_file())
+          existing = {asset['name'] for asset in release['assets']} if release is not None else set()
+          for artifact in artifacts:
+              path = Path(artifact)
+              if path.name in existing:
+                  with TemporaryDirectory() as directory:
+                      run([
+                          'gh', 'release', 'download', tag, '--repo', repository,
+                          '--pattern', path.name, '--dir', directory,
+                      ], check=True)
+                      if sha256((Path(directory) / path.name).read_bytes()).digest() != sha256(path.read_bytes()).digest():
+                          raise RuntimeError(f'GitHub asset differs; refusing to overwrite {path.name}')
+              else:
+                  run(['gh', 'release', 'upload', tag, '--repo', repository, artifact], check=True)
           run([
-              'gh', 'release', 'upload', version, '--repo', repository,
-              '--clobber', *artifacts,
-          ], check=True)
-          run([
-              'gh', 'release', 'edit', version, '--repo', repository,
+              'gh', 'release', 'edit', tag, '--repo', repository,
               '--notes-file', str(notes), '--draft=false',
           ], check=True)
           PY
