@@ -14,7 +14,6 @@ from typing import (
 	Type,
 	Tuple,
 	Union,
-	Protocol,
 )
 
 from ..Broker import (
@@ -36,20 +35,11 @@ from .Startup import startup
 
 __all__ = (
 	'Worker',
-	'WorkerConnection',
 	'WorkerSetup',
 	'WorkerCleanup',
 )
 
 logger = getLogger(__name__)
-
-
-class WorkerConnection(
-	Connection,
-	GetConsumer,
-	Protocol,
-):
-	pass
 
 
 class WorkerSetup(ABC):
@@ -85,7 +75,7 @@ def worker_hooks(
 class Worker:
 	def __init__(
 		self,
-		broker: WorkerConnection,
+		broker: Connection,
 		pool: Pool,
 		setups: Optional[Union[WorkerSetup, Sequence[WorkerSetup]]] = None,
 		cleanups: Optional[Union[WorkerCleanup, Sequence[WorkerCleanup]]] = None,
@@ -128,6 +118,8 @@ class Worker:
 			self.broker.connect()
 			for setup in self.setups:
 				setup(self)
+			if not isinstance(self.broker, GetConsumer):
+				raise TypeError('Worker broker must support consumer creation')
 			self.consumer = self.broker.consumer()
 			for run in self.tasks:
 				self.consumer.subs(

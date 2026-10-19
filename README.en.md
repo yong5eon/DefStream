@@ -93,6 +93,11 @@ declares an error queue to receive rejected messages.
 
 ### 2. Run the Worker: `worker.py`
 
+`Worker` accepts `DefStream.Broker.Connection` directly.
+The connection contract only requires `connect()` and `close()`. The worker checks
+for `GetConsumer` support internally when it runs. A broker that cannot create
+a consumer raises `TypeError`; no worker-specific connection type is needed.
+
 ```python
 from signal import SIGINT, signal
 

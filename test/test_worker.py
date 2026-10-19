@@ -256,8 +256,7 @@ class PoolTests(TestCase):
 class WorkerTests(TestCase):
 	def make_worker(self, runner, pool):
 		consumer = FakeConsumer()
-		broker = Mock()
-		broker.consumer.return_value = consumer
+		broker = Mock(consumer=Mock(return_value=consumer))
 		worker = Worker(broker, pool)
 		worker.add(runner)
 		return worker, consumer, broker

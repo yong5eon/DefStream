@@ -1,6 +1,5 @@
 from .Worker import (
 	Worker,
-	WorkerConnection,
 	WorkerSetup,
 	WorkerCleanup,
 )
@@ -31,7 +30,6 @@ __all__ = (
 	'declare',
 	'send',
 	'request',
-	'WorkerConnection',
 	'WorkerSetup',
 	'WorkerCleanup',
 	'Run',

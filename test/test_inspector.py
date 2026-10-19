@@ -231,8 +231,7 @@ class InspectorTests(TestCase):
 			),
 		)
 		consumer = Consumer()
-		broker = Mock()
-		broker.consumer.return_value = consumer
+		broker = Mock(consumer=Mock(return_value=consumer))
 		worker = Worker(
 			broker,
 			ThreadPool(2),
