@@ -498,7 +498,7 @@ class InspectorTests(TestCase):
 		class NamedAdd(
 			Add,
 			parameters={'queue': 'named-add'},
-			name='named_add',
+			name='Orders.create-v2_Job',
 		):
 			pass
 
@@ -514,7 +514,21 @@ class InspectorTests(TestCase):
 		self.addCleanup(worker.pool.stop)
 		self.assertEqual(
 			set(metrics.tasks),
-			{'named_add'},
+			{'Orders.create-v2_Job'},
+		)
+		started = metrics.begin(NamedAdd.name)
+		metrics.end(
+			NamedAdd.name,
+			started,
+			True,
+		)
+		self.assertEqual(
+			metrics.snapshot(inspector)['tasks'][NamedAdd.name]['success'],
+			1,
+		)
+		self.assertIn(
+			'defstream_tasks_total{task="Orders.create-v2_Job",outcome="success"} 1',
+			metrics.render(inspector),
 		)
 
 	def test_metrics_reject_duplicate_run_names_without_overwriting(self):

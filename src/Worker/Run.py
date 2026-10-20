@@ -4,8 +4,8 @@ from abc import (
 	abstractmethod,
 )
 from collections.abc import Mapping
-from keyword import iskeyword
 from logging import getLogger
+from re import fullmatch
 from time import monotonic
 from typing import (
 	Any,
@@ -138,8 +138,11 @@ class Run(ABC, metaclass=RunMeta):
 			str,
 		):
 			raise TypeError('Run name must be a string or None')
-		if run_name is not None and (not run_name.isidentifier() or iskeyword(run_name)):
-			raise ValueError('Run name must be a valid Python identifier')
+		if run_name is not None and fullmatch(
+			r'[A-Za-z0-9_.-]+',
+			run_name,
+		) is None:
+			raise ValueError('Run name must contain only ASCII letters, digits, underscores, dots or hyphens')
 		if description is not None and not isinstance(
 			description,
 			str,
