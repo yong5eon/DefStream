@@ -27,7 +27,7 @@ Just def. Let workers do the work. You don't need to await this.
 
 def supports_color() -> bool:
 	return (
-		sys.stdout.isatty()
+		getattr(sys.stdout, 'isatty', lambda: False)()
 		and not environ.get('NO_COLOR')
 	)
 
