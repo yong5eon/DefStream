@@ -7,7 +7,8 @@ from signal import (
 from Tasks import (
 	Add,
 	Divide,
-	LoggingSetup,
+	TaskLoggingSetup,
+	SetupLogger,
 	logger,
 )
 
@@ -76,7 +77,6 @@ class Cleanup(WorkerCleanup):
 
 
 if __name__ == '__main__':
-	LoggingSetup()()
 	worker = Worker(
 		Connection(Configuration(
 			host='127.0.0.1',
@@ -86,9 +86,12 @@ if __name__ == '__main__':
 		)),
 		ProcessPool(
 			10,
-			setups=LoggingSetup(),
+			setups=TaskLoggingSetup(),
 		),
-		setups=Prepare(),
+		setups=(
+			SetupLogger(),
+			Prepare(),
+		),
 		cleanups=Cleanup(),
 		inspector=Inspector(
 			host='127.0.0.1',

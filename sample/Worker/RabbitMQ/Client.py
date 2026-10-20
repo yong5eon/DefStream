@@ -3,7 +3,7 @@ from random import randint
 from Tasks import (
 	Add,
 	Divide,
-	LoggingSetup,
+	TaskLoggingSetup,
 	logger,
 )
 
@@ -16,7 +16,7 @@ from DefStream.Worker import request
 
 
 if __name__ == '__main__':
-	LoggingSetup()()
+	TaskLoggingSetup()()
 	broker = Connection(Configuration(
 		host='127.0.0.1',
 		port=5672,

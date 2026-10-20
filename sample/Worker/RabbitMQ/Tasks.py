@@ -28,9 +28,11 @@ from DefStream.Validator.Patterns.Object import (
 	IsRequiredIn,
 )
 from DefStream.Worker import (
+	WorkerSetup,
 	PoolSetup,
 	Run,
 	Specification,
+	Worker,
 )
 
 __all__ = (
@@ -42,7 +44,27 @@ __all__ = (
 logger = getLogger('Sample')
 
 
-class LoggingSetup(PoolSetup):
+class SetupLogger(WorkerSetup):
+	"""부모와 spawn 자식 프로세스의 샘플 로그 출력을 설정한다."""
+
+	def __call__(
+		self,
+		worker: Worker,
+	) -> None:
+		handler = StreamHandler()
+		handler.setFormatter(Formatter('%(asctime)s %(processName)s %(name)s %(levelname)s %(message)s'))
+		sources = (
+			Filter('Sample'),
+			Filter('DefStream'),
+		)
+		handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+		root = getLogger()
+		root.setLevel(DEBUG)
+		root.addHandler(handler)
+		return
+
+
+class TaskLoggingSetup(PoolSetup):
 	"""부모와 spawn 자식 프로세스의 샘플 로그 출력을 설정한다."""
 
 	def __call__(self) -> None:

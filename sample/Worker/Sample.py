@@ -35,19 +35,6 @@ from DefStream.Worker import (
 logger = getLogger('Sample')
 
 
-def configure_logging() -> None:
-	handler = StreamHandler()
-	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
-	sources = (
-		Filter('Sample'),
-		Filter('DefStream'),
-	)
-	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
-	root = getLogger()
-	root.setLevel(DEBUG)
-	root.addHandler(handler)
-	return
-
 
 class Queue(Sendable):
 	def __init__(self):
@@ -219,6 +206,24 @@ class Add(
 		)
 
 
+class SetupLogger(WorkerSetup):
+	def __call__(
+		self,
+		worker: Worker,
+	) -> None:
+		handler = StreamHandler()
+		handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
+		sources = (
+			Filter('Sample'),
+			Filter('DefStream'),
+		)
+		handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+		root = getLogger()
+		root.setLevel(DEBUG)
+		root.addHandler(handler)
+		return
+
+
 class Prepare(WorkerSetup):
 	def __call__(
 		self,
@@ -252,12 +257,16 @@ class Cleanup(WorkerCleanup):
 
 
 if __name__ == '__main__':
-	configure_logging()
 	worker = Worker(
 		Broker(),
 		ThreadPool(1),
-		setups=Prepare(),
-		cleanups=Cleanup(),
+		setups=(
+			SetupLogger(),
+			Prepare(),
+		),
+		cleanups=(
+			Cleanup(),
+		),
 	)
 	worker.add(Add)
 	worker.run()

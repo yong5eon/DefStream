@@ -39,19 +39,6 @@ from DefStream.Worker import (
 logger = getLogger('Sample')
 
 
-def configure_logging() -> None:
-	handler = StreamHandler()
-	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
-	sources = (
-		Filter('Sample'),
-		Filter('DefStream'),
-	)
-	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
-	root = getLogger()
-	root.setLevel(DEBUG)
-	root.addHandler(handler)
-	return
-
 
 class Add(
 	Run,
@@ -94,6 +81,24 @@ class Divide(
 			result,
 		)
 		return result
+
+
+class SetupLogger(WorkerSetup):
+	def __call__(
+		self,
+		worker: Worker,
+	) -> None:
+		handler = StreamHandler()
+		handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
+		sources = (
+			Filter('Sample'),
+			Filter('DefStream'),
+		)
+		handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+		root = getLogger()
+		root.setLevel(DEBUG)
+		root.addHandler(handler)
+		return
 
 
 class Prepare(WorkerSetup):
@@ -139,11 +144,13 @@ class Cleanup(WorkerCleanup):
 
 
 def main() -> None:
-	configure_logging()
 	worker = Worker(
 		Connection(Configuration()),
 		ThreadPool(10),
-		setups=Prepare(),
+		setups=(
+			SetupLogger(),
+			Prepare(),
+		),
 		cleanups=Cleanup(),
 		inspector=Inspector(
 			host='127.0.0.1',
