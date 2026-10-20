@@ -29,7 +29,6 @@ class Specification:
 		schema: Any = None,
 		validator: Optional[Callable[[Any], Any]] = None,
 		example: Any = ...,
-		description: Optional[str] = None,
 		format: str = 'application/json',
 	):
 		if not isinstance(
@@ -60,7 +59,6 @@ class Specification:
 		self.schema = schema
 		self.validator = validator
 		self.example = example
-		self.description = description
 		self.format = format
 		self.document()
 
@@ -84,8 +82,6 @@ class Specification:
 			'contentType': self.format,
 			'payload': payload,
 		}
-		if self.description is not None:
-			message['description'] = self.description
 		if self.example is not ...:
 			message['examples'] = [{'payload': deepcopy(self.example)}]
 		return message

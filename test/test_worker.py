@@ -99,6 +99,38 @@ class FakeConsumer:
 
 
 class RunnerTests(TestCase):
+	def test_named_runs_preserve_abstract_class_contract(self):
+		class Abstract(
+			Run,
+			name='abstract_task',
+			description='Abstract task',
+		):
+			pass
+
+		self.assertEqual(
+			Abstract.name,
+			'abstract_task',
+		)
+		with self.assertRaisesRegex(TypeError, 'abstract'):
+			Abstract()
+
+		class Concrete(
+			Abstract,
+			name='concrete_task',
+		):
+			def run(self):
+				return 3
+
+		self.assertEqual(
+			Concrete.name,
+			'concrete_task',
+		)
+		self.assertIsNone(Concrete.description)
+		self.assertEqual(
+			Concrete()(),
+			3,
+		)
+
 	def test_registration_is_explicit_and_worker_local(self):
 		first = Worker(Mock(), Mock())
 		second = Worker(Mock(), Mock())
@@ -123,6 +155,11 @@ class RunnerTests(TestCase):
 			pass
 
 		self.assertIs(Child.parameters, FileRunner.parameters)
+		self.assertEqual(
+			Child.name,
+			Child.__module__ + '.' + Child.__qualname__,
+		)
+		self.assertIsNone(Child.description)
 		with self.assertRaises(TypeError):
 			class Invalid(
 				Run,
@@ -130,6 +167,18 @@ class RunnerTests(TestCase):
 			):
 				def run(self):
 					pass
+
+	def test_distinct_runs_cannot_register_with_duplicate_names(self):
+		class First(FileRunner, name='same'):
+			pass
+
+		class Second(FileRunner, name='same'):
+			pass
+
+		worker = Worker(Mock(), Mock())
+		worker.add(First)
+		with self.assertRaisesRegex(ValueError, 'Duplicate Run name'):
+			worker.add(Second)
 
 	def test_missing_parameters_are_reported(self):
 		class Missing(Run):

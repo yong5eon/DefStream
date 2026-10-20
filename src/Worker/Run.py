@@ -1,12 +1,15 @@
 from abc import (
 	ABC,
+	ABCMeta,
 	abstractmethod,
 )
 from collections.abc import Mapping
+from keyword import iskeyword
 from logging import getLogger
 from time import monotonic
 from typing import (
 	Any,
+	Dict,
 	Optional,
 	Sequence,
 	Tuple,
@@ -81,9 +84,33 @@ class RunError(ABC):
 		raise NotImplementedError
 
 
-class Run(ABC):
+class RunMeta(ABCMeta):
+	"""구버전 ABCMeta의 클래스 이름 인자와 Run의 name 키워드 충돌을 방지한다."""
+
+	def __new__(
+		mcls,
+		class_name: str,
+		bases: Tuple[type, ...],
+		namespace: Dict[str, Any],
+		/,
+		**kwargs: Any,
+	) -> 'RunMeta':
+		if 'name' in kwargs:
+			kwargs['run_name'] = kwargs.pop('name')
+		return super().__new__(
+			mcls,
+			class_name,
+			bases,
+			namespace,
+			**kwargs,
+		)
+
+
+class Run(ABC, metaclass=RunMeta):
 	logger = getLogger('DefStream.Run')
 	parameters: Any = None
+	name: str = __module__ + '.' + __qualname__
+	description: Optional[str] = None
 	on_error: Optional[EventError] = None
 	setups: Tuple[RunSetup, ...] = ()
 	completes: Tuple[RunComplete, ...] = ()
@@ -94,6 +121,8 @@ class Run(ABC):
 	def __init_subclass__(
 		cls,
 		*,
+		run_name: Optional[str] = None,
+		description: Optional[str] = None,
 		parameters: Any = None,
 		on_error: Optional[EventError] = None,
 		setups: Optional[Union[RunSetup, Sequence[RunSetup]]] = None,
@@ -104,6 +133,20 @@ class Run(ABC):
 		**kwargs,
 	):
 		super().__init_subclass__(**kwargs)
+		if run_name is not None and not isinstance(
+			run_name,
+			str,
+		):
+			raise TypeError('Run name must be a string or None')
+		if run_name is not None and (not run_name.isidentifier() or iskeyword(run_name)):
+			raise ValueError('Run name must be a valid Python identifier')
+		if description is not None and not isinstance(
+			description,
+			str,
+		):
+			raise TypeError('Run description must be a string or None')
+		cls.name = run_name if run_name is not None else cls.__module__ + '.' + cls.__qualname__
+		cls.description = description
 		parents = tuple(base for base in cls.__mro__[1:] if issubclass(
 			base,
 			Run,
