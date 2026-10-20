@@ -46,7 +46,7 @@ Run을 정의할 때 이름과 설명을 선택적으로 지정할 수 있도록
 |---|---|
 | SPECNAME-01 | Run 정의 시 선택적 `name`을 지정할 수 있어야 한다. 지정하지 않은 경우의 기본값은 미지정 상태여야 한다. |
 | SPECNAME-02 | Run 정의 시 선택적 `description`을 지정할 수 있어야 한다. 지정하지 않은 경우 설명은 없어야 한다. |
-| SPECNAME-03 | `name`은 Python 문법상 유효한 식별자여야 하며 예약어는 허용하지 않는다. 이름을 자동 정규화하거나 변경하지 않는다. 잘못된 타입은 `TypeError`, 유효하지 않은 식별자나 예약어는 `ValueError`로 거부한다. |
+| SPECNAME-03 | 명시적 `name`은 `[A-Za-z0-9_.-]+` 전체 일치 문자열이어야 한다. 영문 대소문자·숫자·`_`·`.`·`-`를 위치 제한 없이 허용하고 Python 예약어도 허용한다. 빈 문자열, 공백, 한국어 및 그 외 문자는 `ValueError`, 문자열과 `None` 이외의 타입은 `TypeError`로 거부한다. 입력을 정규화하지 않고 대소문자를 구분하여 보존한다. |
 | SPECNAME-04 | `description`은 문자열 또는 `None`이어야 한다. 다른 타입은 `TypeError`로 명확히 거부한다. 빈 설명 문자열은 그대로 보존한다. |
 | SPECNAME-05 | 이름이 지정되지 않은 Run의 유효 이름은 `Run.__module__ + '.' + Run.__qualname__`이어야 한다. 중첩 클래스도 `__qualname__`을 포함해야 한다. |
 | SPECNAME-06 | AsyncAPI 문서의 `operations` 객체에서 각 Run의 키로 유효 Run 이름을 사용해야 한다. 이 요구사항은 Operation 객체의 별도 필드가 아니라 `operations` 맵의 키에 적용한다. |
@@ -79,7 +79,7 @@ Run을 정의할 때 이름과 설명을 선택적으로 지정할 수 있도록
 | WAT-01 | `Run` 정의에 `name='orders'`를 지정하면 AsyncAPI `operations`와 Metrics에서 `orders` 키로 식별된다. |
 | WAT-02 | 이름을 지정하지 않은 모듈 최상위 Run의 AsyncAPI 키와 Metrics 키가 모두 `모듈명.클래스명`이다. |
 | WAT-03 | 이름을 지정하지 않은 중첩 Run의 기본 이름에 모듈명과 중첩 경로를 포함한 `__qualname__`이 반영된다. |
-| WAT-04 | `name`이 Python 문법상 식별자가 아니거나 예약어이거나 문자열이 아니면 각각 `ValueError` 또는 `TypeError`가 발생한다. |
+| WAT-04 | `Orders.create-v2_Job`, 숫자만 있는 이름, Python 예약어 및 구분자로 시작·끝나는 이름을 그대로 허용한다. 빈 문자열, 한국어, 공백·개행 및 허용 범위 밖 문자는 `ValueError`, 문자열과 `None` 이외의 타입은 `TypeError`로 거부한다. |
 | WAT-05 | `description`이 문자열이면 AsyncAPI Operation 설명에 반영되고, `None`이면 Operation에 설명 필드가 없다. |
 | WAT-06 | `description`에 문자열 또는 `None` 이외의 값을 전달하면 `TypeError`가 발생한다. |
 | WAT-07 | 두 Run에 같은 사용자 지정 이름을 지정하면 Run 등록 시 충돌을 감지하고, 문서 생성에서도 충돌을 검증한다. 기존 항목을 덮어쓰거나 통계를 합치지 않는다. |

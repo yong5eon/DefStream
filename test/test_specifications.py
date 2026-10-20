@@ -426,7 +426,7 @@ class DocumentTests(TestCase):
 		class Described(
 			Add,
 			parameters={'queue': 'described'},
-			name='described',
+			name='Orders.create-v2_Job',
 			description='Add request description',
 		):
 			"""Not the operation description."""
@@ -444,7 +444,7 @@ class DocumentTests(TestCase):
 		inspector.worker.add(Empty)
 		operations = Specifications('/spec').document(inspector)['operations']
 		self.assertEqual(
-			operations['described']['description'],
+			operations['Orders.create-v2_Job']['description'],
 			'Add request description',
 		)
 		self.assertEqual(
@@ -469,12 +469,42 @@ class DocumentTests(TestCase):
 			Local.__module__ + '.' + Local.__qualname__,
 		)
 
-	def test_run_name_must_be_a_python_identifier(self):
+	def test_run_names_preserve_allowed_characters(self):
+		for name in (
+			'Orders.create-v2_Job',
+			'123',
+			'class',
+			'.-_',
+			'-Job.',
+		):
+			with self.subTest(name=name):
+				class Named(
+					Run,
+					name=name,
+				):
+					def run(self):
+						pass
+
+				self.assertEqual(
+					Named.name,
+					name,
+				)
+
+	def test_run_names_reject_empty_strings_and_unsupported_characters(self):
 		for invalid in (
 			'',
-			'not-valid',
 			'has space',
-			'class',
+			' leading',
+			'trailing ',
+			'job\n',
+			'job\t',
+			'job/name',
+			'job:name',
+			'job"name',
+			'job\\name',
+			'\uC791\uC5C5',
+			'caf\u00e9',
+			'\uff11',
 		):
 			with self.subTest(name=invalid), self.assertRaises(ValueError):
 				class Invalid(

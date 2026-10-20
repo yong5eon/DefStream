@@ -507,6 +507,8 @@ class Add(
 - `format` defaults to `application/json`. It changes documented media types, not broker codecs.
 - Run's `name` is used as both the AsyncAPI Operation key and the Metrics task key.
   When omitted, `module.__qualname__` is used; Run's `description` appears on the AsyncAPI Operation.
+  Explicit names must match `[A-Za-z0-9_.-]+`; whitespace and Korean characters are not allowed.
+  Names are case-sensitive and preserved exactly as provided.
 - Execution order: setup hooks → request validation → `run()` → response validation → completion hooks → reply/ACK.
 
 Validation exceptions are task failures and follow error hooks and the `on_error`
