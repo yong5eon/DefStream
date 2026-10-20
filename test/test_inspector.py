@@ -475,7 +475,7 @@ class InspectorTests(TestCase):
 				'failure',
 			),
 		):
-			labels = 'task="' + task.__module__ + '.' + task.__qualname__ + '"'
+			labels = 'task="' + task.name + '"'
 			self.assertIn(
 				f'defstream_tasks_total{{{labels},outcome="{outcome}"}} 1',
 				text,
@@ -494,6 +494,60 @@ class InspectorTests(TestCase):
 				0,
 			)
 
+	def test_metrics_use_run_name(self):
+		class NamedAdd(
+			Add,
+			parameters={'queue': 'named-add'},
+			name='named_add',
+		):
+			pass
+
+		inspector = Inspector()
+		worker = Worker(
+			Mock(),
+			ThreadPool(1),
+		)
+		worker.add(NamedAdd)
+		inspector.worker = worker
+		metrics = Metrics('/stats')
+		metrics.start(inspector)
+		self.addCleanup(worker.pool.stop)
+		self.assertEqual(
+			set(metrics.tasks),
+			{'named_add'},
+		)
+
+	def test_metrics_reject_duplicate_run_names_without_overwriting(self):
+		class First(
+			Add,
+			parameters={'queue': 'first-metrics'},
+			name='first',
+		):
+			pass
+
+		class Second(
+			Add,
+			parameters={'queue': 'second-metrics'},
+			name='second',
+		):
+			pass
+
+		inspector = Inspector()
+		worker = Worker(
+			Mock(),
+			ThreadPool(1),
+		)
+		worker.add(First)
+		worker.add(Second)
+		Second.name = First.name
+		inspector.worker = worker
+		metrics = Metrics('/stats')
+		self.addCleanup(worker.pool.stop)
+		with self.assertRaisesRegex(ValueError, 'Duplicate Metrics task name'):
+			metrics.start(inspector)
+		self.assertIsNone(metrics.started_at)
+		self.assertEqual(metrics.tasks, {})
+
 	def test_active_execution_and_pool_full_are_not_counted_as_failures(self):
 		worker, consumer, inspector = self.make_worker()
 		worker.pool.stop()
@@ -509,7 +563,7 @@ class InspectorTests(TestCase):
 			delivery,
 		))
 		self.assertTrue(submitted.wait(5))
-		task = Add.__module__ + '.' + Add.__qualname__
+		task = Add.name
 		metrics = inspector.exts['/stats']
 		self.assertIsInstance(
 			metrics,
@@ -721,7 +775,7 @@ class InspectorTests(TestCase):
 				)[0],
 				200,
 			)
-			task = Divide.__module__ + '.' + Divide.__qualname__
+			task = Divide.name
 			with self.assertLogs(
 				'DefStream.Worker',
 				level='ERROR',

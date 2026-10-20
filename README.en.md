@@ -481,13 +481,14 @@ class Add(
     schema=request_schema,
     validator=request_validator,
     example={'a': 10, 'b': 20},
-    description='Add two integers',
   ),
   response=Specification(
     schema=response_schema,
     validator=response_validator,
     example=30,
   ),
+  name='add',
+  description='Add two integers',
 ):
   def run(
     self,
@@ -504,6 +505,8 @@ class Add(
 - Plain JSON Schema dictionaries and custom validation functions can also be passed as `schema` and `validator`.
 - `example` is documentation data and is not automatically executed or validated.
 - `format` defaults to `application/json`. It changes documented media types, not broker codecs.
+- Run's `name` is used as both the AsyncAPI Operation key and the Metrics task key.
+  When omitted, `module.__qualname__` is used; Run's `description` appears on the AsyncAPI Operation.
 - Execution order: setup hooks → request validation → `run()` → response validation → completion hooks → reply/ACK.
 
 Validation exceptions are task failures and follow error hooks and the `on_error`

@@ -3,6 +3,7 @@ from json import dumps
 from logging import getLogger
 from re import fullmatch
 from typing import (
+	Any,
 	TYPE_CHECKING,
 	Optional,
 )
@@ -72,10 +73,10 @@ class Specifications(Extension):
 		}
 		if self.description is not None:
 			info['description'] = self.description
-		channels = {}
-		operations = {}
+		channels: dict[str, Any] = {}
+		operations: dict[str, Any] = {}
 		for task in worker.tasks:
-			key = task.__name__
+			key = task.name
 			if key in operations:
 				raise ValueError('Duplicate task specification identifier: ' + key)
 			parameters = task.parameters
@@ -102,7 +103,7 @@ class Specifications(Extension):
 				raise ValueError('Task specification requires a nonempty queue address: ' + key)
 			if queue in channels:
 				raise ValueError('Duplicate channel identifier: ' + queue)
-			message = task.request.document() if task.request is not None else {
+			message: dict[str, Any] = task.request.document() if task.request is not None else {
 				'payload': {'type': 'object'},
 			}
 			message['name'] = task.__name__ + 'Request'
@@ -123,8 +124,8 @@ class Specifications(Extension):
 					'request',
 				)],
 			}
-			if task.request is not None and task.request.description is not None:
-				operation['description'] = task.request.description
+			if task.description is not None:
+				operation['description'] = task.description
 			if task.response is not None:
 				channels[queue]['messages']['response'] = task.response.document()
 				operation['reply'] = {

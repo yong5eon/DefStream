@@ -39,7 +39,7 @@ class DashboardTests(TestCase):
 			ThreadPool(1),
 		)
 		self.worker.add(Task)
-		self.task = Task.__module__ + '.' + Task.__qualname__
+		self.task = Task.name
 		self.inspector = Inspector(
 			port=0,
 			exts=(

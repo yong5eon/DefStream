@@ -56,6 +56,8 @@ def configure_logging() -> None:
 class Add(
 	Run,
 	parameters=Subscription('add'),
+	name='add',
+	description='Add two integers',
 ):
 	def run(
 		self,
@@ -76,6 +78,8 @@ class Divide(
 	Run,
 	parameters=Subscription('divide'),
 	on_error=Reject(),
+	name='divide',
+	description='Divide a dividend by a divisor',
 ):
 	def run(
 		self,

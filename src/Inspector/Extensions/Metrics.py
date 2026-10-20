@@ -122,13 +122,15 @@ class Metrics(Extension):
 		worker = inspector.worker
 		if worker is None:
 			raise RuntimeError('Metrics requires an attached Worker')
+		tasks = {}
+		for task in worker.tasks:
+			if task.name in tasks:
+				raise ValueError('Duplicate Metrics task name: ' + task.name)
+			tasks[task.name] = TaskMetrics()
 		with self.lock:
 			self.started_at = monotonic()
 			self.instance = uuid4().hex
-			self.tasks = {
-				task.__module__ + '.' + task.__qualname__: TaskMetrics()
-				for task in worker.tasks
-			}
+			self.tasks = tasks
 		self.logger.info(
 			'Metrics collection initialized: path=%s tasks=%d',
 			self.path,

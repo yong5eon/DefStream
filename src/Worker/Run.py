@@ -3,6 +3,7 @@ from abc import (
 	abstractmethod,
 )
 from collections.abc import Mapping
+from keyword import iskeyword
 from logging import getLogger
 from time import monotonic
 from typing import (
@@ -84,6 +85,8 @@ class RunError(ABC):
 class Run(ABC):
 	logger = getLogger('DefStream.Run')
 	parameters: Any = None
+	name: str = __module__ + '.' + __qualname__
+	description: Optional[str] = None
 	on_error: Optional[EventError] = None
 	setups: Tuple[RunSetup, ...] = ()
 	completes: Tuple[RunComplete, ...] = ()
@@ -94,6 +97,8 @@ class Run(ABC):
 	def __init_subclass__(
 		cls,
 		*,
+		name: Optional[str] = None,
+		description: Optional[str] = None,
 		parameters: Any = None,
 		on_error: Optional[EventError] = None,
 		setups: Optional[Union[RunSetup, Sequence[RunSetup]]] = None,
@@ -104,6 +109,20 @@ class Run(ABC):
 		**kwargs,
 	):
 		super().__init_subclass__(**kwargs)
+		if name is not None and not isinstance(
+			name,
+			str,
+		):
+			raise TypeError('Run name must be a string or None')
+		if name is not None and (not name.isidentifier() or iskeyword(name)):
+			raise ValueError('Run name must be a valid Python identifier')
+		if description is not None and not isinstance(
+			description,
+			str,
+		):
+			raise TypeError('Run description must be a string or None')
+		cls.name = name if name is not None else cls.__module__ + '.' + cls.__qualname__
+		cls.description = description
 		parents = tuple(base for base in cls.__mro__[1:] if issubclass(
 			base,
 			Run,

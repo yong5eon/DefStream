@@ -512,13 +512,14 @@ class Add(
     schema=request_schema,
     validator=request_validator,
     example={'a': 10, 'b': 20},
-    description='Add two integers',
   ),
   response=Specification(
     schema=response_schema,
     validator=response_validator,
     example=30,
   ),
+  name='add',
+  description='Add two integers',
 ):
   def run(
     self,
@@ -535,6 +536,8 @@ class Add(
 - 일반 JSON Schema 딕셔너리와 직접 작성한 검증 함수도 각각 `schema`, `validator`에 전달할 수 있습니다.
 - `example`은 문서용 값이며 자동 실행·검증하지 않습니다.
 - `format`의 기본값은 `application/json`입니다. 문서의 미디어 타입만 바꾸며 브로커 코덱은 별도 설정입니다.
+- Run의 `name`은 AsyncAPI Operation 키와 Metrics 작업 키에 함께 사용합니다.
+  생략하면 `모듈명.__qualname__`을 사용하며, Run의 `description`은 AsyncAPI Operation에 표시됩니다.
 - 실행 순서는 초기화 훅 → 요청 검증 → `run()` → 응답 검증 → 완료 훅 → 응답 발행·ACK입니다.
 
 검증 예외는 작업 실패로 처리되어 오류 훅과 `on_error` 정책을 따릅니다.

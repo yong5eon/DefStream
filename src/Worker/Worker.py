@@ -102,6 +102,11 @@ class Worker:
 		task_parameters(run)
 		if run in self.tasks:
 			raise ValueError('Run is already registered')
+		if any(
+			registered.name == run.name
+			for registered in self.tasks
+		):
+			raise ValueError('Duplicate Run name: ' + run.name)
 		self.tasks.append(run)
 		self.logger.debug(
 			'Task registered: task=%s.%s',
@@ -246,7 +251,7 @@ class Worker:
 			self.pending -= 1
 			raise RuntimeError('Worker consumer is not initialized')
 		inspector = self.inspector
-		task = run.__module__ + '.' + run.__qualname__
+		task = run.name
 		self.logger.debug(
 			'Task message received: task=%s pending=%s',
 			task,

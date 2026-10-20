@@ -422,18 +422,20 @@ class DocumentTests(TestCase):
 					format=invalid,
 				)
 
-	def test_operation_description_uses_request_specification_not_docstring(self):
+	def test_operation_uses_run_name_and_description(self):
 		class Described(
 			Add,
 			parameters={'queue': 'described'},
-			request=Specification(description='Add request description'),
+			name='described',
+			description='Add request description',
 		):
 			"""Not the operation description."""
 
 		class Empty(
 			Add,
 			parameters={'queue': 'empty'},
-			request=Specification(description=''),
+			name='empty',
+			description='',
 		):
 			pass
 
@@ -442,17 +444,114 @@ class DocumentTests(TestCase):
 		inspector.worker.add(Empty)
 		operations = Specifications('/spec').document(inspector)['operations']
 		self.assertEqual(
-			operations['Described']['description'],
+			operations['described']['description'],
 			'Add request description',
 		)
 		self.assertEqual(
-			operations['Empty']['description'],
+			operations['empty']['description'],
 			'',
 		)
 		self.assertNotIn(
 			'description',
-			operations['Add'],
+			operations[Add.name],
 		)
+
+	def test_run_name_defaults_to_qualified_class_name(self):
+		class Local(
+			Run,
+			parameters={'queue': 'local-name'},
+		):
+			def run(self):
+				pass
+
+		self.assertEqual(
+			Local.name,
+			Local.__module__ + '.' + Local.__qualname__,
+		)
+
+	def test_run_name_must_be_a_python_identifier(self):
+		for invalid in (
+			'',
+			'not-valid',
+			'has space',
+			'class',
+		):
+			with self.subTest(name=invalid), self.assertRaises(ValueError):
+				class Invalid(
+					Run,
+					name=invalid,
+				):
+					def run(self):
+						pass
+		with self.assertRaises(TypeError):
+			class InvalidType(
+				Run,
+				name=1,
+			):
+				def run(self):
+					pass
+		with self.assertRaises(TypeError):
+			class InvalidDescription(
+				Run,
+				description=1,
+			):
+				def run(self):
+					pass
+
+	def test_run_metadata_is_not_inherited_by_subclasses(self):
+		class Parent(
+			Run,
+			name='parent',
+			description='Parent task',
+		):
+			def run(self):
+				pass
+
+		class Child(Parent):
+			pass
+
+		self.assertEqual(
+			Parent.name,
+			'parent',
+		)
+		self.assertEqual(
+			Parent.description,
+			'Parent task',
+		)
+		self.assertEqual(
+			Child.name,
+			Child.__module__ + '.' + Child.__qualname__,
+		)
+		self.assertIsNone(Child.description)
+
+	def test_duplicate_run_names_are_rejected_on_registration_and_documentation(self):
+		class First(
+			Run,
+			parameters={'queue': 'first'},
+			name='duplicate',
+		):
+			def run(self):
+				pass
+
+		class Second(
+			Run,
+			parameters={'queue': 'second'},
+			name='duplicate',
+		):
+			def run(self):
+				pass
+
+		inspector = self.inspector()
+		inspector.worker.add(First)
+		with self.assertRaisesRegex(ValueError, 'Duplicate Run name'):
+			inspector.worker.add(Second)
+		inspector.worker.tasks.append(Second)
+		with self.assertRaisesRegex(ValueError, 'Duplicate task specification'):
+			Specifications('/spec').document(inspector)
+
+	def test_specification_does_not_accept_description(self):
+		with self.assertRaises(TypeError):
+			Specification(description='No longer supported')
 
 	def test_request_and_response_formats_are_preserved_in_asyncapi(self):
 		class Formatted(
@@ -501,7 +600,7 @@ class DocumentTests(TestCase):
 			document['asyncapi'],
 			'3.1.0',
 		)
-		key = 'Add'
+		key = Add.name
 		self.assertEqual(
 			document['channels']['spec.add']['address'],
 			'spec.add',
@@ -621,7 +720,7 @@ class DocumentTests(TestCase):
 		):
 			Specifications('/spec').document(inspector)
 
-	def test_local_task_names_use_only_class_name_for_operations(self):
+	def test_default_operation_names_use_qualified_class_names(self):
 		class Local(
 			Add,
 			parameters={'queue': 'local'},
@@ -634,8 +733,8 @@ class DocumentTests(TestCase):
 		self.assertEqual(
 			set(document['operations']),
 			{
-				'Add',
-				'Local',
+				Add.name,
+				Local.name,
 			},
 		)
 
@@ -654,15 +753,15 @@ class DocumentTests(TestCase):
 			'orders/add~v1',
 		)
 		self.assertEqual(
-			document['operations']['Custom']['channel'],
+			document['operations'][Custom.name]['channel'],
 			{'$ref': '#/channels/orders~1add~0v1'},
 		)
 		self.assertEqual(
-			document['operations']['Custom']['messages'],
+			document['operations'][Custom.name]['messages'],
 			[{'$ref': '#/channels/orders~1add~0v1/messages/request'}],
 		)
 		self.assertEqual(
-			document['operations']['Custom']['reply']['messages'],
+			document['operations'][Custom.name]['reply']['messages'],
 			[{'$ref': '#/channels/orders~1add~0v1/messages/response'}],
 		)
 
@@ -715,12 +814,12 @@ class DocumentTests(TestCase):
 		inspector.worker.add(Plain)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
-			document['operations']['Custom']['reply']['channel'],
+			document['operations'][Custom.name]['reply']['channel'],
 			{'$ref': '#/channels/custom'},
 		)
 		self.assertNotIn(
 			'reply',
-			document['operations']['Plain'],
+			document['operations'][Plain.name],
 		)
 		self.assertNotIn(
 			'response',
@@ -752,12 +851,12 @@ class DocumentTests(TestCase):
 		):
 			pass
 
-		Other.__name__ = 'Add'
+		Other.name = Add.name
 		inspector = self.inspector()
-		inspector.worker.add(Other)
+		inspector.worker.tasks.append(Other)
 		with self.assertRaisesRegex(
 			ValueError,
-			'Duplicate task',
+			'Duplicate task specification',
 		):
 			Specifications('/spec').document(inspector)
 
@@ -779,7 +878,7 @@ class DocumentTests(TestCase):
 		inspector.worker.add(Later)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
-			document['operations']['Later']['reply']['channel'],
+			document['operations'][Later.name]['reply']['channel'],
 			{'$ref': '#/channels/later'},
 		)
 
