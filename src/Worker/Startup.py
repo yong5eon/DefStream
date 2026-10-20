@@ -1,5 +1,6 @@
 from collections.abc import Mapping
-from os import getpid
+from os import environ, getpid
+import sys
 from typing import (
 	Any,
 	TYPE_CHECKING,
@@ -19,7 +20,40 @@ LOGO = r"""
 ███  ███ ▄█▀█▄ ▀██▀  ▀████▄  ▀██▀▀ ████▄ ▄█▀█▄  ▀▀█▄ ███▄███▄ 
 ███  ███ ██▄█▀  ██     ▀████  ██   ██ ▀▀ ██▄█▀ ▄█▀██ ██ ██ ██ 
 ██████▀  ▀█▄▄▄  ██  ███████▀  ██   ██    ▀█▄▄▄ ▀█▄██ ██ ██ ██ 
+
+Just def. Let workers do the work. You don't need to await this.
 """
+
+
+def supports_color() -> bool:
+	return (
+		sys.stdout.isatty()
+		and not environ.get('NO_COLOR')
+	)
+
+
+def colorize_logo(logo: str) -> str:
+	colors = (
+		'\033[38;5;39m',
+		'\033[38;5;45m',
+		'\033[38;5;51m',
+		'\033[38;5;45m',
+		'\033[38;5;39m',
+	)
+	reset = '\033[0m'
+	colorized_lines = []
+	art_line = 0
+	for line in logo.splitlines(keepends=True):
+		if line.strip() and art_line < len(colors):
+			newline = '\n' if line.endswith('\n') else ''
+			colorized_lines.append(
+				f'{colors[art_line]}{line[:-1] if newline else line}'
+				f'{reset}{newline}',
+			)
+			art_line += 1
+		else:
+			colorized_lines.append(line)
+	return ''.join(colorized_lines)
 
 
 def subscription_value(
@@ -90,10 +124,15 @@ def startup(worker: 'Worker') -> None:
 			str,
 		) and vhost:
 			broker_name += '/' + vhost.lstrip('/')
+	logo = LOGO.rstrip()
+	starting_worker = 'Starting Worker'
+	if supports_color():
+		logo = colorize_logo(logo)
+		starting_worker = f'\033[1;38;5;51m{starting_worker}\033[0m'
 	lines = [
-		LOGO.rstrip(),
+		logo,
 		'',
-		'Starting Worker',
+		starting_worker,
 		f'  PID: {getpid()}',
 		f'  Broker: {broker_name}',
 	]
