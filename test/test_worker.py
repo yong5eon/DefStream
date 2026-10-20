@@ -99,6 +99,38 @@ class FakeConsumer:
 
 
 class RunnerTests(TestCase):
+	def test_named_runs_preserve_abstract_class_contract(self):
+		class Abstract(
+			Run,
+			name='abstract_task',
+			description='Abstract task',
+		):
+			pass
+
+		self.assertEqual(
+			Abstract.name,
+			'abstract_task',
+		)
+		with self.assertRaisesRegex(TypeError, 'abstract'):
+			Abstract()
+
+		class Concrete(
+			Abstract,
+			name='concrete_task',
+		):
+			def run(self):
+				return 3
+
+		self.assertEqual(
+			Concrete.name,
+			'concrete_task',
+		)
+		self.assertIsNone(Concrete.description)
+		self.assertEqual(
+			Concrete()(),
+			3,
+		)
+
 	def test_registration_is_explicit_and_worker_local(self):
 		first = Worker(Mock(), Mock())
 		second = Worker(Mock(), Mock())

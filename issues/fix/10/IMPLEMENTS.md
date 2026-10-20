@@ -11,9 +11,10 @@
 
 ## 2. 구현 내용
 
-- [Run](../../../src/Worker/Run.py)의 `__init_subclass__`가 `name`과
-  `description` 키워드를 받는다. 이름은 Python 식별자이며 예약어가 아닌지
-  검사하고, 설명은 문자열 또는 `None`으로 검증한다.
+- [Run](../../../src/Worker/Run.py) 클래스 정의에서 `name`과 `description`
+  키워드를 받는다. `RunMeta`가 이름을 내부 키워드 `run_name`으로 중계하고,
+  `__init_subclass__`가 이름과 설명을 처리한다. 이름은 Python 식별자이며
+  예약어가 아닌지 검사하고, 설명은 문자열 또는 `None`으로 검증한다.
 - 클래스 생성 시 이름이 생략되면 해당 클래스의 `__module__`과 `__qualname__`으로
   기본 이름을 만든다. 하위 Run에는 상위 Run의 이름과 설명을 상속하지 않는다.
 - [Worker](../../../src/Worker/Worker.py)는 Run 등록 시 동일한 이름이 이미
@@ -75,7 +76,8 @@ class Add(
 
 ### 자동 테스트 및 정적 진단
 
-- Python `unittest discover -s test`: **199개 통과, 8개 건너뜀**.
+- 최초 Python 3.12 검증의 `unittest discover -s test`: **199개 실행 중
+  191개 통과, 8개 건너뜀**. 이 결과는 Python 3.9·3.10 호환성 검증을 포함하지 않았다.
 - Run 이름·설명, 입력 검증, 기본 이름, 상속 비적용, 등록·문서 충돌,
   AsyncAPI 설명과 Metrics 키의 회귀 테스트를 추가했다.
 - 변경한 `Run.py`, `Specification.py`, `Metrics.py`, `Specifications.py`에
@@ -102,3 +104,32 @@ Redis의 Divide 실패는 샘플이 의도적으로 넣는 0 나눗셈 입력에
 전체 테스트 중 8개는 선택적 통합 테스트로 건너뛰었다. 이번 로컬 Docker 실행은
 브로커와 샘플의 실제 연동 검증이며, 전체 브로커 어댑터 테스트 스위트 실행으로
 간주하지 않는다.
+
+## 6. Python 3.9·3.10 호환성 수정
+
+Python 3.9.13과 3.10.11에서 클래스 정의의 `name=` 키워드가
+`ABCMeta.__new__(mcls, name, bases, namespace, **kwargs)`의 클래스 이름 인자와
+충돌하는 것을 재현했다. 이 경우 `Run.__init_subclass__`에 도달하기 전에
+`TypeError: __new__() got multiple values for argument 'name'`이 발생한다.
+
+`ABCMeta`를 상속한 `RunMeta`를 추가하여 공개 `name=`을 내부 `run_name` 키워드로
+변환한 뒤 기존 추상 클래스 생성 경로로 전달한다. 이름의 기본값·검증·상속 비적용
+처리는 계속 `Run.__init_subclass__`가 담당한다. 사용자 클래스 정의 문법은
+변경하지 않으며 `ABCMeta`의 추상 메서드 검사도 유지한다.
+
+[Worker 테스트](../../../test/test_worker.py)에 이름을 지정한 추상 Run의 생성 거부,
+구체 하위 Run의 이름 재정의 및 실행을 검증하는 회귀 테스트를 추가했다.
+
+| Python | 전체 코어 테스트 결과 |
+|---|---|
+| 3.9.13 | 200개 실행, 192개 통과, 8개 건너뜀 |
+| 3.10.11 | 200개 실행, 192개 통과, 8개 건너뜀 |
+| 3.12.10 | 200개 실행, 192개 통과, 8개 건너뜀 |
+| 3.14.5 | 200개 실행, 192개 통과, 8개 건너뜀 |
+
+구버전 테스트는 개발 환경의 Redis 8.x 클라이언트가 해당 버전과 호환되지 않아
+세션 전용 경로에 Redis 5.3.1과 의존성을 설치하여 실행했다. 프로젝트의
+의존성 선언과 공용 가상환경은 변경하지 않았다.
+Python 3.9의 첫 전체 실행에서는 무관한 Console HTTP 테스트에 Windows
+`ConnectionAbortedError`가 발생했으나, 해당 테스트의 단독 실행과 전체 재실행은
+통과했다. 변경한 Run 소스의 Pylance 진단에도 오류가 없다.
