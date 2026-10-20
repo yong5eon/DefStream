@@ -274,7 +274,7 @@ class LoggingTests(TestCase):
 		try:
 			spec.loader.exec_module(sample)
 			self.assertEqual(root.handlers, handlers)
-			sample.configure_logging()
+			sample.SetupLogger()(Mock())
 			handler = root.handlers[-1]
 			for name, expected in (
 				(
