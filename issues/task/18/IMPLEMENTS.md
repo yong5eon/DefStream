@@ -46,3 +46,12 @@ GitHub 공식 유효성 문서는 문자열 항목에 빈 문자열을 허용하
 공식 근거: [Issue Forms 유효성 오류](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/common-validation-errors-when-creating-issue-forms).
 로컬 검증에서 네 양식의 빈 최상위 문자열 없음, `title` 생략, 레이블 매핑과
 입력 필드 ID를 확인했다. GitHub 화면에서의 복구 확인은 수행하지 않았다.
+
+### 작업 양식만 누락되는 현상
+
+원격 기본 브랜치에도 네 양식과 `title` 제거가 반영된 것을 GitHub API로 확인했다.
+다른 양식은 표시되지만 작업 양식만 보이지 않는다는 사용자 확인에 따라,
+짧은 표시 이름의 영향을 점검하기 위해 `name`을 `작업`에서 `작업 제안`으로
+변경했다. 파일명, 레이블과 입력 항목은 유지했다.
+공식 문서에서 이름의 최소 길이 제한은 확인하지 못했으므로 원인 확정이나
+GitHub 화면에서의 복구 완료로 간주하지 않는다.
