@@ -6,7 +6,7 @@ from operator import eq
 
 __all__ = (
 	'SetDefault',
-	'IsToNone',
+	'IsOptional',
 	'IsNotToNone',
 	'IsNotEmpty',
 )
@@ -29,7 +29,7 @@ class SetDefault(Pattern):
 		)
 	
 
-class IsToNone(Pattern):
+class IsOptional(Pattern):
 	def __init__(self, *args):
 		self.patterns = args
 		return
@@ -90,4 +90,3 @@ class IsNotEmpty(Pattern):
 			self.__class__.__name__,
 			', '.join([p.__repr__() for p in self.patterns])
 		)
-
