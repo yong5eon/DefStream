@@ -323,13 +323,13 @@ class Console(Extension):
 			)
 			task = next(
 				(
-					task for task in worker.tasks if task.__name__ == payload['task']
+					task for task in worker.tasks if task.name == payload['task']
 				),
 				None,
 			)
 			if task is None:
 				raise ValueError('Unknown registered task')
-			if sum(task.__name__ == payload['task'] for task in worker.tasks) != 1:
+			if sum(task.name == payload['task'] for task in worker.tasks) != 1:
 				raise ValueError('Ambiguous registered task name')
 		except (
 			ValueError,
@@ -337,8 +337,9 @@ class Console(Extension):
 			UnicodeDecodeError,
 		) as error:
 			self.logger.warning(
-				'Inspector Console rejected invalid input: error=%s',
+				'Inspector Console rejected invalid input: error=%s message=%s',
 				type(error).__name__,
+				error,
 			)
 			return json_response(
 				'400 Bad Request',

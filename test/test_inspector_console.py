@@ -57,6 +57,19 @@ class Task(
 		return a / b
 
 
+class NamedTask(
+	Run,
+	run_name='ETL.OBS.Split',
+	parameters={'queue': 'named-task'},
+):
+	def run(
+		self,
+		a,
+		b,
+	):
+		return a / b
+
+
 class Producer:
 	def __init__(self):
 		self.connected = 0
@@ -168,7 +181,7 @@ class ConsoleExtensionTests(TestCase):
 		mode='send',
 	):
 		return {
-			'task': 'Task',
+			'task': Task.name,
 			'mode': mode,
 			'body': {
 				'a': 6,
@@ -458,6 +471,47 @@ class ConsoleExtensionTests(TestCase):
 		self.assertTrue(all(producer.closed == 1 for producer in self.producers))
 		self.worker.broker.connect.assert_not_called()
 		self.worker.broker.close.assert_not_called()
+
+	def test_custom_task_name_is_resolved_and_duplicate_names_are_rejected(self):
+		self.worker.add(NamedTask)
+		payload = self.payload()
+		payload['task'] = NamedTask.name
+		status, body, headers = self.fetch(
+			'POST',
+			payload,
+		)
+		self.assertEqual(status, 200)
+		self.assertEqual(loads(body)['result'], 'message-id')
+		self.assertEqual(self.producers[-1].sent[0][1], NamedTask.parameters)
+
+		self.worker.tasks.append(NamedTask)
+		with self.assertLogs(
+			'DefStream.Inspector.Extensions.Console',
+			level='WARNING',
+		) as logs:
+			status, body, headers = self.fetch(
+				'POST',
+				payload,
+			)
+		self.assertEqual(status, 400)
+		self.assertEqual(loads(body)['error'], 'Ambiguous registered task name')
+		self.assertIn('message=Ambiguous registered task name', logs.output[0])
+
+	def test_invalid_task_warning_includes_the_specific_error(self):
+		payload = self.payload()
+		payload['task'] = 'not-registered'
+		with self.assertLogs(
+			'DefStream.Inspector.Extensions.Console',
+			level='WARNING',
+		) as logs:
+			status, body, headers = self.fetch(
+				'POST',
+				payload,
+			)
+		self.assertEqual(status, 400)
+		self.assertIn('error=ValueError', logs.output[0])
+		self.assertIn('message=Unknown registered task', logs.output[0])
+		self.assertEqual(self.producers, [])
 
 	def test_unsupported_rpc_and_worker_not_running(self):
 		self.extension.broker = Producer
@@ -768,7 +822,7 @@ class ConsoleExtensionTests(TestCase):
 					rpc,
 				)
 				payload = self.payload()
-				payload['task'] = 'Live'
+				payload['task'] = Live.name
 				self.assertEqual(
 					self.fetch(
 						'POST',
