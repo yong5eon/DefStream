@@ -822,7 +822,7 @@ class ConsoleExtensionTests(TestCase):
 					rpc,
 				)
 				payload = self.payload()
-				payload['task'] = 'Live'
+				payload['task'] = Live.name
 				self.assertEqual(
 					self.fetch(
 						'POST',
