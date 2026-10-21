@@ -34,3 +34,15 @@ GitHub 웹 UI에서의 양식 렌더링은 확인하지 않았다.
 
 PyYAML로 네 파일의 레이블 배열이 지정된 이름 하나만 포함하는지, 빈 제목과
 필드 ID 중복 없음이 유지되는지 검증했다. `git diff --check`도 통과했다.
+
+## 양식 선택 화면 미표시 수정
+
+GitHub 공식 유효성 문서는 문자열 항목에 빈 문자열을 허용하지 않으며,
+선택 항목은 값을 비우는 대신 항목 자체를 생략하도록 안내한다.
+네 양식의 `title: ""`를 제거하여 제목 접두어 없이 작성하는 의도를 유지했다.
+번호가 포함된 파일명, 레이블과 입력 항목은 변경하지 않았다.
+앞선 YAML 구문 검증은 이 GitHub 제약을 확인하지 못했다.
+
+공식 근거: [Issue Forms 유효성 오류](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/common-validation-errors-when-creating-issue-forms).
+로컬 검증에서 네 양식의 빈 최상위 문자열 없음, `title` 생략, 레이블 매핑과
+입력 필드 ID를 확인했다. GitHub 화면에서의 복구 확인은 수행하지 않았다.
