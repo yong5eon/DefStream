@@ -1,6 +1,5 @@
 name: 버그/오류 제보
 description: 예상과 다르게 동작하거나 오류가 발생하는 문제를 제보합니다.
-title: ""
 labels:
   - bug
 body:
