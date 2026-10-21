@@ -72,7 +72,7 @@ class LoggingTests(TestCase):
 			('Broker', 'Sample.py'),
 		):
 			with self.subTest(sample=relative):
-				path = root.joinpath('sample', *relative)
+				path = root.joinpath('samples', *relative)
 				result = run(
 					[
 						executable,
@@ -266,7 +266,7 @@ class LoggingTests(TestCase):
 		root = getLogger()
 		handlers = root.handlers[:]
 		level = root.level
-		path = Path(__file__).resolve().parents[1] / 'sample' / 'Worker' / 'Sample.py'
+		path = Path(__file__).resolve().parents[1] / 'samples' / 'Worker' / 'Sample.py'
 		spec = spec_from_file_location('sample_logging_test', path)
 		self.assertIsNotNone(spec)
 		assert spec is not None and spec.loader is not None

@@ -55,4 +55,4 @@ null 의미도 유지합니다.
 
 - [요구사항 명세서](./REQUIREMENTS.md)
 - [구현 및 검증 기록](./IMPLEMENTS.md)
-- [Descriptor 회귀 테스트](../../../test/test_descriptor.py)
+- [Descriptor 회귀 테스트](../../../tests/test_descriptor.py)

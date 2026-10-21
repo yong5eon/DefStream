@@ -29,8 +29,8 @@
 - [Specification](../../../src/Worker/Specification.py)에서 `description` 인자와
   AsyncAPI 메시지 설명 생성을 제거했다. schema, validator, example, format은
   유지한다.
-- [RabbitMQ Worker 샘플](../../../sample/Worker/RabbitMQ/Tasks.py)과
-  [Redis Worker 샘플](../../../sample/Worker/Redis/Sample.py)에 `add`, `divide`
+- [RabbitMQ Worker 샘플](../../../samples/Worker/RabbitMQ/Tasks.py)과
+  [Redis Worker 샘플](../../../samples/Worker/Redis/Sample.py)에 `add`, `divide`
   이름 및 작업 설명을 지정했다. RabbitMQ 샘플의 request·response
   Specification 설명은 Run의 메타데이터로 옮겼다.
 - [한국어 사용 설명서](../../../README.md)와
@@ -117,7 +117,7 @@ Python 3.9.13과 3.10.11에서 클래스 정의의 `name=` 키워드가
 처리는 계속 `Run.__init_subclass__`가 담당한다. 사용자 클래스 정의 문법은
 변경하지 않으며 `ABCMeta`의 추상 메서드 검사도 유지한다.
 
-[Worker 테스트](../../../test/test_worker.py)에 이름을 지정한 추상 Run의 생성 거부,
+[Worker 테스트](../../../tests/test_worker.py)에 이름을 지정한 추상 Run의 생성 거부,
 구체 하위 Run의 이름 재정의 및 실행을 검증하는 회귀 테스트를 추가했다.
 
 | Python | 전체 코어 테스트 결과 |

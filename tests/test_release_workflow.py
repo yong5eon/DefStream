@@ -37,6 +37,50 @@ def workflow_script(name: str) -> str:
 
 
 class ReleaseWorkflowTests(TestCase):
+	def test_pr_test_paths_and_push_behavior(self) -> None:
+		for event_name, changed, expected in (
+			('pull_request', b'', 'false'),
+			('pull_request', b'src/view.html\0', 'true'),
+			('pull_request', b'samples/Worker/Sample.py\0', 'true'),
+			('pull_request', b'tests/test_worker.py\0', 'true'),
+			('pull_request', b'setup.py\0', 'true'),
+			('push', b'', 'true'),
+		):
+			with self.subTest(event=event_name, changed=changed), TemporaryDirectory() as directory:
+				root = Path(directory)
+				event = root / 'event.json'
+				event.write_text(dumps({'pull_request': {'base': {'sha': 'base'}}}))
+				with (
+					patch.dict(environ, {
+						'GITHUB_EVENT_NAME': event_name,
+						'GITHUB_EVENT_PATH': str(event),
+						'GITHUB_SHA': 'head',
+						'GITHUB_OUTPUT': str(root / 'output'),
+					}),
+					patch('subprocess.check_output', return_value=changed) as git,
+					redirect_stdout(StringIO()),
+				):
+					exec(workflow_script('Detect test-relevant changes'), {})
+				self.assertEqual((root / 'output').read_text().strip(), 'required=' + expected)
+				if event_name == 'push':
+					git.assert_not_called()
+				else:
+					self.assertEqual(git.call_args.args[0], [
+						'git', 'diff', '--name-only', '--no-renames', '-z',
+						'base...head', '--', 'samples/', 'src/', 'tests/', 'setup.py',
+					])
+		return
+
+	def test_test_job_is_gated_and_core_paths_are_plural(self) -> None:
+		workflow = WORKFLOW.read_text(encoding='utf-8')
+		test_job = workflow.split('\n  test:\n', 1)[1].split('\n  publish:\n', 1)[0]
+		self.assertIn("if: needs.changes.outputs.test_required == 'true'", test_job)
+		self.assertIn('test_required: ${{ steps.test_paths.outputs.required }}', workflow)
+		self.assertIn('test_directory=tests', test_job)
+		self.assertIn('test_directory=test\n', test_job)
+		self.assertIn('packages/DefStream/tests/test_dashboard_ui.cjs', test_job)
+		return
+
 	def test_embedded_python_syntax(self) -> None:
 		lines = WORKFLOW.read_text(encoding='utf-8').splitlines()
 		for index, line in enumerate(lines):
@@ -141,6 +185,8 @@ class ReleaseWorkflowTests(TestCase):
 				'MANIFEST.in',
 				'README.md',
 				'.github/workflows/ci.yml',
+				'samples/Worker/Sample.py',
+				'tests/test_worker.py',
 			]
 			for name in names:
 				path = root / name
@@ -162,6 +208,22 @@ class ReleaseWorkflowTests(TestCase):
 				text=True,
 			).splitlines()
 			self.assertEqual(set(selected), set(names[:2] + names[3:7]))
+			(root / 'samples' / 'Worker' / 'Sample.py').unlink()
+			test_changes = check_output(
+				[
+					'git', '-C', str(root), 'diff', '--name-only', '--no-renames',
+					base, '--', 'samples/', 'src/', 'tests/', 'setup.py',
+				],
+				text=True,
+			).splitlines()
+			self.assertEqual(set(test_changes), {
+				'src/__init__.py',
+				'src/nested/code.py',
+				'src/nested/view.html',
+				'samples/Worker/Sample.py',
+				'tests/test_worker.py',
+				'setup.py',
+			})
 		return
 
 	def test_direct_push_generates_notes(self) -> None:

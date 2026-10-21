@@ -76,8 +76,8 @@ ProcessPool은 `spawn` 자식 프로세스를 사용하므로 부모의 핸들�
 자식도 로그를 출력하려면 import 가능한 `PoolSetup` 구현에서 같은 설정을 적용하고
 `ProcessPool(..., setups=...)`로 전달하세요. 자식 초기화 훅이 실행되기 전의 DEBUG·INFO는
 그 설정으로 수신할 수 없습니다.
-[RabbitMQ 작업 예제의 LoggingSetup](./sample/Worker/RabbitMQ/Tasks.py)과
-[부모·자식 설정 예제](./sample/Worker/RabbitMQ/Worker.py)를 참고하세요.
+[RabbitMQ 작업 예제의 LoggingSetup](./samples/Worker/RabbitMQ/Tasks.py)과
+[부모·자식 설정 예제](./samples/Worker/RabbitMQ/Worker.py)를 참고하세요.
 기존 애플리케이션에서는 이미 설정한 핸들러를 반복 추가하지 않도록 초기화 위치를 관리해야 합니다.
 
 ## 설치
@@ -638,9 +638,9 @@ Console의 `broker` 인자는 `DefStream.Broker.BrokerFactory` 계약을 사용�
 
 ## 예제와 라이선스
 
-- [브로커 없이 실행하는 Worker 예제](./sample/Worker/Sample.py)
-- [RabbitMQ Worker·RPC 클라이언트 예제](./sample/Worker/RabbitMQ)
-- [Redis Worker 예제](./sample/Worker/Redis/Sample.py)
+- [브로커 없이 실행하는 Worker 예제](./samples/Worker/Sample.py)
+- [RabbitMQ Worker·RPC 클라이언트 예제](./samples/Worker/RabbitMQ)
+- [Redis Worker 예제](./samples/Worker/Redis/Sample.py)
 - [릴리즈와 변경 내역](https://github.com/yong5eon/DefStream/releases)
 
 GNU GPL v3 라이선스를 사용합니다. 자세한 조건은 [LICENSE](./LICENSE)를 확인하세요.

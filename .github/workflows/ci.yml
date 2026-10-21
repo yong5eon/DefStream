@@ -33,6 +33,7 @@ jobs:
       core_ref: ${{ steps.refs.outputs.core_ref }}
       rabbitmq_ref: ${{ steps.refs.outputs.rabbitmq_ref }}
       redis_ref: ${{ steps.refs.outputs.redis_ref }}
+      test_required: ${{ steps.test_paths.outputs.required }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -42,6 +43,28 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - name: Detect test-relevant changes
+        id: test_paths
+        run: |
+          python - <<'PY'
+          from json import loads
+          from os import environ
+          from pathlib import Path
+          from subprocess import check_output
+
+          required = True
+          if environ['GITHUB_EVENT_NAME'] == 'pull_request':
+              event = loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+              base = event['pull_request']['base']['sha']
+              changed = check_output([
+                  'git', 'diff', '--name-only', '--no-renames', '-z',
+                  f'{base}...{environ["GITHUB_SHA"]}', '--', 'samples/', 'src/', 'tests/', 'setup.py',
+              ])
+              required = bool(changed)
+          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+              output.write(f'required={str(required).lower()}\n')
+          print(f'Test-relevant changes: {required}')
+          PY
       - name: Check complete push range and plan version
         id: changes
         env:
@@ -224,6 +247,7 @@ jobs:
   test:
     name: Test Python ${{ matrix.python }}
     needs: changes
+    if: needs.changes.outputs.test_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -384,8 +408,12 @@ jobs:
       - name: Test installed package
         run: |
           cd "$RUNNER_TEMP"
+          test_directory=test
+          if [ "$PROJECT" = "DefStream" ]; then
+            test_directory=tests
+          fi
           "$RUNNER_TEMP/installed/bin/python" -m unittest discover \
-            -s "$GITHUB_WORKSPACE/packages/$PROJECT/test" -p 'test_*.py' -v
+            -s "$GITHUB_WORKSPACE/packages/$PROJECT/$test_directory" -p 'test_*.py' -v
 
       - name: Set up Node for core UI tests
         if: env.PROJECT == 'DefStream'
@@ -395,7 +423,7 @@ jobs:
 
       - name: Test core UI
         if: env.PROJECT == 'DefStream'
-        run: node --test packages/DefStream/test/test_dashboard_ui.cjs
+        run: node --test packages/DefStream/tests/test_dashboard_ui.cjs
 
       - name: Preserve verified release distributions
         if: needs.changes.outputs.release == 'true' && matrix.python == '3.13'
