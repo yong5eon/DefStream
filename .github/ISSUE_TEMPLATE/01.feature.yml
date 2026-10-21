@@ -1,6 +1,8 @@
 name: 기능 제안
-description: DefStream에 추가하거나 개선할 기능을 제안합니다.
-title: "[기능 제안] "
+description: 추가하거나 개선할 기능을 제안합니다.
+title: ""
+labels:
+  - feature
 body:
   - type: markdown
     attributes:

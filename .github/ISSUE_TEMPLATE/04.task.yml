@@ -1,0 +1,39 @@
+name: 작업
+description: 리소스 변경, 문서화 등 소스 코드 변경이 아닌 작업을 정리합니다.
+title: ""
+labels:
+  - task
+body:
+  - type: markdown
+    attributes:
+      value: >
+        리소스 변경, 문서 작성·정리 등 소스 코드를 변경하지 않는 작업에 사용해 주세요.
+        기능 추가, 버그 제보 또는 소스 코드 변경은 해당 이슈 양식을 이용해 주세요.
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 작업 목적
+      description: 이 작업이 필요한 이유와 기대하는 효과를 설명해 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 작업 내용 및 대상
+      description: 수행할 작업과 대상 리소스, 문서 또는 경로를 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 완료 기준
+      description: 작업이 완료되었다고 판단할 수 있는 결과물이나 확인 방법을 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 관련 자료 및 주의사항
+      description: 참고 링크, 관련 이슈, 사전 준비나 주의사항이 있다면 적어 주세요.
+    validations:
+      required: false
