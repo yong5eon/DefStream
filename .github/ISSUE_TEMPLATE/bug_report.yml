@@ -1,0 +1,61 @@
+name: 버그/오류 제보
+description: 예상과 다르게 동작하거나 오류가 발생하는 문제를 제보합니다.
+title: "[버그] "
+body:
+  - type: markdown
+    attributes:
+      value: >
+        재현 가능한 버그를 제보해 주세요. 로그나 설정을 첨부할 때 토큰, 비밀번호,
+        개인정보 등 민감한 정보는 반드시 삭제해 주세요.
+  - type: input
+    id: version
+    attributes:
+      label: 버전
+      description: 사용 중인 버전 또는 커밋을 입력해 주세요.
+      placeholder: 예) 0.1.12
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작
+      description: 어떤 결과를 기대했는지 설명해 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+      description: 실제로 발생한 결과를 설명해 주세요. 오류가 표시되면 메시지도 포함해 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 재현 방법
+      description: 문제를 재현하는 단계나 최소 코드 예제를 작성해 주세요.
+      placeholder: |
+        1. 다음 설정으로 Worker를 시작합니다.
+        2. 특정 메시지를 전달합니다.
+        3. 오류가 발생합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 실행 환경
+      description: Python 버전, 운영체제, 브로커 및 관련 어댑터 버전을 입력해 주세요.
+      placeholder: |
+        - Python:
+        - 운영체제:
+        - 브로커:
+        - 어댑터:
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 추가 정보
+      description: 관련 로그나 스크린샷 등 문제 파악에 도움이 되는 정보를 적어 주세요.
+    validations:
+      required: false
