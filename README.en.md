@@ -27,15 +27,66 @@ Configure execution, acknowledgements, failure policies, and monitoring without
 - [Lifecycle hooks](#lifecycle-hooks)
 - [Request/reply contracts and validation](#requestreply-contracts-and-validation)
 - [Health checks and task console](#health-checks-and-task-console)
+- [Logging](#logging)
 - [Broker selection and operational considerations](#broker-selection-and-operational-considerations)
 - [Examples and license](#examples-and-license)
 
-## 로깅 지원
+## Logging
 
-클래스별 표준 로거와 사용자 주도 핸들러 설정을 지원합니다.
-샘플은 `Sample` 및 `DefStream` 계층만 출력하며, ProcessPool 자식은 별도 setup 훅으로
-출력을 설정합니다. Worker의 시작 배너는 유지됩니다.
-로거 이름, 선택 수신, 예외 메시지 주의사항과 프로세스 설정은 [로깅 안내](./README.md#로깅)를 참고하세요.
+DefStream records messages through standard `logging` without configuring handlers,
+formatters, or levels. Select the sources your application needs. The samples
+output only the `Sample` and `DefStream` logger hierarchies, replacing their
+`print()` calls with logging. The Worker's existing startup banner is still
+printed regardless of logging configuration.
+
+```python
+from logging import DEBUG, Filter, Formatter, StreamHandler, getLogger
+
+sources = (Filter('Sample'), Filter('DefStream'))
+handler = StreamHandler()
+handler.setFormatter(Formatter(
+  '%(asctime)s %(processName)s %(name)s %(levelname)s %(message)s'
+))
+handler.addFilter(lambda record: any(source.filter(record) for source in sources))
+root = getLogger()
+root.setLevel(DEBUG)
+root.addHandler(handler)
+
+logger = getLogger('Sample')
+logger.info('Application started')
+```
+
+Apply filters to the **handler**, not the root logger. `Filter('DefStream')`
+includes `DefStream` and names below `DefStream.`, but not `DefStreamExtra`.
+This configuration is an example for a standalone application; it does not change
+output from other handlers already installed. To receive only broker logs, select
+`DefStream.Broker.Implements.RabbitMQ` or `DefStream.Broker.Implements.Redis`
+instead of `DefStream`.
+
+- The class member `logger` uses `DefStream.Worker`, `DefStream.Run`,
+  `DefStream.Executor`, `DefStream.Pool`, `DefStream.ThreadPool`, and
+  `DefStream.ProcessPool`.
+- Shared Pool methods also use the concrete pool's logger member. User subclasses
+  inherit the default name and can explicitly override `logger`.
+- Inspector, Server, and RequestHandler share `DefStream.Inspector`.
+  HTTP request receipt is DEBUG; response status and transmission results are INFO.
+  Extension-specific logs use `DefStream.Inspector.Extensions.<extension name>`.
+- Normal per-message processing is DEBUG, lifecycle events are INFO, events
+  requiring attention are WARNING, and processing failures are ERROR.
+  Bodies, results, and credentials are excluded from the default log context.
+- Without any handlers, Python's `lastResort` may write WARNING and higher to
+  stderr. Do not put sensitive values in user exception messages: failure
+  tracebacks include those messages.
+
+ProcessPool uses `spawn` child processes, so parent handlers are not automatically
+inherited. To receive child logs, apply the same configuration in an importable
+`PoolSetup` implementation and pass it through `ProcessPool(..., setups=...)`.
+That configuration cannot capture DEBUG and INFO logs emitted before the child
+setup hook runs. See
+[LoggingSetup in the RabbitMQ task example](./samples/Worker/RabbitMQ/Tasks.py)
+and the [parent/child configuration example](./samples/Worker/RabbitMQ/Worker.py).
+In existing applications, choose the initialization location carefully to avoid
+adding the same handlers repeatedly.
 
 ## Installation
 
@@ -610,9 +661,9 @@ For a class-based factory, you can inherit `BrokerFactory` and implement `__call
 
 ## Examples and license
 
-- [Worker without an external broker](./sample/Worker/Sample.py)
-- [RabbitMQ Worker and RPC client](./sample/Worker/RabbitMQ)
-- [Redis Worker](./sample/Worker/Redis/Sample.py)
+- [Worker without an external broker](./samples/Worker/Sample.py)
+- [RabbitMQ Worker and RPC client](./samples/Worker/RabbitMQ)
+- [Redis Worker](./samples/Worker/Redis/Sample.py)
 - [Releases and change history](https://github.com/yong5eon/DefStream/releases)
 
 Licensed under GNU GPL v3. See [LICENSE](./LICENSE) for the terms.

@@ -24,7 +24,7 @@ Pylance 오류가 발생하지 않게 한다. 특히 `int = None`과 같은 선�
 | [Types.py](../../../src/Descriptor/Types.py) | 기본 타입, Properties, Object, Array 생성자 |
 | [DataObject.py](../../../src/Descriptor/DataObject.py) | dataclass 타입 해석, 스키마 변환, 객체 변환 |
 | [공개 API](../../../src/Descriptor/__init__.py) | ToSchema·ToObject의 인자 전달과 직렬화 |
-| [기존 테스트](../../../test/test_specifications.py) | 스키마 조합, dataclass 변환, 기본값과 실패 계약 |
+| [기존 테스트](../../../tests/test_specifications.py) | 스키마 조합, dataclass 변환, 기본값과 실패 계약 |
 
 ### 2.2. 확인 방법과 환경
 
@@ -180,7 +180,7 @@ Pylance 오류가 발생하지 않게 한다. 특히 `int = None`과 같은 선�
 2. 노드 타입·가변 인자·nullable·mapper 선언을 일치시키고 호출 호환성을 확인한다.
 3. 타입 표현식 좁히기, metadata 정규화, dataclass 인스턴스 판정을 수정한다.
 4. 대응하는 최소 타입 검사 예제와 회귀 테스트를 추가한다.
-5. [기존 Descriptor 관련 테스트](../../../test/test_specifications.py)의
+5. [기존 Descriptor 관련 테스트](../../../tests/test_specifications.py)의
    `test_original_descriptor_and_validator_api_without_datamodel`과
    `test_schema_conditions_bounds_defaults_and_unsupported_values`를 먼저 실행한다.
    추가 테스트도 함께 검증하고, 필요하면 관련 Specification 테스트로 넓힌다.
@@ -225,7 +225,7 @@ Pylance 오류가 발생하지 않게 한다. 특히 `int = None`과 같은 선�
 | 대상 네 파일의 Pylance 오류 | **56건 → 0건** |
 | 대상 네 파일의 미사용 힌트 | 5건 → 4건. 사용하지 않는 import 1개를 정리했고, 미구현·추상 메서드 인자는 유지했다. |
 | 직접 호출부 | Specification의 Pylance 오류 0건 |
-| 신규 테스트 파일 | [test_descriptor.py](../../../test/test_descriptor.py)의 Pylance 오류·경고 0건 |
+| 신규 테스트 파일 | [test_descriptor.py](../../../tests/test_descriptor.py)의 Pylance 오류·경고 0건 |
 | 문법·공백 | 변경한 Python 파일 4개의 문법 검사 및 `git diff --check` 통과 |
 | Python 3.12.10 | 신규 회귀 테스트 11개 및 기존 스키마 테스트 2개, 총 **13개 통과** |
 | Python 3.9.13 | 동일한 테스트 **13개 통과** |

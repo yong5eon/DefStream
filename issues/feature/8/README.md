@@ -34,7 +34,7 @@ Pool 공통 동작도 실제 ThreadPool·ProcessPool의 로거 이름으로 기�
 ## 샘플 변경
 
 샘플은 `print()` 대신 `Sample` 로거를 사용하며 `Sample`과 `DefStream` 계층만
-출력합니다. [RabbitMQ Worker 샘플](../../../sample/Worker/RabbitMQ/Worker.py)은
-부모와 spawn 자식에 [LoggingSetup](../../../sample/Worker/RabbitMQ/Tasks.py)을 적용합니다.
+출력합니다. [RabbitMQ Worker 샘플](../../../samples/Worker/RabbitMQ/Worker.py)은
+부모와 spawn 자식에 [LoggingSetup](../../../samples/Worker/RabbitMQ/Tasks.py)을 적용합니다.
 실제 애플리케이션도 ProcessPool 자식의 로깅을 별도로 설정해야 합니다.
 설정 예제는 [사용 설명서](../../../README.md#로깅)를 참고하세요.

@@ -8,7 +8,7 @@ Worker 시작 배너를 로깅 설정 여부와 관계없이 먼저 확인할 �
 
 ## 변경 내용
 
-- [Worker 샘플](../../../sample/Worker/Sample.py)은 `configure_logging()`을
+- [Worker 샘플](../../../samples/Worker/Sample.py)은 `configure_logging()`을
   실행 진입점에서 호출하는 대신 `SetupLogger` setup 훅에서 수행합니다.
   Worker 생성·작업 등록 시점의 로그는 아직 설정되지 않은 핸들러에 의해 출력되지
   않으며, 시작 배너가 샘플의 첫 화면 출력이 됩니다.

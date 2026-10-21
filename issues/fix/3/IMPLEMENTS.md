@@ -30,7 +30,7 @@
 
 ### 테스트와 사용자 문서
 
-- [계약 테스트](../../../test/test_protocol_contracts.py)에서 생성자 타입,
+- [계약 테스트](../../../tests/test_protocol_contracts.py)에서 생성자 타입,
   공개 export 제거, 구조적 연결 및 두 어댑터의 수용, 미지원 연결의 실패를 검증한다.
 - 워커·수명 주기·시작 배너·Inspector·작업 훅 테스트의 브로커 Mock은
   `consumer`를 생성 인자로 명시하도록 수정했다.

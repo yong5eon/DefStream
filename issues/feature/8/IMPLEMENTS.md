@@ -62,11 +62,11 @@ HealthCheck는 probe 예약·응답·판정과 응답 생성을 DEBUG로 기록�
 - 런타임 로그 메시지는 영어로 작성하고 한국어 문서·주석은 유지한다.
 - 본문·결과·인증정보를 기본 문맥에 넣지 않는다. 단, Worker의 작업 실패
   traceback에는 사용자 예외 메시지가 포함될 수 있으므로 사용자가 주의해야 한다.
-- [Worker 샘플](../../../sample/Worker)과 [Broker 샘플](../../../sample/Broker)은
+- [Worker 샘플](../../../samples/Worker)과 [Broker 샘플](../../../samples/Broker)은
   `Sample`과 `DefStream` 계층만 핸들러 필터로 선택한다.
 - 샘플의 `print()`는 로그로 전환하고 라이브러리 시작 배너는 유지했다.
-- [RabbitMQ Worker 샘플](../../../sample/Worker/RabbitMQ/Worker.py)은 부모 진입점과
-  ProcessPool의 `setups`에 [LoggingSetup](../../../sample/Worker/RabbitMQ/Tasks.py)을
+- [RabbitMQ Worker 샘플](../../../samples/Worker/RabbitMQ/Worker.py)은 부모 진입점과
+  ProcessPool의 `setups`에 [LoggingSetup](../../../samples/Worker/RabbitMQ/Tasks.py)을
   적용한다. `spawn` 자식이 부모의 핸들러를 자동 상속한다고 가정하지 않는다.
 
 ## 6. 검증 결과
@@ -81,9 +81,9 @@ Python 3.13.16에서 실제 RabbitMQ·Redis가 실행 중인 환경으로 검증
 | 세 프로젝트 소스·샘플의 로그 및 observe 호출 문자열 | 376곳 점검, 한국어 문자열 없음 |
 | 세 프로젝트 소스·샘플 `compileall` 및 `git diff --check` | 통과 |
 
-[로깅 테스트](../../../test/test_logging.py)는 클래스 멤버·상속·사용자 재정의,
+[로깅 테스트](../../../tests/test_logging.py)는 클래스 멤버·상속·사용자 재정의,
 레벨·본문 제외·작업 실패 traceback 중복 방지·배너 유지·샘플 필터·spawn 설정을
-검증한다. [Inspector 로깅 테스트](../../../test/test_inspector_logging.py)는 실제 HTTP
+검증한다. [Inspector 로깅 테스트](../../../tests/test_inspector_logging.py)는 실제 HTTP
 요청에서 수신·응답 각 1회 기록, 쿼리·본문 제외, WSGI 500과 전송 중단을 검증한다.
 기존 테스트의 이전 모듈 로거 기대값도 새 이름과 레벨에 맞췄다.
 

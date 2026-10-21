@@ -84,7 +84,7 @@ dataclass 클래스와 인스턴스를 구분하고, 인스턴스만 `asdict()`�
 
 ## 4. 테스트와 실행 방식
 
-[test_descriptor.py](../../../test/test_descriptor.py)에 회귀 테스트 11개를 추가했다.
+[test_descriptor.py](../../../tests/test_descriptor.py)에 회귀 테스트 11개를 추가했다.
 
 - nullable 기본값과 타입 힌트의 일치
 - 중첩 object·array·Schema와 조건 조합
@@ -98,7 +98,7 @@ dataclass 클래스와 인스턴스를 구분하고, 인스턴스만 `asdict()`�
 - format·경계·명시적 `None`
 - JSON Schema 매핑과 Specification 호환성
 
-기존 [스키마 테스트](../../../test/test_specifications.py)의 다음 두 테스트를
+기존 [스키마 테스트](../../../tests/test_specifications.py)의 다음 두 테스트를
 함께 실행했다.
 
 - `test_original_descriptor_and_validator_api_without_datamodel`

@@ -1,7 +1,9 @@
-name: 작업
+name: 작업 제안
 description: 리소스 변경, 문서화 등 소스 코드 변경이 아닌 작업을 정리합니다.
 labels:
   - task
+projects:
+  - yong5eon/7
 body:
   - type: markdown
     attributes:
