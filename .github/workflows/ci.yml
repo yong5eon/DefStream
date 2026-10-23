@@ -30,9 +30,6 @@ jobs:
       build: ${{ steps.changes.outputs.build }}
       new_version: ${{ steps.changes.outputs.new_version }}
       tag: ${{ steps.changes.outputs.tag }}
-      core_ref: ${{ steps.refs.outputs.core_ref }}
-      rabbitmq_ref: ${{ steps.refs.outputs.rabbitmq_ref }}
-      redis_ref: ${{ steps.refs.outputs.redis_ref }}
       test_required: ${{ steps.test_paths.outputs.required }}
     steps:
       - uses: actions/checkout@v7
@@ -58,7 +55,7 @@ jobs:
               base = event['pull_request']['base']['sha']
               changed = check_output([
                   'git', 'diff', '--name-only', '--no-renames', '-z',
-                  f'{base}...{environ["GITHUB_SHA"]}', '--', 'samples/', 'src/', 'tests/', 'setup.py',
+                  f'{base}...{environ["GITHUB_SHA"]}', '--', 'samples/', 'src/', 'tests/', 'setup.py', '.github/workflows/ci.yml',
               ])
               required = bool(changed)
           with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
@@ -198,43 +195,6 @@ jobs:
           with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
               output.write(f'branch={branch}\n')
           PY
-      - name: Resolve dependency refs
-        id: refs
-        env:
-          BRANCH: ${{ steps.changelog.outputs.branch }}
-        run: |
-          python - <<'PY'
-          from json import loads
-          from os import environ
-          from pathlib import Path
-          from subprocess import check_output, run
-
-          head = environ['GITHUB_SHA']
-          path = f'issues/{environ["BRANCH"]}/ci.refs.json'
-          entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
-          refs = {}
-          if entry:
-              if entry[0] not in ('100644', '100755'):
-                  raise ValueError(f'Dependency refs must be a regular file: {path}')
-              refs = loads(check_output(['git', 'show', f'{head}:{path}']).decode('utf-8'))
-          else:
-              print(f'{path} not found: dependency refs default to master')
-          projects = {
-              'DefStream': 'core_ref',
-              'DefStream-RabbitMQ': 'rabbitmq_ref',
-              'DefStream-Redis': 'redis_ref',
-          }
-          if not isinstance(refs, dict) or refs.keys() - projects.keys():
-              raise ValueError(f'Expected an object with only supported project names: {path}')
-          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              for project, key in projects.items():
-                  ref = refs.get(project, 'master')
-                  if not isinstance(ref, str) or not ref or ref.startswith('-'):
-                      raise ValueError(f'Invalid dependency ref for {project}: {ref!r}')
-                  run(['git', 'check-ref-format', '--allow-onelevel', ref], check=True)
-                  output.write(f'{key}={ref}\n')
-                  print(f'{project} dependency ref: {ref}')
-          PY
       - name: Preserve customer release notes
         uses: actions/upload-artifact@v7
         with:
@@ -255,7 +215,7 @@ jobs:
       matrix:
         python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
     env:
-      PROJECT: ${{ github.event.repository.name }}
+      PROJECT: DefStream
       DEFSTREAM_RABBITMQ_TESTS: '1'
       DEFSTREAM_REDIS_TESTS: '1'
     services:
@@ -285,27 +245,8 @@ jobs:
       - name: Check out core
         uses: actions/checkout@v7
         with:
-          repository: yong5eon/DefStream
-          ref: ${{ github.event.repository.name == 'DefStream' && github.sha || needs.changes.outputs.core_ref }}
+          ref: ${{ github.sha }}
           path: packages/DefStream
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Check out RabbitMQ adapter
-        uses: actions/checkout@v7
-        with:
-          repository: yong5eon/DefStream-RabbitMQ
-          ref: ${{ github.event.repository.name == 'DefStream-RabbitMQ' && github.sha || needs.changes.outputs.rabbitmq_ref }}
-          path: packages/DefStream-RabbitMQ
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Check out Redis adapter
-        uses: actions/checkout@v7
-        with:
-          repository: yong5eon/DefStream-Redis
-          ref: ${{ github.event.repository.name == 'DefStream-Redis' && github.sha || needs.changes.outputs.redis_ref }}
-          path: packages/DefStream-Redis
           fetch-depth: 0
           persist-credentials: false
 
@@ -329,7 +270,7 @@ jobs:
           from re import fullmatch
 
           project = environ['PROJECT']
-          if project not in ('DefStream', 'DefStream-RabbitMQ', 'DefStream-Redis'):
+          if project != 'DefStream':
               raise ValueError(f'Unexpected project: {project}')
           if environ['RELEASE_BUILD'] != 'true':
               print('Test-only build: using the existing Git-derived development version.')
@@ -353,23 +294,17 @@ jobs:
           NEW_VERSION: ${{ needs.changes.outputs.new_version }}
           WHEEL_BUILD: ${{ needs.changes.outputs.build }}
         run: |
-          mkdir -p dist dependency-wheels
-          for name in DefStream DefStream-RabbitMQ DefStream-Redis; do
-            if [ "$name" = "$PROJECT" ]; then
-              if [ "$RELEASE_BUILD" = "true" ]; then
-                if [ "$NEW_VERSION" = "true" ]; then
-                  SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
-                else
-                  SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --wheel --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
-                fi
-                python -m wheel tags --build "$WHEEL_BUILD" --remove dist/*.whl
-              else
-                python -m build --outdir "$GITHUB_WORKSPACE/dist" "packages/$name"
-              fi
+          mkdir -p dist
+          if [ "$RELEASE_BUILD" = "true" ]; then
+            if [ "$NEW_VERSION" = "true" ]; then
+              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --outdir "$GITHUB_WORKSPACE/dist" packages/DefStream
             else
-              python -m build --outdir "$GITHUB_WORKSPACE/dependency-wheels" "packages/$name"
+              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --wheel --outdir "$GITHUB_WORKSPACE/dist" packages/DefStream
             fi
-          done
+            python -m wheel tags --build "$WHEEL_BUILD" --remove dist/*.whl
+          else
+            python -m build --outdir "$GITHUB_WORKSPACE/dist" packages/DefStream
+          fi
           python -m twine check --strict dist/*
 
       - name: Normalize source archive timestamps
@@ -399,30 +334,53 @@ jobs:
                   path.write_bytes(buffer.getvalue())
           PY
 
+      - name: Verify optional client installations
+        run: |
+          python - <<'PY'
+          from os import environ
+          from pathlib import Path
+          from subprocess import run
+          from venv import EnvBuilder
+
+          wheel, = Path('dist').glob('*.whl')
+          for extra, modules in (
+              ('', ('DefStream', 'DefStream.Worker', 'DefStream.Inspector')),
+              ('RabbitMQ', ('DefStream.Broker.Implements.RabbitMQ',)),
+              ('Redis', ('DefStream.Broker.Implements.Redis',)),
+          ):
+              environment = Path(environ['RUNNER_TEMP'], 'optional-' + (extra or 'core'))
+              EnvBuilder(with_pip=True).create(environment)
+              python = environment / 'bin' / 'python'
+              package = str(wheel.resolve()) + (f'[{extra}]' if extra else '')
+              run([str(python), '-m', 'pip', 'install', package], check=True)
+              code = (
+                  'from importlib import import_module; from importlib.util import find_spec; '
+                  f'assert (find_spec("pika") is not None) == {extra == "RabbitMQ"}; '
+                  f'assert (find_spec("redis") is not None) == {extra == "Redis"}; '
+                  f'[import_module(name) for name in {modules!r}]'
+              )
+              run([str(python), '-I', '-c', code], check=True)
+              run([str(python), '-m', 'pip', 'check'], check=True)
+          PY
+
       - name: Install built wheels into a clean environment
         run: |
           python -m venv "$RUNNER_TEMP/installed"
-          "$RUNNER_TEMP/installed/bin/python" -m pip install dist/*.whl dependency-wheels/*.whl
+          "$RUNNER_TEMP/installed/bin/python" -m pip install "$(echo dist/*.whl)[RabbitMQ,Redis]"
           "$RUNNER_TEMP/installed/bin/python" -m pip check
 
       - name: Test installed package
         run: |
           cd "$RUNNER_TEMP"
-          test_directory=test
-          if [ "$PROJECT" = "DefStream" ]; then
-            test_directory=tests
-          fi
           "$RUNNER_TEMP/installed/bin/python" -m unittest discover \
-            -s "$GITHUB_WORKSPACE/packages/$PROJECT/$test_directory" -p 'test_*.py' -v
+            -s "$GITHUB_WORKSPACE/packages/DefStream/tests" -p 'test_*.py' -v
 
       - name: Set up Node for core UI tests
-        if: env.PROJECT == 'DefStream'
         uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Test core UI
-        if: env.PROJECT == 'DefStream'
         run: node --test packages/DefStream/tests/test_dashboard_ui.cjs
 
       - name: Preserve verified release distributions
