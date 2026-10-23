@@ -113,7 +113,7 @@ class Queue(
 			content_encoding=self.encode.charset,
 			priority=priority,
 			timestamp=timestamp,
-			expiration=expiration,
+			expiration=str(expiration) if expiration is not None else None,
 			message_id=id,
 			delivery_mode=2 if persistent else 1,
 			reply_to=reply_to,
