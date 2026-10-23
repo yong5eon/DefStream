@@ -348,13 +348,17 @@ class Connection(
 		self.logger.debug('Exchange declaration: exchange=%s type=%s durable=%s auto_delete=%s alternate_exchange=%s', name, type, durable, autodelete, str(alter) if alter else None)
 		with self.observe('Exchange declaration: exchange=%s', name):
 			channel = self.connection.channel()
-			channel.exchange_declare(
-				name,
-				str(type),
-				durable=durable,
-				auto_delete=autodelete,
-				arguments=args
-			)
+			try:
+				channel.exchange_declare(
+					name,
+					str(type),
+					durable=durable,
+					auto_delete=autodelete,
+					arguments=args
+				)
+			finally:
+				if channel.is_open:
+					channel.close()
 		return
 
 	def delete_exchange(
