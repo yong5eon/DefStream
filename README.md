@@ -569,10 +569,10 @@ class Add(
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
   Console,
-  Dashboard,
-  HealthCheck,
   Metrics,
+  Ping,
   Specifications,
+  Status,
 )
 
 
@@ -589,9 +589,9 @@ inspector = Inspector(
   host='127.0.0.1',
   port=9999,
   exts=(
-    HealthCheck('/status'),
+    Ping('/ping'),
     Metrics('/metrics'),
-    Dashboard('/dashboard'),
+    Status('/status'),
     Specifications('/asyncapi.json'),
     Console(
       '/console',
@@ -604,9 +604,9 @@ inspector = Inspector(
 
 | 경로 | 용도 |
 | --- | --- |
-| `/status` | 구독 준비와 소비자 루프 응답성을 검사. 정상 200, 시작·종료·응답 불가 상태 503 |
+| `/ping` | 구독 준비와 소비자 루프 응답성을 검사. 정상 200, 시작·종료·응답 불가 상태 503 |
 | `/metrics` | `defstream_` 접두사의 Prometheus 지표 |
-| `/dashboard` | 처리 성공·실패·처리량·소요 시간. `Metrics` 하나와 함께 등록 |
+| `/status` | 처리 성공·실패·처리량·소요 시간. `Metrics` 하나와 함께 등록 |
 | `/asyncapi.json` | 등록 작업의 요청·응답 계약을 AsyncAPI JSON으로 제공 |
 | `/console` | 작업 목록·스키마 조회, JSON 메시지 발행, 지원 브로커의 RPC 실행 |
 

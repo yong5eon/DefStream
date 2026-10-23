@@ -593,10 +593,10 @@ This snippet reuses the `Connection` and `Configuration` imports from `worker.py
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
   Console,
-  Dashboard,
-  HealthCheck,
   Metrics,
+  Ping,
   Specifications,
+  Status,
 )
 
 
@@ -613,9 +613,9 @@ inspector = Inspector(
   host='127.0.0.1',
   port=9999,
   exts=(
-    HealthCheck('/status'),
+    Ping('/ping'),
     Metrics('/metrics'),
-    Dashboard('/dashboard'),
+    Status('/status'),
     Specifications('/asyncapi.json'),
     Console(
       '/console',
@@ -628,9 +628,9 @@ inspector = Inspector(
 
 | Path | Purpose |
 | --- | --- |
-| `/status` | Check subscription readiness and consumer-loop responsiveness: 200 when healthy, 503 during startup/shutdown or when unresponsive |
+| `/ping` | Check subscription readiness and consumer-loop responsiveness: 200 when healthy, 503 during startup/shutdown or when unresponsive |
 | `/metrics` | Prometheus metrics with the `defstream_` prefix |
-| `/dashboard` | Successes, failures, throughput, and duration; register with exactly one `Metrics` |
+| `/status` | Successes, failures, throughput, and duration; register with exactly one `Metrics` |
 | `/asyncapi.json` | Registered task request/reply contracts as AsyncAPI JSON |
 | `/console` | Browse tasks and schemas, send JSON messages, and execute RPC on supported brokers |
 

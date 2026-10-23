@@ -19,11 +19,11 @@ from DefStream.Broker.Implements.Redis import (
 )
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-	HealthCheck,
 	Metrics,
+	Ping,
 	Specifications,
 	Console,
-	Dashboard,
+	Status,
 )
 from DefStream.Worker import (
 	declare,
@@ -156,10 +156,10 @@ def main() -> None:
 			host='127.0.0.1',
 			port=9999,
 			exts=(
-				HealthCheck('/status'),
+				Ping('/ping'),
 				Metrics('/metrics'),
-				Dashboard(
-					'/dashboard',
+				Status(
+					'/status',
 					title='DefStream using Redis Sample',
 					description='A sample DefStream worker using Redis as the broker',
 				),

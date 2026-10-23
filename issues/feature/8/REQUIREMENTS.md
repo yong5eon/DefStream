@@ -33,7 +33,7 @@
 - [Worker](../../../src/Worker/Worker.py)의 모듈 로거가 작업 실패, 미확인 메시지를 남긴 종료, 종료 후 메시지 확인 처리 불가를 ERROR로 기록한다.
 - [Inspector](../../../src/Inspector/Inspector.py)의 모듈 로거가 HTTP 접근 기록을 INFO로, 서버 실행 실패를 예외 로그로 기록한다.
 - [Console](../../../src/Inspector/Extensions/Console.py)은 인증·출처·입력 거부, RPC 실패, 내부 요청 처리 실패를 기록한다.
-- [HealthCheck](../../../src/Inspector/Extensions/HealthCheck.py)는 상태 확인 작업 예약 실패를 예외 로그로 기록한다.
+- [HealthCheck](../../../src/Inspector/Extensions/Ping.py)는 상태 확인 작업 예약 실패를 예외 로그로 기록한다.
 - 다른 Worker 모듈과 나머지 Inspector 확장에는 현재 직접적인 로깅 호출이 없다.
 - [Startup](../../../src/Worker/Startup.py)은 로거 대신 `print()`로 시작 배너와 구성을 출력한다.
 
@@ -52,10 +52,10 @@
 | 우선 대상 | [Inspector](../../../src/Inspector/Inspector.py) | `DefStream.Inspector` | 확장 등록·시작, HTTP 서버 생명주기와 요청 처리 |
 | 보조 대상 | [Server](../../../src/Inspector/Inspector.py) | `DefStream.Inspector` (공유) | HTTP 서버의 연결 처리 문맥. Inspector와 중복되는 생명주기 로그는 제외 |
 | 보조 대상 | [RequestHandler](../../../src/Inspector/Inspector.py) | `DefStream.Inspector` (공유) | 공통 HTTP 요청 수신(DEBUG)과 응답 상태를 포함한 전송 결과(INFO) |
-| 우선 대상 | [HealthCheck](../../../src/Inspector/Extensions/HealthCheck.py) | `DefStream.Inspector.Extensions.HealthCheck` | 상태 확인 작업 예약·응답·시간 초과·상태 변화 |
+| 우선 대상 | [HealthCheck](../../../src/Inspector/Extensions/Ping.py) | `DefStream.Inspector.Extensions.HealthCheck` | 상태 확인 작업 예약·응답·시간 초과·상태 변화 |
 | 우선 대상 | [Console](../../../src/Inspector/Extensions/Console.py) | `DefStream.Inspector.Extensions.Console` | 요청 검증·발행·RPC·접근 거부·내부 오류 |
 | 우선 대상 | [Metrics](../../../src/Inspector/Extensions/Metrics.py) | `DefStream.Inspector.Extensions.Metrics` | 수집 초기화, 작업 관측 시작·종료, 스냅샷·응답 생성 |
-| 우선 대상 | [Dashboard](../../../src/Inspector/Extensions/Dashboard.py) | `DefStream.Inspector.Extensions.Dashboard` | Metrics 연결, HTML·JSON 응답 생성 |
+| 우선 대상 | [Dashboard](../../../src/Inspector/Extensions/Status.py) | `DefStream.Inspector.Extensions.Dashboard` | Metrics 연결, HTML·JSON 응답 생성 |
 | 우선 대상 | [Specifications](../../../src/Inspector/Extensions/Specifications.py) | `DefStream.Inspector.Extensions.Specifications` | 작업 목록의 AsyncAPI 문서 생성과 응답 |
 
 ### 4.1. 독립 로거를 우선 추가하지 않을 대상

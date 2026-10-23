@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 	from ..Inspector import Inspector
 
 __all__ = (
-	'HealthCheck',
+	'Ping',
 )
 
-class HealthCheck(Extension):
-	logger = getLogger('DefStream.Inspector.Extensions.HealthCheck')
+class Ping(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.Ping')
 
 	def __init__(
 		self,
@@ -33,7 +33,7 @@ class HealthCheck(Extension):
 			timeout,
 			bool,
 		) or not isfinite(timeout) or timeout <= 0:
-			raise ValueError('HealthCheck probe timeout must be finite and positive')
+			raise ValueError('Ping probe timeout must be finite and positive')
 		self.timeout = timeout
 		self.lock = Lock()
 		self.probe: Optional[Event] = None
@@ -66,12 +66,12 @@ class HealthCheck(Extension):
 			if self.probe is None or self.probe.is_set():
 				self.probe = Event()
 				try:
-					self.logger.debug('Scheduling HealthCheck Consumer probe')
+					self.logger.debug('Scheduling Ping Consumer probe')
 					worker.consumer.call(self.probe.set)
 				except Exception as error:
 					self.probe = None
 					self.logger.error(
-						'HealthCheck Consumer probe scheduling failed: error=%s',
+						'Ping Consumer probe scheduling failed: error=%s',
 						type(error).__name__,
 					)
 					return False
@@ -79,7 +79,7 @@ class HealthCheck(Extension):
 		responded = probe.wait(self.timeout)
 		healthy = responded and self.state(inspector) == 'running'
 		self.logger.debug(
-			'HealthCheck Consumer probe completed: responded=%s healthy=%s',
+			'Ping Consumer probe completed: responded=%s healthy=%s',
 			responded,
 			healthy,
 		)
@@ -94,7 +94,7 @@ class HealthCheck(Extension):
 		if not healthy and state == 'running':
 			state = 'unresponsive'
 		self.logger.debug(
-			'Building HealthCheck response: status=%s state=%s',
+			'Building Ping response: status=%s state=%s',
 			'200' if healthy else '503',
 			state,
 		)
