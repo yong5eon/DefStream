@@ -32,7 +32,7 @@ class Event(BaseEvent):
 		self.consumer = consumer
 		self.transaction = transaction
 		self.properties = properties
-		self.props = properties.headers
+		self.props = properties.headers or {}
 		self.payload = body
 		return
 
