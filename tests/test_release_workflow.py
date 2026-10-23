@@ -44,6 +44,7 @@ class ReleaseWorkflowTests(TestCase):
 			('pull_request', b'samples/Worker/Sample.py\0', 'true'),
 			('pull_request', b'tests/test_worker.py\0', 'true'),
 			('pull_request', b'setup.py\0', 'true'),
+			('pull_request', b'.github/workflows/ci.yml\0', 'true'),
 			('push', b'', 'true'),
 		):
 			with self.subTest(event=event_name, changed=changed), TemporaryDirectory() as directory:
@@ -67,7 +68,7 @@ class ReleaseWorkflowTests(TestCase):
 				else:
 					self.assertEqual(git.call_args.args[0], [
 						'git', 'diff', '--name-only', '--no-renames', '-z',
-						'base...head', '--', 'samples/', 'src/', 'tests/', 'setup.py',
+						'base...head', '--', 'samples/', 'src/', 'tests/', 'setup.py', '.github/workflows/ci.yml',
 					])
 		return
 
@@ -76,8 +77,16 @@ class ReleaseWorkflowTests(TestCase):
 		test_job = workflow.split('\n  test:\n', 1)[1].split('\n  publish:\n', 1)[0]
 		self.assertIn("if: needs.changes.outputs.test_required == 'true'", test_job)
 		self.assertIn('test_required: ${{ steps.test_paths.outputs.required }}', workflow)
-		self.assertIn('test_directory=tests', test_job)
-		self.assertIn('test_directory=test\n', test_job)
+		self.assertIn('packages/DefStream/tests" -p', test_job)
+		self.assertIn('DEFSTREAM_RABBITMQ_TESTS: \'1\'', test_job)
+		self.assertIn('DEFSTREAM_REDIS_TESTS: \'1\'', test_job)
+		self.assertIn('image: rabbitmq:4.1', test_job)
+		self.assertIn('image: redis:7.4', test_job)
+		self.assertIn('[RabbitMQ,Redis]', test_job)
+		self.assertNotIn('DefStream-RabbitMQ', workflow)
+		self.assertNotIn('DefStream-Redis', workflow)
+		self.assertNotIn('dependency-wheels', workflow)
+		self.assertNotIn('Resolve dependency refs', workflow)
 		self.assertIn('packages/DefStream/tests/test_dashboard_ui.cjs', test_job)
 		return
 
