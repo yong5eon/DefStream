@@ -3,6 +3,7 @@ from ast import (
 	parse,
 )
 from importlib import import_module
+from gc import collect
 from io import StringIO
 from logging import (
 	DEBUG,
@@ -231,19 +232,32 @@ class LoggingTests(TestCase):
 
 	def test_pop_timeout_is_debug_without_poll_noise_and_success(self):
 		queue = self.queue()
+		queue.logger = getLogger(self.id())
+		# 다른 큐의 지연 정리 로그가 대기 중 발생해도 대상 큐의 로그만 검증한다.
+		unrelated = self.queue()
+		unrelated.cycle = unrelated
+		pending_cleanup = [unrelated]
+		del unrelated
+
+		def collect_unrelated_queue(*args):
+			pending_cleanup.clear()
+			collect()
+			return
+
 		module = import_module(NAMESPACE + '.Queue')
 		self.channel.basic_get.return_value = (None, None, None)
-		with patch.object(module, 'time', side_effect=[0, 0, 1]), patch.object(module, 'sleep'), self.assertLogs(NAMESPACE, level=DEBUG) as logs:
+		with patch.object(module, 'time', side_effect=[0, 0, 1]), patch.object(module, 'sleep', side_effect=collect_unrelated_queue), self.assertLogs(queue.logger, level=DEBUG) as logs:
 			self.assertIsNone(queue.pop(timeout=1))
+		self.assertFalse(pending_cleanup)
 		self.assertEqual(len(logs.records), 2)
 		self.assertTrue(all(record.levelno == DEBUG for record in logs.records))
 		self.channel.basic_get.return_value = (self.method, self.properties, self.encode(SECRET))
-		with self.assertLogs(NAMESPACE, level=DEBUG) as logs:
+		with self.assertLogs(queue.logger, level=DEBUG) as logs:
 			event = queue.pop(timeout=1)
 		self.assertEqual(event.body, SECRET)
 		self.assert_safe(logs.records)
 		self.channel.basic_get.side_effect = RuntimeError(SECRET)
-		with self.assertLogs(NAMESPACE, level=DEBUG) as logs, self.assertRaises(RuntimeError):
+		with self.assertLogs(queue.logger, level=DEBUG) as logs, self.assertRaises(RuntimeError):
 			queue.pop(timeout=1)
 		self.assertEqual(logs.records[-1].levelno, ERROR)
 		self.assert_safe(logs.records)
