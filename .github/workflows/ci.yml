@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    branches: [master]
   push:
     branches: [master]
 
@@ -18,7 +17,7 @@ concurrency:
 
 jobs:
   changes:
-    name: Plan release version
+    name: Prepare CI and master release metadata
     permissions:
       contents: read
       pull-requests: read
@@ -30,7 +29,6 @@ jobs:
       build: ${{ steps.changes.outputs.build }}
       new_version: ${{ steps.changes.outputs.new_version }}
       tag: ${{ steps.changes.outputs.tag }}
-      test_required: ${{ steps.test_paths.outputs.required }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,49 +38,22 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - name: Detect test-relevant changes
-        id: test_paths
-        run: |
-          python - <<'PY'
-          from json import loads
-          from os import environ
-          from pathlib import Path
-          from subprocess import check_output
-
-          required = True
-          if environ['GITHUB_EVENT_NAME'] == 'pull_request':
-              event = loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-              base = event['pull_request']['base']['sha']
-              changed = check_output([
-                  'git', 'diff', '--name-only', '--no-renames', '-z',
-                  f'{base}...{environ["GITHUB_SHA"]}', '--', 'samples/', 'src/', 'tests/', 'setup.py', '.github/workflows/ci.yml',
-              ])
-              required = bool(changed)
-          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(f'required={str(required).lower()}\n')
-          print(f'Test-relevant changes: {required}')
-          PY
       - name: Check complete push range and plan version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         id: changes
         env:
           BEFORE: ${{ github.event.before }}
-          RELEASE_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
           python - <<'PY'
-          from json import loads
           from os import environ
           from pathlib import Path
           from re import fullmatch
           from subprocess import check_output
 
-          release_push = environ['RELEASE_PUSH'] == 'true'
           series = environ['RELEASE_SERIES']
           if fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)', series) is None:
               raise ValueError(f'Invalid RELEASE_SERIES: {series!r}')
           before = environ['BEFORE']
-          if not release_push:
-              event = loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-              before = event['pull_request']['base']['sha']
           if not before:
               raise ValueError('Missing push base commit')
           first_push = set(before) == {'0'}
@@ -125,12 +96,12 @@ jobs:
           version = f'{series}.{patch}'
           print(f'Planned version: {version}, wheel build: {number}')
           with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(f'release={str(release_push).lower()}\nversion={version}\n')
+              output.write(f'release=true\nversion={version}\n')
               output.write(f'build={number}\nnew_version={str(new_version).lower()}\n')
               output.write(f'tag={version if new_version else release_tags[latest]}\n')
           PY
-      - name: Validate PR branch changelog
-        id: changelog
+      - name: Collect branch changelog for release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
           BEFORE: ${{ github.event.before }}
@@ -144,25 +115,20 @@ jobs:
           from subprocess import check_output
 
           head = environ['GITHUB_SHA']
-          if environ['GITHUB_EVENT_NAME'] == 'pull_request':
-              event = loads(Path(environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-              branch = event['pull_request']['head']['ref']
-          else:
-              repository = environ['GITHUB_REPOSITORY']
-              pages = loads(check_output([
-                  'gh', 'api', '--paginate', '--slurp',
-                  f'repos/{repository}/commits/{head}/pulls?per_page=100',
-              ]))
-              pulls = [
-                  pull for page in pages for pull in page
-                  if pull['merged_at'] is not None
-                  and pull['merge_commit_sha'] == head
-                  and pull['base']['ref'] == 'master'
-                  and pull['base']['repo']['full_name'] == repository
-              ]
-              if len(pulls) > 1:
-                  raise ValueError('Multiple merged PRs found for the release commit')
-              branch = pulls[0]['head']['ref'] if pulls else 'master'
+          repository = environ['GITHUB_REPOSITORY']
+          pages = loads(check_output([
+              'gh', 'api', '--paginate', '--slurp',
+              f'repos/{repository}/commits/{head}/pulls?per_page=100',
+          ]))
+          pulls = [
+              pull for page in pages for pull in page
+              if pull['merged_at'] is not None
+              and pull['merge_commit_sha'] == head
+              and pull['base']['ref'] == 'master'
+              and pull['base']['repo']['full_name'] == repository
+          ]
+          if len(pulls) > 1:
+              raise ValueError('Multiple merged PRs found for the release commit')
           if environ['NEW_VERSION'] == 'false':
               tag = environ['RELEASE_TAG']
               release = loads(check_output([
@@ -172,7 +138,7 @@ jobs:
                   raise ValueError(f'Existing release notes are missing or empty: {tag}')
               body = release['body'].encode('utf-8')
               print(f'Reusing release notes unchanged: {tag}')
-          elif environ['GITHUB_EVENT_NAME'] == 'push' and not pulls:
+          elif not pulls:
               before = environ['BEFORE']
               if not before:
                   raise ValueError('Missing push base commit')
@@ -181,6 +147,7 @@ jobs:
               body = '## master 직접 push\n\n'.encode('utf-8') + commits
               print('Direct master push: generating release notes from commits')
           else:
+              branch = pulls[0]['head']['ref']
               path = f'issues/{branch}/README.md'
               entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
               if not entry or entry[0] not in ('100644', '100755'):
@@ -192,10 +159,9 @@ jobs:
           notes = Path(environ['RUNNER_TEMP'], 'release-notes', 'README.md')
           notes.parent.mkdir(parents=True, exist_ok=True)
           notes.write_bytes(body)
-          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(f'branch={branch}\n')
           PY
       - name: Preserve customer release notes
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v7
         with:
           name: release-notes
@@ -207,7 +173,6 @@ jobs:
   test:
     name: Test Python ${{ matrix.python }}
     needs: changes
-    if: needs.changes.outputs.test_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -384,7 +349,7 @@ jobs:
         run: node --test packages/DefStream/tests/test_status_ui.cjs
 
       - name: Preserve verified release distributions
-        if: needs.changes.outputs.release == 'true' && matrix.python == '3.13'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.changes.outputs.release == 'true' && matrix.python == '3.13'
         uses: actions/upload-artifact@v7
         with:
           name: distributions
