@@ -31,7 +31,7 @@ Configure execution, acknowledgements, failure policies, and monitoring without
 - [Broker selection and operational considerations](#broker-selection-and-operational-considerations)
 - [RabbitMQ usage](#rabbitmq-usage)
 - [Redis usage](#redis-usage)
-- [Examples and license](#examples-and-license)
+- [License](#license)
 
 ## Logging
 
