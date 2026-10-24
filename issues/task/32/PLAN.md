@@ -4,11 +4,11 @@
 
 - 근거: [이슈 기록](./ISSUE.md), [요구사항 명세서](./REQUIREMENTS.md)
 - 작업 브랜치: `task/32`
-- 구현 대상: [CI 워크플로](../../../.github/workflows/ci.yml), [관련 회귀 테스트](../../../tests/test_rabbitmq_release_workflow.py)
+- 구현 대상: [CI 워크플로](../../../.github/workflows/ci.yml), [공통 회귀 테스트](../../../tests/test_release_workflow.py), [RabbitMQ 회귀 테스트](../../../tests/test_rabbitmq_release_workflow.py), [Redis 회귀 테스트](../../../tests/test_redis_release_workflow.py)
 
 DefEssential과 동일한 이벤트별 실행 정책을 적용하되, DefStream의 기존 검증 범위와 릴리즈 정책을 유지한다.
 
-이 문서는 앞으로 수행할 구현·검증 순서를 정의한다. 계획서 작성 시점에는 CI와 테스트를 변경하지 않았으며, 아래 작업을 완료한 것으로 간주하지 않는다.
+이 문서는 구현·검증 순서를 정의한다. 계획서 작성 시점에는 CI와 테스트를 변경하지 않았으며, 실제 수행 결과는 [구현 기록](./IMPLEMENTS.md)과 [작업 기록](./TASK.md)에서 별도로 관리한다.
 
 ## 2. 구현 방향
 
@@ -93,7 +93,7 @@ DefEssential과 동일한 이벤트별 실행 정책을 적용하되, DefStream�
 관련 테스트는 프로젝트 루트에서 다음 명령으로 묶어 실행한다.
 
 ```powershell
-python -m unittest discover -s tests -p test_rabbitmq_release_workflow.py -v
+python -m unittest discover -s tests -p 'test*release_workflow.py' -v
 git diff --check
 ```
 
@@ -141,6 +141,8 @@ git diff --check
 
 ## 4. 주요 위험과 대응
 
+구현 전 참조 조사에서 동일 워크플로를 검증하는 공통·RabbitMQ·Redis 테스트 세 파일을 확인했다. 단계 이름과 PR 계약 변경이 세 파일 모두에 영향을 주므로, 관련 테스트를 함께 갱신하고 위의 단일 패턴으로 실행한다. 중복 테스트 구조 자체의 리팩터링은 이번 작업에 포함하지 않는다.
+
 | 위험 | 대응 |
 | --- | --- |
 | 릴리즈 job 전체를 생략하여 PR 테스트까지 생략됨 | 릴리즈 step만 제한하는 최소 변경을 우선하고 `needs`와 실행 조건을 함께 검증 |
@@ -152,9 +154,11 @@ git diff --check
 
 ## 5. 최종 완료 판단
 
-- [ ] 요구사항 CI-01~CI-06 및 SEC-01이 구현되고 관련 회귀 테스트가 통과한다.
-- [ ] 기존 Python·패키지·브로커 통합·UI 검증과 릴리즈 정책이 유지된다.
-- [ ] 정적 검사와 diff 검토 결과에 요청 범위 밖 변경이 없다.
-- [ ] 인수 기준 AC-01~AC-12 각각의 검증 근거 또는 미검증 사유가 기록된다.
-- [ ] 원격 확인이 남았다면 구현·로컬 검증 완료와 운영 검증 대기 상태를 구분한다. 인수 검증 전체 완료로 표시하지 않는다.
-- [ ] 실제 구현·검증 결과와 사용자·운영자용 변경 로그가 작성된다.
+- [x] 요구사항 CI-01~CI-06 및 SEC-01이 구현되고 관련 회귀 테스트가 통과한다.
+- [x] 기존 Python·패키지·브로커 통합·UI 검증과 릴리즈 정책이 유지된다.
+- [x] 정적 검사와 diff 검토 결과에 요청 범위 밖 변경이 없다.
+- [x] 인수 기준 AC-01~AC-12 각각의 검증 근거 또는 미검증 사유가 기록된다.
+- [x] 원격 확인이 남았다면 구현·로컬 검증 완료와 운영 검증 대기 상태를 구분한다. 인수 검증 전체 완료로 표시하지 않는다.
+- [x] 실제 구현·검증 결과와 사용자·운영자용 변경 로그가 작성된다.
+
+GitHub Actions 실제 이벤트와 배포에 대한 인수 검증은 대기 중이다. 위 체크는 구현·로컬 검증·기록 완료를 나타내며, 원격 검증 완료를 의미하지 않는다.
