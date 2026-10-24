@@ -17,7 +17,7 @@ DefEssential과 동일하게 맞추는 대상은 이벤트별 실행 정책과 �
 ### 2.1. 변경 대상
 
 - [CI 워크플로](../../../.github/workflows/ci.yml)의 이벤트 트리거, job 의존성, 테스트 실행 조건 및 릴리즈 단계 실행 조건
-- [릴리즈 워크플로 회귀 테스트](../../../tests/test_rabbitmq_release_workflow.py)의 변경된 PR 동작에 대한 기대값과 관련 검증
+- [공통 릴리즈 워크플로 회귀 테스트](../../../tests/test_release_workflow.py), [RabbitMQ 관련 회귀 테스트](../../../tests/test_rabbitmq_release_workflow.py), [Redis 관련 회귀 테스트](../../../tests/test_redis_release_workflow.py)의 변경된 PR 동작에 대한 기대값과 관련 검증
 
 ### 2.2. 유지 대상 및 범위 제외
 
