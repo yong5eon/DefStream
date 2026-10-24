@@ -18,11 +18,11 @@ from DefStream.Broker.Implements.RabbitMQ import (
 )
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-	HealthCheck,
 	Metrics,
+	Ping,
 	Specifications,
 	Console,
-	Dashboard,
+	Status,
 )
 from DefStream.Worker import (
 	declare,
@@ -97,10 +97,10 @@ if __name__ == '__main__':
 			host='127.0.0.1',
 			port=9999,
 			exts=(
-				HealthCheck('/status'),
+				Ping('/ping'),
 				Metrics('/metrics'),
-				Dashboard(
-					'/dashboard',
+				Status(
+					'/status',
 					title='DefStream using RabbitMQ Sample',
 					description='A sample DefStream worker using RabbitMQ as the broker',
 				),

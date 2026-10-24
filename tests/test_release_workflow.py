@@ -87,7 +87,7 @@ class ReleaseWorkflowTests(TestCase):
 		self.assertNotIn('DefStream-Redis', workflow)
 		self.assertNotIn('dependency-wheels', workflow)
 		self.assertNotIn('Resolve dependency refs', workflow)
-		self.assertIn('packages/DefStream/tests/test_dashboard_ui.cjs', test_job)
+		self.assertIn('packages/DefStream/tests/test_status_ui.cjs', test_job)
 		return
 
 	def test_embedded_python_syntax(self) -> None:

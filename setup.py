@@ -43,7 +43,7 @@ setup(
 	package_data={
 		'DefStream.Inspector.Extensions': [
 			'Console.html',
-			'Dashboard.html',
+			'Status.html',
 		],
 	},
 	classifiers=[

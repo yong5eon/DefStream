@@ -16,12 +16,12 @@ if TYPE_CHECKING:
 	from ..Inspector import Inspector
 
 __all__ = (
-	'Dashboard',
+	'Status',
 )
 
 
-class Dashboard(Extension):
-	logger = getLogger('DefStream.Inspector.Extensions.Dashboard')
+class Status(Extension):
+	logger = getLogger('DefStream.Inspector.Extensions.Status')
 
 	def __init__(
 		self,
@@ -35,12 +35,12 @@ class Dashboard(Extension):
 			title,
 			str,
 		) or not title:
-			raise ValueError('Dashboard title must be a nonempty string')
+			raise ValueError('Status title must be a nonempty string')
 		if description is not None and not isinstance(
 			description,
 			str,
 		):
-			raise TypeError('Dashboard description must be a string or None')
+			raise TypeError('Status description must be a string or None')
 		self.title = title
 		self.description = description
 		self.metrics: Optional[Metrics] = None
@@ -57,10 +57,10 @@ class Dashboard(Extension):
 			)
 		]
 		if len(metrics) != 1:
-			raise ValueError('Dashboard requires exactly one registered Metrics extension')
+			raise ValueError('Status requires exactly one registered Metrics extension')
 		self.metrics = metrics[0]
 		self.logger.debug(
-			'Dashboard Metrics extension attached: path=%s',
+			'Status Metrics extension attached: path=%s',
 			self.metrics.path,
 		)
 
@@ -71,8 +71,8 @@ class Dashboard(Extension):
 	) -> Response:
 		if environ.get('HTTP_ACCEPT') == 'application/json':
 			if self.metrics is None:
-				raise RuntimeError('Dashboard has not been started')
-			self.logger.debug('Building Dashboard JSON response')
+				raise RuntimeError('Status has not been started')
+			self.logger.debug('Building Status JSON response')
 			return Response(
 				'200 OK',
 				dumps(
@@ -86,22 +86,22 @@ class Dashboard(Extension):
 					'nosniff',
 				),),
 			)
-		self.logger.debug('Dashboard HTML response requested')
+		self.logger.debug('Status HTML response requested')
 		return self(inspector)
 
 	def __call__(
 		self,
 		inspector: 'Inspector',
 	) -> Response:
-		self.logger.debug('Reading Dashboard HTML resource')
+		self.logger.debug('Reading Status HTML resource')
 		values = {
 			'title': escape(self.title),
 			'description': escape(self.description) if self.description is not None else '',
 		}
 		page = sub(
-			r'\{\{dashboard_(title|description)\}\}',
+			r'\{\{status_(title|description)\}\}',
 			lambda match: values[match[1]],
-			files(__package__).joinpath('Dashboard.html').read_text(encoding='utf-8'),
+			files(__package__).joinpath('Status.html').read_text(encoding='utf-8'),
 		)
 		return Response(
 			'200 OK',

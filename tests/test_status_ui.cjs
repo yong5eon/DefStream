@@ -4,7 +4,7 @@ const { runInNewContext } = require('node:vm');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const html = readFileSync(join(__dirname, '..', 'src', 'Inspector', 'Extensions', 'Dashboard.html'), 'utf8');
+const html = readFileSync(join(__dirname, '..', 'src', 'Inspector', 'Extensions', 'Status.html'), 'utf8');
 const script = html.split('<script>')[1].split('</script>')[0].replace(/\nrefresh\(\);\s*$/, '');
 
 function fixture() {
@@ -20,7 +20,7 @@ function fixture() {
   }
   const context = {
     Intl, Date, Object, Math, AbortController,
-    window: { location: { pathname: '/dashboard' } },
+    window: { location: { pathname: '/status' } },
     document: {
       hidden: false,
       body: { classList: { add: name => classes.add(name), remove: name => classes.delete(name) } },

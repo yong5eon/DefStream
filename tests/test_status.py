@@ -12,8 +12,9 @@ from unittest.mock import (
 
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-	Dashboard,
 	Metrics,
+	Ping,
+	Status,
 )
 from DefStream.Worker import (
 	Run,
@@ -24,16 +25,16 @@ from DefStream.Worker import (
 
 class Task(
 	Run,
-	parameters={'queue': 'dashboard-test'},
+	parameters={'queue': 'status-test'},
 ):
 	def run(self):
 		return 1
 
 
-class DashboardTests(TestCase):
+class StatusTests(TestCase):
 	def setUp(self):
 		self.metrics = Metrics('/metrics')
-		self.dashboard = Dashboard('/dashboard')
+		self.status = Status('/status')
 		self.worker = Worker(
 			Mock(),
 			ThreadPool(1),
@@ -43,7 +44,7 @@ class DashboardTests(TestCase):
 		self.inspector = Inspector(
 			port=0,
 			exts=(
-				self.dashboard,
+				self.status,
 				self.metrics,
 			),
 		)
@@ -51,9 +52,17 @@ class DashboardTests(TestCase):
 		self.addCleanup(self.inspector.stop)
 		self.inspector.start(self.worker)
 
+	def test_public_extensions_use_replacement_names(self):
+		extensions = import_module('DefStream.Inspector.Extensions')
+
+		self.assertIs(extensions.Status, Status)
+		self.assertIs(extensions.Ping, Ping)
+		self.assertFalse(hasattr(extensions, 'Dashboard'))
+		self.assertFalse(hasattr(extensions, 'HealthCheck'))
+
 	def fetch(
 		self,
-		path='/dashboard',
+		path='/status',
 		accept='application/json',
 		method='GET',
 	):
@@ -133,7 +142,7 @@ class DashboardTests(TestCase):
 			'no-store',
 		)
 		self.assertIs(
-			self.dashboard.metrics,
+			self.status.metrics,
 			self.metrics,
 		)
 		data['tasks'][self.task]['success'] = 100
@@ -154,6 +163,10 @@ class DashboardTests(TestCase):
 
 	def test_lifecycle_stays_available_during_start_and_shutdown(self):
 		self.assertFalse(loads(self.fetch()[1])['running'])
+		self.assertEqual(
+			self.fetch('/dashboard')[0],
+			404,
+		)
 		self.worker.running.set()
 		self.assertTrue(loads(self.fetch()[1])['running'])
 		self.worker.stopping.set()
@@ -165,13 +178,13 @@ class DashboardTests(TestCase):
 		self.assertFalse(loads(body)['running'])
 
 	def test_html_refresh_custom_text_and_http_methods(self):
-		dashboard = Dashboard(
-			'/dashboard',
+		status_extension = Status(
+			'/status',
 			title='<Dashboard> & Metrics',
 			description='<script>not HTML</script>',
 		)
-		dashboard.start(self.inspector)
-		self.inspector.exts['/dashboard'] = dashboard
+		status_extension.start(self.inspector)
+		self.inspector.exts['/status'] = status_extension
 		status, body, headers = self.fetch(accept='text/html')
 		self.assertEqual(
 			status,
@@ -190,13 +203,13 @@ class DashboardTests(TestCase):
 			headers['Content-Security-Policy'],
 		)
 		with patch.object(
-			import_module('DefStream.Inspector.Extensions.Dashboard'),
+			import_module('DefStream.Inspector.Extensions.Status'),
 			'files',
 		) as resources:
 			resource = resources.return_value.joinpath.return_value
 			resource.read_text.side_effect = [
-				'<title>{{dashboard_title}}</title>First',
-				'<title>{{dashboard_title}}</title>Updated',
+				'<title>{{status_title}}</title>First',
+				'<title>{{status_title}}</title>Updated',
 			]
 			for expected in (
 				b'First',
@@ -234,9 +247,9 @@ class DashboardTests(TestCase):
 				Metrics('/two'),
 			),
 		):
-			dashboard = Dashboard('/dashboard')
+			status_extension = Status('/status')
 			inspector = Inspector(exts=(
-				dashboard,
+				status_extension,
 				*exts,
 			))
 			inspector.worker = self.worker
@@ -244,7 +257,7 @@ class DashboardTests(TestCase):
 				ValueError,
 				'exactly one',
 			):
-				dashboard.start(inspector)
+				status_extension.start(inspector)
 
 	def test_snapshot_generation_and_empty_tasks(self):
 		before = self.metrics.snapshot(self.inspector)

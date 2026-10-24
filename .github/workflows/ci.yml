@@ -381,7 +381,7 @@ jobs:
           node-version: '22'
 
       - name: Test core UI
-        run: node --test packages/DefStream/tests/test_dashboard_ui.cjs
+        run: node --test packages/DefStream/tests/test_status_ui.cjs
 
       - name: Preserve verified release distributions
         if: needs.changes.outputs.release == 'true' && matrix.python == '3.13'

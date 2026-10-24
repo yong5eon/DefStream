@@ -15,10 +15,10 @@ from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extension import Extension
 from DefStream.Inspector.Extensions import (
 	Console,
-	Dashboard,
-	HealthCheck,
 	Metrics,
+	Ping,
 	Specifications,
+	Status,
 )
 from DefStream.Inspector.Inspector import (
 	InspectorServerHandler,
@@ -75,8 +75,8 @@ class InspectorLoggingTests(TestCase):
 			self.assertEqual(cls.logger.name, 'DefStream.Inspector')
 		for cls in (
 			Console,
-			Dashboard,
-			HealthCheck,
+			Status,
+			Ping,
 			Metrics,
 			Specifications,
 		):

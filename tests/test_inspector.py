@@ -29,8 +29,8 @@ from DefStream.Inspector import (
 	Response,
 )
 from DefStream.Inspector.Extensions import (
-	HealthCheck,
 	Metrics,
+	Ping,
 )
 from DefStream.Worker import (
 	PoolFull,
@@ -223,8 +223,8 @@ class InspectorTests(TestCase):
 		inspector = Inspector(
 			port=0,
 			exts=(
-				HealthCheck(
-					'/health',
+				Ping(
+					'/ping',
 					timeout=0.1,
 				),
 				Metrics('/stats'),
@@ -322,7 +322,7 @@ class InspectorTests(TestCase):
 			self.assertTrue(preparing.wait(5))
 			status, body, headers = self.fetch(
 				inspector,
-				'/health',
+				'/ping',
 			)
 			self.assertEqual(
 				status,
@@ -344,7 +344,7 @@ class InspectorTests(TestCase):
 			self.assertEqual(
 				self.fetch(
 					inspector,
-					'/health?probe=1',
+					'/ping?probe=1',
 				)[0],
 				200,
 			)
@@ -358,7 +358,7 @@ class InspectorTests(TestCase):
 			self.assertTrue(blocked.wait(5))
 			status, body, headers = self.fetch(
 				inspector,
-				'/health',
+				'/ping',
 			)
 			self.assertEqual(
 				status,
@@ -371,7 +371,7 @@ class InspectorTests(TestCase):
 			self.assertEqual(
 				self.fetch(
 					inspector,
-					'/health',
+					'/ping',
 				)[0],
 				503,
 			)
@@ -383,7 +383,7 @@ class InspectorTests(TestCase):
 			self.assertEqual(
 				self.fetch(
 					inspector,
-					'/health',
+					'/ping',
 				)[0],
 				200,
 			)
@@ -392,7 +392,7 @@ class InspectorTests(TestCase):
 			self.assertEqual(
 				self.fetch(
 					inspector,
-					'/health',
+					'/ping',
 				)[0],
 				503,
 			)
@@ -622,7 +622,7 @@ class InspectorTests(TestCase):
 		self.assertTrue(consumer.ready.wait(5))
 		status, body, headers = self.fetch(
 			inspector,
-			'/health',
+			'/ping',
 			'HEAD',
 		)
 		self.assertEqual(
@@ -648,7 +648,7 @@ class InspectorTests(TestCase):
 		)
 		status, body, headers = self.fetch(
 			inspector,
-			'/health',
+			'/ping',
 			'POST',
 		)
 		self.assertEqual(
@@ -696,17 +696,17 @@ class InspectorTests(TestCase):
 	def test_validation(self):
 		for path in (
 			'health',
-			'/health?query=1',
-			'/health#fragment',
+			'/ping?query=1',
+			'/ping#fragment',
 		):
 			with self.assertRaises(ValueError):
-				HealthCheck(path)
+				Ping(path)
 		with self.assertRaisesRegex(
 			ValueError,
 			'Duplicate',
 		):
 			Inspector(exts=(
-				HealthCheck('/same'),
+				Ping('/same'),
 				Metrics('/same'),
 			))
 		for timeout in (
@@ -717,8 +717,8 @@ class InspectorTests(TestCase):
 			True,
 		):
 			with self.assertRaises(ValueError):
-				HealthCheck(
-					'/health',
+				Ping(
+					'/ping',
 					timeout=timeout,
 				)
 
@@ -741,7 +741,7 @@ class InspectorTests(TestCase):
 		self.assertEqual(
 			self.fetch(
 				inspector,
-				'/health',
+				'/ping',
 			)[0],
 			200,
 		)
@@ -758,7 +758,7 @@ class InspectorTests(TestCase):
 		inspector = Inspector(
 			port=0,
 			exts=(
-				HealthCheck('/health'),
+				Ping('/ping'),
 				Metrics('/stats'),
 			),
 		)
@@ -785,7 +785,7 @@ class InspectorTests(TestCase):
 			self.assertEqual(
 				self.fetch(
 					inspector,
-					'/health',
+					'/ping',
 				)[0],
 				200,
 			)
@@ -828,7 +828,7 @@ class InspectorTests(TestCase):
 			self.assertEqual(
 				self.fetch(
 					inspector,
-					'/health',
+					'/ping',
 				)[0],
 				200,
 			)

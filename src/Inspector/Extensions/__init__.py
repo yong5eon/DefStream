@@ -1,13 +1,13 @@
-from .HealthCheck import HealthCheck
+from .Ping import Ping
 from .Metrics import Metrics
 from .Specifications import Specifications
 from .Console import Console
-from .Dashboard import Dashboard
+from .Status import Status
 
 __all__ = (
-	'HealthCheck',
+	'Ping',
 	'Metrics',
 	'Specifications',
 	'Console',
-	'Dashboard',
+	'Status',
 )
