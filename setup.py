@@ -22,7 +22,7 @@ for package in find_packages(SOURCE):
 setup(
 	name='DefStream',
 	description='Synchronous message processing with pluggable broker adapters',
-	long_description=Path('README.md').read_text(encoding='utf-8'),
+	long_description=Path('README.setup.md').read_text(encoding='utf-8'),
 	long_description_content_type='text/markdown',
 	author='Heo Yongseon',
 	url='https://github.com/yong5eon/DefStream',
