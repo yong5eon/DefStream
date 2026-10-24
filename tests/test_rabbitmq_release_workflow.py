@@ -50,20 +50,15 @@ class ReleaseWorkflowTests(TestCase):
 		self,
 		tags: str,
 		changed: str = '',
-		event: str = 'true',
 	) -> dict:
 		with TemporaryDirectory() as directory:
 			output = Path(directory) / 'output'
-			event_path = Path(directory) / 'event.json'
-			event_path.write_text(dumps({'pull_request': {'base': {'sha': 'pr-base'}}}))
 			environment = {
 				'GITHUB_OUTPUT': str(output),
-				'RELEASE_PUSH': event,
 				'RELEASE_SERIES': '0.1',
 				'BEFORE': 'before',
 				'GITHUB_SHA': 'head',
 				'GITHUB_RUN_NUMBER': '42',
-				'GITHUB_EVENT_PATH': str(event_path),
 			}
 			with (
 				patch.dict(environ, environment),
@@ -119,12 +114,12 @@ class ReleaseWorkflowTests(TestCase):
 			self.plan('')
 		return
 
-	def test_pull_request_does_not_release(self) -> None:
-		result = self.plan('0.1.4', event='false')
-		self.assertEqual(result['release'], 'false')
+	def test_master_push_plans_release(self) -> None:
+		result = self.plan('0.1.4')
+		self.assertEqual(result['release'], 'true')
 		self.assertEqual(result['new_version'], 'false')
 		self.assertEqual(result['tag'], '0.1.4')
-		self.assertIn('pr-base', self.commands[0].args[0])
+		self.assertIn('before', self.commands[0].args[0])
 		return
 
 	def test_git_pathspec_distinguishes_resources_and_packaging(self) -> None:
@@ -166,11 +161,8 @@ class ReleaseWorkflowTests(TestCase):
 
 	def test_direct_push_generates_notes(self) -> None:
 		with TemporaryDirectory() as directory:
-			output = Path(directory) / 'output'
 			environment = {
-				'GITHUB_OUTPUT': str(output),
 				'GITHUB_SHA': 'head',
-				'GITHUB_EVENT_NAME': 'push',
 				'GITHUB_REPOSITORY': 'owner/project',
 				'BEFORE': 'before',
 				'RUNNER_TEMP': directory,
@@ -181,27 +173,35 @@ class ReleaseWorkflowTests(TestCase):
 				patch('subprocess.check_output', side_effect=[b'[[]]', b'- setup.py update (abc)\n']),
 				redirect_stdout(StringIO()),
 			):
-				exec(workflow_script('Validate PR branch changelog'), {})
-			self.assertEqual(output.read_text().strip(), 'branch=master')
+				exec(workflow_script('Collect branch changelog for release'), {})
 			notes = (Path(directory) / 'release-notes' / 'README.md').read_text(encoding='utf-8')
 			self.assertIn('setup.py update', notes)
 		return
 
-	def test_pr_still_requires_changelog(self) -> None:
+	def test_merged_release_requires_changelog(self) -> None:
 		with TemporaryDirectory() as directory:
-			event = Path(directory) / 'event.json'
-			event.write_text(dumps({'pull_request': {'head': {'ref': 'fix/1'}}}))
+			pull = {
+				'merged_at': '2026-10-25T00:00:00Z',
+				'merge_commit_sha': 'head',
+				'base': {
+					'ref': 'master',
+					'repo': {'full_name': 'owner/project'},
+				},
+				'head': {'ref': 'fix/1'},
+			}
 			with (
 				patch.dict(environ, {
-					'GITHUB_EVENT_NAME': 'pull_request',
-					'GITHUB_EVENT_PATH': str(event),
+					'GITHUB_REPOSITORY': 'owner/project',
 					'GITHUB_SHA': 'head',
 					'NEW_VERSION': 'true',
 				}),
-				patch('subprocess.check_output', return_value=b''),
+				patch('subprocess.check_output', side_effect=[
+					dumps([[pull]]).encode(),
+					b'',
+				]),
 			):
 				with self.assertRaisesRegex(ValueError, 'Changelog must exist'):
-					exec(workflow_script('Validate PR branch changelog'), {})
+					exec(workflow_script('Collect branch changelog for release'), {})
 		return
 
 	def check_upload(
@@ -323,52 +323,61 @@ class ReleaseWorkflowTests(TestCase):
 		return
 
 	def test_rebuild_reuses_existing_notes_without_branch_changelog(self) -> None:
-		for event_name in ['push', 'pull_request']:
-			with self.subTest(event=event_name), TemporaryDirectory() as directory:
+		for branch in (
+			'master',
+			'docs/1',
+		):
+			with self.subTest(branch=branch), TemporaryDirectory() as directory:
 				root = Path(directory)
-				event = root / 'event.json'
-				event.write_text(dumps({'pull_request': {'head': {'ref': 'docs/1'}}}))
+				pulls = [] if branch == 'master' else [
+					{
+						'merged_at': '2026-10-25T00:00:00Z',
+						'merge_commit_sha': 'head',
+						'base': {
+							'ref': 'master',
+							'repo': {'full_name': 'owner/project'},
+						},
+						'head': {'ref': branch},
+					},
+				]
 				body = '## 이전 변경로그\n\n기존 내용을 그대로 유지합니다.\n'
 				release = {'tag_name': '0.1.4', 'body': body}
-				responses = [dumps(release).encode('utf-8')]
-				if event_name == 'push':
-					responses.insert(0, b'[[]]')
+				responses = [
+					dumps([pulls]).encode('utf-8'),
+					dumps(release).encode('utf-8'),
+				]
 				with (
 					patch.dict(environ, {
-						'GITHUB_EVENT_NAME': event_name,
-						'GITHUB_EVENT_PATH': str(event),
 						'GITHUB_SHA': 'head',
 						'GITHUB_REPOSITORY': 'owner/project',
 						'NEW_VERSION': 'false',
 						'RELEASE_TAG': '0.1.4',
-						'GITHUB_OUTPUT': str(root / 'output'),
 						'RUNNER_TEMP': directory,
 					}),
 					patch('subprocess.check_output', side_effect=responses) as commands,
 					redirect_stdout(StringIO()),
 				):
-					exec(workflow_script('Validate PR branch changelog'), {})
+					exec(workflow_script('Collect branch changelog for release'), {})
 				self.assertEqual((root / 'release-notes' / 'README.md').read_bytes(), body.encode('utf-8'))
 				self.assertTrue(all(call.args[0][0] == 'gh' for call in commands.call_args_list))
 		return
 
 	def test_rebuild_rejects_empty_existing_notes(self) -> None:
 		with TemporaryDirectory() as directory:
-			event = Path(directory) / 'event.json'
-			event.write_text(dumps({'pull_request': {'head': {'ref': 'docs/1'}}}))
 			with (
 				patch.dict(environ, {
-					'GITHUB_EVENT_NAME': 'pull_request',
-					'GITHUB_EVENT_PATH': str(event),
 					'GITHUB_SHA': 'head',
 					'GITHUB_REPOSITORY': 'owner/project',
 					'NEW_VERSION': 'false',
 					'RELEASE_TAG': '0.1.4',
 				}),
-				patch('subprocess.check_output', return_value=b'{"tag_name":"0.1.4","body":""}'),
+				patch('subprocess.check_output', side_effect=[
+					b'[[]]',
+					b'{"tag_name":"0.1.4","body":""}',
+				]),
 			):
 				with self.assertRaisesRegex(ValueError, 'missing or empty'):
-					exec(workflow_script('Validate PR branch changelog'), {})
+					exec(workflow_script('Collect branch changelog for release'), {})
 		return
 
 	def test_sdist_normalization_preserves_content_and_is_reproducible(self) -> None:
