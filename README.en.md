@@ -1,10 +1,12 @@
 # DefStream
 
-[한국어](./README.md) | **English**
+Synchronous event/message processing with pluggable broker adapters
 
 **Just def.**<br>
 **Let workers do the work.**<br>
 **You don't need to await this.**
+
+[한국어](./README.md) | **English**
 
 DefStream is a synchronous task-processing library that consumes broker messages
 and executes ordinary Python task methods in a thread or process pool.

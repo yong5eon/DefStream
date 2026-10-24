@@ -1,10 +1,12 @@
 # DefStream
 
-**한국어** | [English](./README.en.md)
+Synchronous event/message processing with pluggable broker adapters
 
 **Just def.**<br>
 **Let workers do the work.**<br>
 **You don't need to await this.**
+
+**한국어** | [English](./README.en.md)
 
 DefStream은 메시지 브로커에서 받은 작업을 일반 Python 함수처럼 작성하고,
 스레드 또는 프로세스 풀에서 실행하는 동기식 작업 처리 라이브러리입니다.
