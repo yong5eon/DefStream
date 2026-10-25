@@ -148,7 +148,7 @@ jobs:
               print('Direct master push: generating release notes from commits')
           else:
               branch = pulls[0]['head']['ref']
-              path = f'issues/{branch}/README.md'
+              path = f'issues/{branch}/CHANGELOG.md'
               entry = check_output(['git', 'ls-tree', head, '--', path]).decode().split()
               if not entry or entry[0] not in ('100644', '100755'):
                   raise ValueError(f'Changelog must exist as a regular file: {path}')
