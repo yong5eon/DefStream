@@ -317,12 +317,12 @@ class ReleaseWorkflowTests(TestCase):
 				'Changelog must exist',
 			),
 			(
-				b'100644 blob object issues/fix/1/README.md',
+				b'100644 blob object issues/fix/1/CHANGELOG.md',
 				b' \n',
 				'Customer changelog is empty',
 			),
 			(
-				b'100644 blob object issues/fix/1/README.md',
+				b'100644 blob object issues/fix/1/CHANGELOG.md',
 				b'customer notes',
 				'',
 			),
@@ -358,7 +358,7 @@ class ReleaseWorkflowTests(TestCase):
 						'ls-tree',
 						'head',
 						'--',
-						'issues/fix/1/README.md',
+						'issues/fix/1/CHANGELOG.md',
 					],
 				)
 		return
