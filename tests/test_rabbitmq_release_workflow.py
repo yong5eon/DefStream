@@ -109,9 +109,14 @@ class ReleaseWorkflowTests(TestCase):
 		self.assertEqual(self.plan('', 'src/__init__.py')['version'], '0.1.0')
 		return
 
-	def test_rebuild_without_release_history_is_rejected(self) -> None:
-		with self.assertRaisesRegex(ValueError, 'No release tag'):
-			self.plan('')
+	def test_initial_release_without_source_changes(self) -> None:
+		self.assertEqual(self.plan(''), {
+			'release': 'true',
+			'version': '0.1.0',
+			'build': '42',
+			'new_version': 'true',
+			'tag': '0.1.0',
+		})
 		return
 
 	def test_master_push_plans_release(self) -> None:
