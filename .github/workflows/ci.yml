@@ -83,8 +83,6 @@ jobs:
           number = int(environ['GITHUB_RUN_NUMBER'])
           if number < 1:
               raise ValueError('Build number must be positive')
-          if latest is None and not changed:
-              raise ValueError('No release tag or source/packaging changes; tag the existing release before rebuilding')
           migrate = latest is not None and latest[5]
           new_version = bool(changed) or latest is None or migrate
           if new_version:
