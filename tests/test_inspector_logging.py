@@ -124,6 +124,18 @@ class InspectorLoggingTests(TestCase):
 			handler.finish_response()
 		handler.request_handler.log_request.assert_not_called()
 
+	def test_transport_failures_are_logged_as_warnings(self):
+		for error in (TimeoutError(), ConnectionResetError()):
+			server = Server.__new__(Server)
+			with self.subTest(error=type(error).__name__):
+				with self.assertLogs('DefStream.Inspector', level='WARNING') as logs:
+					try:
+						raise error
+					except Exception:
+						server.handle_error(None, None)
+				self.assertEqual(len(logs.records), 1)
+				self.assertEqual(logs.records[0].levelno, 30)
+
 	def test_console_handled_failure_retains_error_type_not_private_message(self):
 		console = Console(
 			'/console',

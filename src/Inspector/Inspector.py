@@ -51,7 +51,8 @@ class Server(
 		client_address,
 	) -> None:
 		_, error, traceback = exc_info()
-		self.logger.error(
+		log = self.logger.warning if isinstance(error, (TimeoutError, ConnectionError)) else self.logger.error
+		log(
 			'HTTP connection handling failed: error_type=%s\n%s',
 			type(error).__name__,
 			''.join(
