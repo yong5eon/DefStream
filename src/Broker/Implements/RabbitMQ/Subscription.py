@@ -1,8 +1,10 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import (
 	Any,
 	Optional,
+	Union,
 )
 from DefStream.Broker import validate_priority
 
@@ -19,8 +21,22 @@ class Subscription:
 	error: Optional[str] = None
 	max_priority: Optional[int] = None
 	priority: Optional[int] = None
+	timeout: Optional[Union[int, timedelta]] = None
 
-	def __post_init__(self):
+	def __post_init__(self) -> None:
+		if self.timeout is not None:
+			if isinstance(self.timeout, timedelta):
+				if self.timeout <= timedelta(0) or self.timeout.microseconds % 1000:
+					raise ValueError('Subscription timeout must be positive with whole-millisecond precision')
+				object.__setattr__(
+					self,
+					'timeout',
+					self.timeout // timedelta(milliseconds=1),
+				)
+			elif isinstance(self.timeout, bool) or not isinstance(self.timeout, int):
+				raise TypeError('Subscription timeout must be integer milliseconds, a timedelta or None')
+			elif self.timeout <= 0:
+				raise ValueError('Subscription timeout must be positive')
 		if self.priority is not None and self.max_priority is None:
 			object.__setattr__(
 				self,

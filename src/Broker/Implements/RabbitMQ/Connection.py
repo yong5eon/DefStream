@@ -172,7 +172,7 @@ class Connection(
 		self,
 		parameters: AnyValue,
 	) -> None:
-		subscription = Subscription.parse(parameters)
+		subscription: Subscription = Subscription.parse(parameters)
 		self.logger.debug('Task queue declaration: queue=%s error_queue=%s max_priority=%s durable=True', subscription.queue, subscription.error, subscription.max_priority)
 		connection = self.connected()
 		with self.observe('Task queue declaration'):
@@ -190,6 +190,8 @@ class Connection(
 					}
 				if subscription.max_priority is not None:
 					arguments['x-max-priority'] = subscription.max_priority
+				if subscription.timeout is not None:
+					arguments['x-consumer-timeout'] = subscription.timeout
 				channel.queue_declare(
 					subscription.queue,
 					durable=True,

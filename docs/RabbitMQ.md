@@ -165,11 +165,52 @@ Worker는 실행과 완료 훅이 끝난 뒤 ACK하고, 실패하면 지정한 �
 - `max_priority`: classic 작업 큐의 최대 우선순위. 정수 `1..255` 또는 `None`.
 - `priority`: 기본 메시지 우선순위. 정수 `0..max_priority` 또는 `None`.
   이 값만 지정하면 `max_priority`는 `255`로 설정됩니다.
+- `timeout`: 큐별 ACK 대기 한도. 밀리초 단위의 양수 `int`, 양수의 정수 밀리초
+  정밀도 `datetime.timedelta` 또는 `None`. 생략하면 브로커의 기존 설정을 따릅니다.
 
 `Subscription` 객체 생성이나 `consumer.subs()`는 큐를 선언하지 않습니다.
 작업용 `declare()`는 일반 durable 큐와 선택적 DLQ를 준비하며,
 스트림 큐나 Exchange 바인딩을 자동 생성하지 않습니다.
-기존 큐의 선언 옵션이 다르면 실패하며 자동 삭제·재생성하지 않습니다.
+선언 옵션이 호환되지 않아 발생한 오류는 전파하며 자동 삭제·재생성하지 않습니다.
+
+### 장시간 작업의 ACK 대기 한도
+
+RabbitMQ 3.12 이상에서 `Subscription.timeout`을 지정하면 작업용 `declare()`가
+작업 큐에 `x-consumer-timeout`을 정수 밀리초로 전달합니다. 오류 큐에는 적용하지 않습니다.
+앞의 Worker 예제에서 다음 작업을 정의하고 `worker.add(Add)` 대신
+`worker.add(LongRunningAdd)`로 등록하면 기존 `Prepare`가 큐를 선언합니다.
+
+```python
+from datetime import timedelta
+
+
+class LongRunningAdd(
+  Add,
+  parameters=Subscription(
+    queue='defstream.example.rabbitmq.long.add',
+    error='defstream.example.rabbitmq.long.add.error',
+    timeout=timedelta(hours=24),
+  ),
+):
+  pass
+```
+
+위 설정은 `x-consumer-timeout=86400000`을 전달합니다.
+`timeout=86400000`처럼 정수 밀리초로 지정해도 같습니다.
+`Subscription.timeout`은 생성 시 정수 밀리초로 정규화됩니다.
+`Subscription.parse({'queue': 'tasks', 'timeout': timedelta(hours=24)})`처럼
+Mapping으로도 지정할 수 있습니다. 생략 또는 `None`이면 해당 큐 인자를 보내지 않습니다.
+
+- `bool` 및 `int`·`timedelta` 이외의 타입은 `TypeError`, 0·음수 또는 밀리초 미만 정밀도는
+  `ValueError`로 거부합니다. 시간을 조용히 반올림하거나 절삭하지 않습니다.
+- 객체 생성이나 구독만으로 설정을 적용하지 않습니다. 명시적인 작업 큐 선언이 필요합니다.
+- 작업 실행을 강제 중단하는 기능이 아니며 완료 후 ACK·실패 정책·prefetch를 유지합니다.
+  RPC 응답 대기시간은 별도입니다.
+- 기존 큐의 설정 변경·재생성·policy 적용은 운영 측 책임입니다.
+
+[RabbitMQ의 ACK timeout 안내](https://www.rabbitmq.com/docs/3.13/consumers#acknowledgement-timeout)에
+따르면 1분 미만은 지원하지 않으며 5분 미만은 권장하지 않습니다.
+이 검사는 약 1분 간격이므로 정확한 실행 제한 시간으로 사용하지 마세요.
 
 ### 워커 작업 우선순위
 
