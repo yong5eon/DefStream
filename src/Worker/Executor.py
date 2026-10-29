@@ -232,6 +232,7 @@ class Executor(PyExecutor):
 		self.pending: Dict[int, Future[Any]] = {}
 		self.workers: List[Future] = []
 		self.processes: List[BaseProcess] = []
+		self.draining: Dict[int, ProcessEvent] = {}
 		self.completed: Dict[int, ProcessEvent] = {}
 		self.process_lock = Lock()
 		self.stopping: Union[Event, ProcessEvent] = Event()
@@ -284,6 +285,8 @@ class Executor(PyExecutor):
 					self.processes.append(process)
 					if process.pid is None:
 						raise RuntimeError('Started process has no PID')
+					# Keep named semaphores alive until spawned children have exited.
+					self.draining[process.pid] = draining
 					self.completed[process.pid] = completed
 				else:
 					if self.executor is None:

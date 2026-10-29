@@ -31,3 +31,4 @@
 - [Python 3.9·3.10 테스트 패치 대상 수정](./implements/1793276518340.md)
 - [PR 리뷰의 종료·복구 경계 결함 수정](./implements/1793277364116.md)
 - [후속 PR 리뷰의 프로세스 종료 및 Pool 경쟁 수정](./implements/1793278267422.md)
+- [Linux spawn 공유 Event 수명 보존](./implements/1793278764701.md)

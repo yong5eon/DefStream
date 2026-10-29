@@ -1,6 +1,8 @@
 from contextlib import nullcontext
 from concurrent.futures import Future
+from gc import collect
 from importlib import import_module
+from multiprocessing import get_context
 from os import _exit as exit_process
 from pathlib import Path
 from pickle import dumps
@@ -30,6 +32,7 @@ from unittest.mock import (
 	Mock,
 	patch,
 )
+from weakref import ref
 
 from pika.exceptions import (
 	ChannelClosedByBroker,
@@ -724,6 +727,26 @@ class RecoveryTests(TestCase):
 			self.assertFalse(require_value(executor.monitor).is_alive())
 		finally:
 			executor.abort()
+
+	def test_parent_retains_all_spawn_events_until_process_shutdown(self):
+		pool = ProcessPool(2)
+		context = get_context('spawn')
+		create_event = context.Event
+		references = []
+
+		def event():
+			created = create_event()
+			references.append(ref(created))
+			return created
+
+		try:
+			with patch.object(context, 'Event', side_effect=event):
+				self.assertEqual(pool.submit(ValueRun, {}).result(10), 'new generation')
+			collect()
+			self.assertEqual(len(references), 5)
+			self.assertTrue(all(reference() is not None for reference in references))
+		finally:
+			pool.stop()
 
 	def test_closed_idle_channel_is_detected_without_settlement(self):
 		consumer = self.consumer()
