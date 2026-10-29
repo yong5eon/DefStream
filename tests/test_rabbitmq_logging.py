@@ -279,6 +279,7 @@ class LoggingTests(TestCase):
 			callback = self.channel.basic_consume.call_args.args[1]
 			callback(self.channel, self.method, self.properties, self.encode(SECRET))
 			consumer.call(Mock())
+			self.channel.start_consuming.side_effect = consumer.stop
 			consumer.run()
 			consumer.stop()
 		self.assert_safe(logs.records)
