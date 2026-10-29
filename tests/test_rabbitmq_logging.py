@@ -1,4 +1,5 @@
 from ast import (
+	If,
 	Module,
 	parse,
 )
@@ -47,6 +48,7 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
+from tests._support import require_value
 
 
 NAMESPACE = 'Broker.RabbitMQ'
@@ -240,7 +242,7 @@ class LoggingTests(TestCase):
 		queue.logger = getLogger(self.id())
 		# 다른 큐의 지연 정리 로그가 대기 중 발생해도 대상 큐의 로그만 검증한다.
 		unrelated = self.queue()
-		unrelated.cycle = unrelated
+		setattr(unrelated, 'cycle', unrelated)
 		pending_cleanup = [unrelated]
 		del unrelated
 
@@ -259,6 +261,7 @@ class LoggingTests(TestCase):
 		self.channel.basic_get.return_value = (self.method, self.properties, self.encode(SECRET))
 		with self.assertLogs(queue.logger, level=DEBUG) as logs:
 			event = queue.pop(timeout=1)
+		event = require_value(event)
 		self.assertEqual(event.body, SECRET)
 		self.assert_safe(logs.records)
 		self.channel.basic_get.side_effect = RuntimeError(SECRET)
@@ -463,7 +466,11 @@ class LoggingTests(TestCase):
 				self.assertEqual(root.handlers, handlers)
 				self.assertEqual(root.level, level)
 				tree = parse(path.read_text(encoding='utf-8'))
-				entry = next(node for node in tree.body if getattr(node, 'test', None) is not None)
+				entry = next(
+					node
+					for node in tree.body
+					if isinstance(node, If) and getattr(node, 'test', None) is not None
+				)
 				config = []
 				for statement in entry.body:
 					config.append(statement)

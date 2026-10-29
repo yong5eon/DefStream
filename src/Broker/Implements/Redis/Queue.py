@@ -5,7 +5,7 @@ from time import (
 )
 from typing import (
 	Any,
-	Iterable,
+	Generator,
 	Optional,
 	Union,
 )
@@ -116,7 +116,7 @@ class Queue(
 				self.queue,
 				{'body': self.encode(body)},
 			)
-			message_id = id.decode('ascii')
+			message_id = id.decode('ascii') if isinstance(id, bytes) else id
 		except Exception as error:
 			self.logger.error(
 				'Redis Stream publication or serialization failed: queue=%s error_type=%s',
@@ -226,7 +226,7 @@ class Queue(
 		self,
 		offset: Union[int, str] = 0,
 		timeout: Optional[int] = None,
-	) -> Iterable[Event]:
+	) -> Generator[Event, None, None]:
 		if timeout is not None and timeout < 0:
 			raise ValueError('Redis read timeout must be non-negative milliseconds')
 		cursor = str(offset)

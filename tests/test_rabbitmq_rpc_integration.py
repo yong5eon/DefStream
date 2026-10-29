@@ -27,6 +27,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
+from tests._support import require_value
 
 
 class RpcRun(Run):
@@ -80,7 +81,7 @@ class RpcIntegrationTests(TestCase):
 					'defstream-rpc-' + uuid4().hex
 					for index in range(3)
 				]
-				channel = client.connection.channel()
+				channel = require_value(client.connection).channel()
 				exchange = 'defstream-rpc-' + uuid4().hex
 				worker = Worker(
 					Connection(client.conf),

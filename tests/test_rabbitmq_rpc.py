@@ -34,6 +34,7 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
+from tests._support import call_with_invalid_input
 
 
 class RpcTests(TestCase):
@@ -142,8 +143,10 @@ class RpcTests(TestCase):
 		)
 
 	def consumer(self):
+		connection = Mock()
+		self.connection = connection
 		return Consumer(
-			Mock(),
+			connection,
 			JavaScriptObjectNotationDecoder(),
 		)
 
@@ -155,7 +158,7 @@ class RpcTests(TestCase):
 			consumer = self.consumer()
 			event = self.request()
 			trace = []
-			channel = consumer.connection.channel.return_value
+			channel = self.connection.channel.return_value
 			channel.basic_publish.side_effect = lambda **kwargs: trace.append('response')
 			event.channel.basic_ack.side_effect = lambda *args: trace.append('ack')
 			consumer.complete(
@@ -212,7 +215,7 @@ class RpcTests(TestCase):
 	def test_publish_failure_does_not_ack_or_reject(self):
 		consumer = self.consumer()
 		event = self.request()
-		consumer.connection.channel.return_value.basic_publish.side_effect = RuntimeError('publish failed')
+		self.connection.channel.return_value.basic_publish.side_effect = RuntimeError('publish failed')
 		for operation in (
 			lambda: consumer.complete(
 				event,
@@ -241,7 +244,7 @@ class RpcTests(TestCase):
 		self.assertIsNone(consumer.response_channel)
 		event.channel.basic_nack.assert_called_once()
 		trace = []
-		channel = consumer.connection.channel.return_value
+		channel = self.connection.channel.return_value
 		channel.basic_publish.side_effect = lambda **kwargs: trace.append('response')
 		event.channel.basic_reject.side_effect = lambda *args, **kwargs: trace.append('reject')
 		consumer.fail(
@@ -260,7 +263,7 @@ class RpcTests(TestCase):
 	def test_missing_reply_destination_is_logged_and_request_settled(self):
 		consumer = self.consumer()
 		event = self.request()
-		consumer.connection.channel.return_value.basic_publish.side_effect = UnroutableError([])
+		self.connection.channel.return_value.basic_publish.side_effect = UnroutableError([])
 		with self.assertLogs(
 			'Broker.RabbitMQ.Consumer',
 			level='WARNING',
@@ -340,7 +343,7 @@ class QueueClientTests(TestCase):
 
 	def test_timeout_closes_connection(self):
 		with self.assertRaises(TimeoutError):
-			self.invoke(timeout=0.001)
+			call_with_invalid_input(self.invoke, timeout=0.001)
 		self.connect.return_value.close.assert_called_once_with()
 
 	def test_invalid_timeouts(self):
@@ -353,7 +356,7 @@ class QueueClientTests(TestCase):
 			float('inf'),
 		):
 			with self.subTest(timeout=timeout), self.assertRaises(ValueError):
-				self.invoke(timeout)
+				call_with_invalid_input(self.invoke, timeout)
 
 	def test_remote_error_and_invalid_response(self):
 		connect = self.connect

@@ -1,5 +1,8 @@
 from http.client import HTTPConnection
-from io import StringIO
+from io import (
+	BytesIO,
+	StringIO,
+)
 from logging import (
 	DEBUG,
 	ERROR,
@@ -26,6 +29,7 @@ from DefStream.Inspector.Inspector import (
 	Server,
 )
 from DefStream.Inspector.Response import Response
+from tests._support import require_value
 
 
 class Example(Extension):
@@ -51,7 +55,7 @@ class InspectorLoggingTests(TestCase):
 		inspector.start(Mock())
 		connection = HTTPConnection(
 			'127.0.0.1',
-			inspector.server.server_port,
+			require_value(inspector.server).server_port,
 			timeout=5,
 		)
 		try:
@@ -127,17 +131,18 @@ class InspectorLoggingTests(TestCase):
 
 	def test_interrupted_response_does_not_log_success(self):
 		handler = InspectorServerHandler(
-			StringIO(),
-			StringIO(),
+			BytesIO(),
+			BytesIO(),
 			StringIO(),
 			{},
 		)
-		handler.request_handler = Mock()
-		handler.result = [b'private-response']
+		request_handler = Mock()
+		handler.request_handler = request_handler
+		setattr(handler, 'result', [b'private-response'])
 		handler.write = Mock(side_effect=ConnectionResetError())
 		with self.assertRaises(ConnectionResetError):
 			handler.finish_response()
-		handler.request_handler.log_request.assert_not_called()
+		request_handler.log_request.assert_not_called()
 
 	def test_console_handled_failure_retains_error_type_not_private_message(self):
 		console = Console(

@@ -11,6 +11,7 @@ from threading import (
 	Event,
 	Thread,
 )
+from typing import Optional
 from unittest import (
 	TestCase,
 	main,
@@ -34,7 +35,9 @@ from DefStream.Worker import (
 	Specification,
 	ThreadPool,
 	Worker,
+	WorkerSetup,
 )
+from tests._support import require_value
 
 TOKEN = 'test-token-at-least-32-characters!'
 
@@ -75,7 +78,7 @@ class Producer:
 		self.connected = 0
 		self.closed = 0
 		self.sent = []
-		self.error = None
+		self.error: Optional[BaseException] = None
 
 	def connect(self):
 		self.connected += 1
@@ -127,10 +130,8 @@ class ConsoleExtensionTests(TestCase):
 			broker=factory,
 			token=TOKEN,
 		)
-		self.worker = Worker(
-			Mock(),
-			ThreadPool(1),
-		)
+		self.broker = Mock()
+		self.worker = Worker(self.broker, ThreadPool(1))
 		self.worker.add(Task)
 		self.worker.running.set()
 		self.inspector = Inspector(
@@ -145,12 +146,12 @@ class ConsoleExtensionTests(TestCase):
 		self,
 		method='GET',
 		payload=None,
-		token=TOKEN,
+		token: Optional[str] = TOKEN,
 		headers=None,
 	):
 		connection = HTTPConnection(
 			'127.0.0.1',
-			self.inspector.server.server_port,
+			require_value(self.inspector.server).server_port,
 			timeout=5,
 		)
 		request_headers = {
@@ -348,15 +349,18 @@ class ConsoleExtensionTests(TestCase):
 		)
 
 	def test_optional_token_allows_catalog_send_and_rpc_without_authorization(self):
-		for options in (
-			{},
-			{'token': None},
-		):
-			self.extension = Console(
+		for extension in (
+			Console(
 				'/console',
 				broker=RPCProducer,
-				**options,
-			)
+			),
+			Console(
+				'/console',
+				broker=RPCProducer,
+				token=None,
+			),
+		):
+			self.extension = extension
 			self.inspector.exts['/console'] = self.extension
 			status, body, headers = self.fetch(
 				token=None,
@@ -469,8 +473,8 @@ class ConsoleExtensionTests(TestCase):
 			],
 		)
 		self.assertTrue(all(producer.closed == 1 for producer in self.producers))
-		self.worker.broker.connect.assert_not_called()
-		self.worker.broker.close.assert_not_called()
+		self.broker.connect.assert_not_called()
+		self.broker.close.assert_not_called()
 
 	def test_custom_task_name_is_resolved_and_duplicate_names_are_rejected(self):
 		self.worker.add(NamedTask)
@@ -749,7 +753,7 @@ class ConsoleExtensionTests(TestCase):
 				)[0],
 				500,
 			)
-		self.worker.broker.close.assert_not_called()
+		self.broker.close.assert_not_called()
 
 	def test_concurrency_limit_and_existing_routes_keep_methods(self):
 		for _ in range(4):
@@ -779,10 +783,12 @@ class ConsoleExtensionTests(TestCase):
 			pass
 
 		ready = Event()
+		worker_broker = factory()
 
-		def prepare(worker):
-			worker.broker.declare(Live.parameters)
-			ready.set()
+		class Prepare(WorkerSetup):
+			def __call__(self, worker: Worker) -> None:
+				worker_broker.declare(Live.parameters)
+				ready.set()
 
 		extension = Console(
 			'/console',
@@ -794,9 +800,9 @@ class ConsoleExtensionTests(TestCase):
 			exts=(extension,),
 		)
 		worker = Worker(
-			factory(),
+			worker_broker,
 			ThreadPool(2),
-			setups=prepare,
+			setups=Prepare(),
 			inspector=inspector,
 		)
 		worker.add(Live)

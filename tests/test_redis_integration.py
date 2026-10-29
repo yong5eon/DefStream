@@ -25,6 +25,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
+from tests._support import require_value
 
 
 class RedisRunner(
@@ -117,8 +118,7 @@ class RedisIntegrationTests(TestCase):
 			],
 		}
 		id = queue.send(body)
-		event = queue.pop(timeout=200)
-		self.assertIsNotNone(event)
+		event = require_value(queue.pop(timeout=200))
 		self.assertEqual(
 			event.id,
 			id,
@@ -129,7 +129,7 @@ class RedisIntegrationTests(TestCase):
 		)
 		event.nack()
 		event.nack()
-		retry = queue.pop(timeout=200)
+		retry = require_value(queue.pop(timeout=200))
 		self.assertNotEqual(
 			retry.id,
 			id,

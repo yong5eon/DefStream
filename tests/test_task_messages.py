@@ -41,6 +41,10 @@ from DefStream.Worker import (
 	request,
 )
 from DefStream.Worker import __all__ as worker_exports
+from tests._support import (
+	call_with_invalid_input,
+	require_value,
+)
 
 
 class Task(
@@ -162,7 +166,8 @@ class MessageTests(TestCase):
 			),
 		):
 			with self.subTest(helper=helper, arguments=arguments), self.assertRaises(NotImplementedError):
-				helper(
+				call_with_invalid_input(
+					helper,
 					task=Task,
 					broker=broker,
 					**arguments,
@@ -285,7 +290,8 @@ class MessageTests(TestCase):
 			{1: 'invalid'},
 		):
 			with self.subTest(body=body), self.assertRaises(TypeError):
-				emit(
+				call_with_invalid_input(
+					emit,
 					body,
 					task=Task,
 					broker=Mock(),
@@ -296,7 +302,8 @@ class MessageTests(TestCase):
 			object,
 		):
 			with self.subTest(task=task), self.assertRaises(TypeError):
-				emit(
+				call_with_invalid_input(
+					emit,
 					{},
 					task=task,
 					broker=Mock(),
@@ -311,7 +318,8 @@ class MessageTests(TestCase):
 				broker=RedisConnection(RedisConfiguration()),
 			)
 		with self.assertRaises(NotImplementedError):
-			declare(
+			call_with_invalid_input(
+				declare,
 				task=Task,
 				broker=object(),
 			)
@@ -632,7 +640,8 @@ class RabbitMessageTests(TestCase):
 					task=Task,
 					broker=connection,
 				)
-			channel = connection.connection.channel()
+			transport = require_value(connection.connection)
+			channel = transport.channel()
 			self.assertEqual(
 				channel.queue_declare(
 					name,
@@ -687,7 +696,7 @@ class RabbitMessageTests(TestCase):
 				).method.message_count,
 				1,
 			)
-			self.assertTrue(connection.connection.is_open)
+			self.assertTrue(transport.is_open)
 		finally:
 			worker.stop()
 			if thread.ident is not None:

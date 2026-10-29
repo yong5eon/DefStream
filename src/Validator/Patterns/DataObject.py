@@ -5,7 +5,13 @@ from ..Validator import Validator
 
 from dataclasses import is_dataclass
 
-from typing import Dict, Union, Sequence
+from typing import (
+	Dict,
+	Mapping,
+	Optional,
+	Sequence,
+	Union,
+)
 
 __all__ = (
 	'IsRequiredIn',
@@ -43,8 +49,8 @@ class IsRequiredIn(Pattern):
 class IsMappingOf(Pattern):
 	def __init__(
 		self, 
-		mappings: Dict[str, Union[Validator, Pattern, Sequence[Pattern]]] = {}, 
-		error: BaseException = None
+		mappings: Mapping[str, Union[Validator, Pattern, Sequence[Pattern]]] = {},
+		error: Optional[BaseException] = None,
 	):
 		self.mappings = self.__mapper__(mappings)
 		self.error = error
@@ -60,21 +66,23 @@ class IsMappingOf(Pattern):
 				setattr(parameter, key, validator(getattr(parameter, key) if hasattr(parameter, key) else None))
 		return parameter
 
-	def __mapper__(self, mappings: Dict[str, Validator]) -> Dict[str, Validator]:
-		if not isinstance(mappings, dict):
-			raise TypeError('{} must be dict'.format(mappings))
+	def __mapper__(
+		self,
+		mappings: Mapping[str, Union[Validator, Pattern, Sequence[Pattern]]],
+	) -> Dict[str, Validator]:
+		mapped: Dict[str, Validator] = {}
 		for key, value in mappings.items():
 			if isinstance(value, Sequence):
-				mappings[key] = Validator(*value)
+				mapped[key] = Validator(*value)
 				continue
 			if isinstance(value, Pattern):
-				mappings[key] = Validator(value)
+				mapped[key] = Validator(value)
 				continue
 			if isinstance(value, Validator):
-				mappings[key] = value
+				mapped[key] = value
 				continue
 			raise ValueError('Invalid mapping table, {} must be dictionary or listable of Patterns, or callable based Pattern'.format(value))
-		return mappings
+		return mapped
 
 	def __repr__(self) -> str:
 		return '{}({})'.format(

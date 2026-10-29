@@ -1,6 +1,6 @@
 from typing import (
 	Any,
-	Iterable,
+	Generator,
 	Optional,
 	Protocol,
 )
@@ -42,4 +42,4 @@ class Readable(Protocol):
 		self,
 		offset: int = 0,
 		timeout: Optional[int] = None,
-	) -> Iterable[Event]: ...
+	) -> Generator[Event, None, None]: ...

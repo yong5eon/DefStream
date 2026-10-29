@@ -81,12 +81,13 @@ class RabbitMQIntegrationTests(TestCase):
 					self.addCleanup(setattr, RejectIntegrationRunner, 'parameters', RejectIntegrationRunner.parameters)
 					IntegrationRunner.parameters = Subscription(queue)
 					RejectIntegrationRunner.parameters = Subscription(rejected)
-					worker = Worker(
+					active_worker = Worker(
 						Connection(Configuration('127.0.0.1', 5672, 'guest', 'guest')),
 						pool_cls(2),
 					)
-					worker.add(IntegrationRunner)
-					worker.add(RejectIntegrationRunner)
+					worker = active_worker
+					active_worker.add(IntegrationRunner)
+					active_worker.add(RejectIntegrationRunner)
 					path = str(Path(directory) / 'result')
 					for target, payload in (
 						(queue, {'path': path, 'retry': True}),
@@ -101,7 +102,7 @@ class RabbitMQIntegrationTests(TestCase):
 
 					def run():
 						try:
-							worker.run()
+							active_worker.run()
 						except Exception as error:
 							errors.append(error)
 
@@ -119,7 +120,7 @@ class RabbitMQIntegrationTests(TestCase):
 							if errors:
 								break
 							sleep(0.01)
-						worker.stop()
+						active_worker.stop()
 						thread.join(15)
 					self.assertFalse(thread.is_alive(), 'Worker did not shut down')
 					self.assertEqual(errors, [])
@@ -131,7 +132,7 @@ class RabbitMQIntegrationTests(TestCase):
 						self.assertEqual(state.message_count, 0)
 						self.assertEqual(state.consumer_count, 0)
 				finally:
-					if thread is not None and thread.is_alive():
+					if worker is not None and thread is not None and thread.is_alive():
 						worker.stop()
 						thread.join(15)
 					for name in reversed(created):

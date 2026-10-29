@@ -17,7 +17,7 @@ from .Event import (
 )
 
 __all__ = (
-	'Consumer'
+	'Consumer',
 )
 
 

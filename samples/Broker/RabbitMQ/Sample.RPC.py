@@ -59,6 +59,9 @@ def serve(
 	broker = Connection(configuration)
 	try:
 		broker.connect()
+		connection = broker.connection
+		if connection is None:
+			raise RuntimeError('RabbitMQ connection is not initialized')
 		consumer = broker.consumer()
 		try:
 			consumer.subs(
@@ -71,13 +74,13 @@ def serve(
 				if stopping.is_set():
 					consumer.stop()
 				else:
-					broker.connection.call_later(
+					connection.call_later(
 						0.1,
 						check_stop,
 					)
 				return
 
-			broker.connection.call_later(
+			connection.call_later(
 				0.1,
 				check_stop,
 			)

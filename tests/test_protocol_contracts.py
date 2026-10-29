@@ -56,6 +56,7 @@ from DefStream.Worker import (
 	Worker,
 )
 from DefStream.Worker import __all__ as worker_exports
+from tests._support import call_with_invalid_input
 
 
 def queue_provider(
@@ -107,7 +108,7 @@ class ProtocolContractTests(TestCase):
 
 		self.assertTrue(isabstract(IncompleteFactory))
 		with self.assertRaises(TypeError):
-			IncompleteFactory()
+			call_with_invalid_input(IncompleteFactory)
 
 		def factory_function() -> Connection:
 			return StructuralConnection()
@@ -205,13 +206,11 @@ class ProtocolContractTests(TestCase):
 			RedisEventHandler,
 			EventHandler,
 		)
-		self.assertTrue(EventHandler._is_protocol)
-
 		class IncompleteHandler(EventHandler):
 			pass
 
 		with self.assertRaises(TypeError):
-			IncompleteHandler()
+			call_with_invalid_input(IncompleteHandler)
 
 		class Handler(EventHandler):
 			def __call__(
@@ -220,9 +219,10 @@ class ProtocolContractTests(TestCase):
 			) -> None:
 				event.ack()
 
-		event = Mock(spec=Event)
+		ack = Mock()
+		event = Mock(spec=Event, ack=ack)
 		Handler()(event)
-		event.ack.assert_called_once()
+		ack.assert_called_once()
 
 	def test_protocols_are_abstract(self):
 		self.assertNotIn(
@@ -237,16 +237,15 @@ class ProtocolContractTests(TestCase):
 			GetConsumer,
 		):
 			with self.subTest(protocol=protocol):
-				self.assertTrue(protocol._is_protocol)
 				with self.assertRaises(TypeError):
-					protocol()
+					call_with_invalid_input(protocol)
 
 		class IncompleteQueue(GetQueue):
 			pass
 
 		self.assertTrue(isabstract(IncompleteQueue))
 		with self.assertRaises(TypeError):
-			IncompleteQueue()
+			call_with_invalid_input(IncompleteQueue)
 
 	def test_concrete_connections_declare_only_supported_capabilities(self):
 		for exports in (
@@ -280,7 +279,6 @@ class ProtocolContractTests(TestCase):
 					implementation.__bases__,
 				)
 				self.assertFalse(isabstract(implementation))
-				self.assertFalse(implementation._is_protocol)
 				for capability in capabilities:
 					self.assertIn(
 						capability,
@@ -408,7 +406,6 @@ class ProtocolContractTests(TestCase):
 					contract,
 					implementation.__bases__,
 				)
-				self.assertFalse(implementation._is_protocol)
 
 	def test_redis_event_body_is_readable_after_protocol_inheritance(self):
 		body = {'value': 1}

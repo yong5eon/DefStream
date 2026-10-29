@@ -31,6 +31,7 @@ from DefStream.Broker.Implements.Redis.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
+from tests._support import require_value
 
 
 class RedisLoggingTests(TestCase):
@@ -335,9 +336,9 @@ class RedisLoggingTests(TestCase):
 		)
 		filters = []
 		for index, path in enumerate(sample_paths):
-			spec = spec_from_file_location('redis_sample_{}'.format(index), path)
+			spec = require_value(spec_from_file_location('redis_sample_{}'.format(index), path))
 			module = module_from_spec(spec)
-			spec.loader.exec_module(module)
+			require_value(spec.loader).exec_module(module)
 			filters.append(module.SampleLogFilter())
 		self.assertEqual(root_logger.level, root_level)
 		self.assertEqual(tuple(root_logger.handlers), root_handlers)

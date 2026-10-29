@@ -42,8 +42,11 @@ class StartupTests(TestCase):
 
 		pool = Mock()
 		pool.size.return_value = 4
+		broker = Mock(consumer=Mock())
+		self.broker = broker
+		self.pool = pool
 		worker = Worker(
-			Mock(consumer=Mock()),
+			broker,
 			pool,
 		)
 		worker.add(Task)
@@ -138,9 +141,9 @@ class StartupTests(TestCase):
 			self.assertTrue(worker.running.is_set())
 			observed.append('consuming')
 
-		worker.broker.connect.side_effect = check_startup
+		self.broker.connect.side_effect = check_startup
 		worker.setups = (lambda current: check_startup(),)
-		consumer = worker.broker.consumer.return_value
+		consumer = self.broker.consumer.return_value
 		consumer.subs.side_effect = lambda *args: check_startup()
 		consumer.run.side_effect = check_consumption
 		with redirect_stdout(stream):
@@ -172,8 +175,8 @@ class StartupTests(TestCase):
 		):
 			with self.subTest(stage=stage):
 				worker = self.worker('jobs')
-				consumer = worker.broker.consumer.return_value
-				action = worker.broker.connect if stage == 'connect' else consumer.subs
+				consumer = self.broker.consumer.return_value
+				action = self.broker.connect if stage == 'connect' else consumer.subs
 				action.side_effect = RuntimeError('preparation failed')
 				stream = StringIO()
 				with redirect_stdout(stream), self.assertRaisesRegex(
@@ -186,8 +189,8 @@ class StartupTests(TestCase):
 					stream.getvalue(),
 				)
 				consumer.run.assert_not_called()
-				worker.pool.stop.assert_called_once_with()
-				worker.broker.close.assert_called_once_with()
+				self.pool.stop.assert_called_once_with()
+				self.broker.close.assert_called_once_with()
 
 	def test_stopped_worker_prints_banner_but_does_not_consume(self):
 		worker = self.worker('jobs')
@@ -199,7 +202,7 @@ class StartupTests(TestCase):
 			'Starting Worker',
 			stream.getvalue(),
 		)
-		worker.broker.consumer.return_value.run.assert_not_called()
+		self.broker.consumer.return_value.run.assert_not_called()
 
 	def test_custom_subscription_is_not_dumped_or_rejected_by_banner(self):
 		worker = self.worker(object())
@@ -210,7 +213,7 @@ class StartupTests(TestCase):
 			'queue=<adapter-defined>',
 			stream.getvalue(),
 		)
-		worker.broker.consumer.return_value.run.assert_called_once_with()
+		self.broker.consumer.return_value.run.assert_called_once_with()
 
 	def test_all_tasks_are_listed_and_known_queues_are_deduplicated(self):
 		worker = self.worker('jobs')
@@ -366,7 +369,7 @@ class StartupTests(TestCase):
 				)
 				worker = self.worker('jobs')
 				worker.broker = RabbitConnection(conf)
-				conf.vhost = vhost
+				setattr(conf, 'vhost', vhost)
 				stream = StringIO()
 				with redirect_stdout(stream):
 					startup(worker)
@@ -377,7 +380,11 @@ class StartupTests(TestCase):
 
 	def test_custom_broker_without_configuration_uses_qualname(self):
 		class Broker:
-			pass
+			def connect(self) -> None:
+				return
+
+			def close(self) -> None:
+				return
 
 		worker = self.worker('jobs')
 		worker.broker = Broker()

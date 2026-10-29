@@ -12,6 +12,8 @@ from typing import (
 	Sequence,
 	TYPE_CHECKING,
 	Tuple,
+	IO,
+	cast,
 )
 from wsgiref.simple_server import (
 	WSGIRequestHandler,
@@ -63,6 +65,8 @@ class Server(
 
 
 class InspectorServerHandler(ServerHandler):
+	request_handler: 'RequestHandler'
+
 	def log_exception(
 		self,
 		exc_info,
@@ -104,13 +108,16 @@ class RequestHandler(WSGIRequestHandler):
 		)
 		handler = InspectorServerHandler(
 			self.rfile,
-			self.wfile,
+			cast(IO[bytes], self.wfile),
 			self.get_stderr(),
 			self.get_environ(),
 			multithread=True,
 		)
 		handler.request_handler = self
-		handler.run(self.server.get_app())
+		application = cast(WSGIServer, self.server).get_app()
+		if application is None:
+			raise RuntimeError('Inspector WSGI application is not initialized')
+		handler.run(application)
 
 	def log_request(
 		self,

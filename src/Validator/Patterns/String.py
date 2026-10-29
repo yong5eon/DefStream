@@ -3,6 +3,7 @@
 from ..Pattern import Pattern
 
 from operator import eq
+from typing import Optional
 
 __all__ = (
 	'IsAlphabet',
@@ -70,7 +71,13 @@ class ToLower(Pattern):
 
 
 class IsSubString(Pattern):
-	def __init__(self, match: str, end: int = None, start: int = 0, error=None):
+	def __init__(
+		self,
+		match: str,
+		end: Optional[int] = None,
+		start: int = 0,
+		error=None,
+	):
 		self.error = error
 		self.match = match
 		self.start = start

@@ -13,6 +13,7 @@ from DefStream.Broker.Implements.RabbitMQ import (
 	Reject,
 	Subscription,
 )
+from tests._support import call_with_invalid_input
 
 
 class SubscriptionTests(TestCase):
@@ -49,7 +50,8 @@ class SubscriptionTests(TestCase):
 			1,
 		):
 			with self.subTest(value=value), self.assertRaises(ValueError):
-				Subscription(
+				call_with_invalid_input(
+					Subscription,
 					'queue',
 					error=value,
 				)
@@ -171,7 +173,8 @@ class SubscriptionTests(TestCase):
 			'10',
 		):
 			with self.subTest(value=value), self.assertRaises(ValueError):
-				Subscription(
+				call_with_invalid_input(
+					Subscription,
 					queue='queue',
 					qos=value,
 				)

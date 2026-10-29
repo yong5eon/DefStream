@@ -331,6 +331,8 @@ class Consumer(BaseConsumer):
 					)
 					raise
 				for _, entries in messages:
+					if not isinstance(entries, list):
+						raise TypeError('Redis Stream read returned invalid entries')
 					self.deliver(
 						stream,
 						handler,
