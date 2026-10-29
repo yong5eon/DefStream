@@ -9,12 +9,18 @@
 - 작업 대상: `yong5eon/DefStream`, 작업 브랜치 `feature/46`
 - 분기 기준: 깨끗한 로컬 `master`의 `85174f0`
 - 병합 대상: `master`
-- 로컬 진행 상태: 이슈 기록 작성, 구현 전
+- 로컬 진행 상태: Worker 내부 실행기·연결 복구 방식 확정 및 요구사항 반영, 구현 전
 - 댓글: 없음
 
 ## 관련 이슈
 
 - [#47 Subscription 작업별 consumer timeout 지원](https://github.com/yong5eon/DefStream/issues/47): ACK timeout 자체를 다루는 별도 이슈
+
+## 작업 문서
+
+- [요구사항 명세](./REQUIREMENTS.md)
+- [작업 종합](./TASKS.md)
+- [최신 작업 기록](./tasks/1793274121654.md)
 
 ## 이슈 원문
 
