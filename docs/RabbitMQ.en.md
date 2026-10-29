@@ -325,7 +325,9 @@ print(result)
 
 - `timeout` is in **seconds**. Missing replies raise `TimeoutError`.
   This does not cancel delivered work or strictly bound total connection and cleanup time.
-- Each call owns a dedicated connection and temporary reply queue, cleaned up on exit.
+- Queue-based RPC uses a dedicated connection and creates a temporary reply queue named
+  `{request queue}.{uuid4().hex}`, which is cleaned up on exit. Exchange RPC reply queue
+  names are not affected by this rule.
 - Server rejection raises `DefStream.Broker.RemoteError`.
   Requeue can retry without sending a final error response.
 - Reply publication and request ACK are not atomic. Handle duplicate execution with RPC too.
