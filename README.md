@@ -24,6 +24,8 @@ python -m pip install "DefStream[Redis]"
 ```
 
 두 어댑터가 모두 필요하면 `python -m pip install "DefStream[RabbitMQ,Redis]"`를 사용하세요. 브로커 클라이언트 없이 코어만 설치하려면 `python -m pip install DefStream`을 사용합니다.
+기본 설치에는 브로커 구현체 코드도 포함되지 않습니다. 각 extra는 동일 버전의 별도 구현체 패키지와 클라이언트를 설치합니다.
+기존 통합 배포에서의 전환과 editable 설치는 [설치 격리와 개발·배포](./docs/Packaging.md)를 참고하세요.
 
 ## 빠르게 시작하기
 

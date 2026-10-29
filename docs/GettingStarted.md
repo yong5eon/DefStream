@@ -20,8 +20,9 @@ python -m pip install "DefStream[RabbitMQ,Redis]"
 ```
 
 코어만 필요하면 `python -m pip install DefStream`을 사용합니다.
-두 브로커 구현체는 모두 DefStream 배포본에 포함되지만, 기본 설치에는 브로커 클라이언트가 포함되지 않습니다.
-`RabbitMQ` extra는 `pika>=1.3.2`, `Redis` extra는 `redis>=5.1.1`을 설치합니다.
+기본 설치에는 브로커 구현체와 클라이언트가 모두 포함되지 않습니다.
+`RabbitMQ` extra는 동일 버전 `DefStream-RabbitMQ`와 `pika>=1.3.2`를,
+`Redis` extra는 동일 버전 `DefStream-Redis`와 `redis>=5.1.1`을 설치합니다.
 
 | 선택 설치 | Python import 경로 | 사용 안내 |
 | --- | --- | --- |
@@ -29,13 +30,9 @@ python -m pip install "DefStream[RabbitMQ,Redis]"
 | `DefStream[RabbitMQ]` | `DefStream.Broker.Implements.RabbitMQ` | [RabbitMQ 사용 방법](./RabbitMQ.md#rabbitmq-사용-방법) |
 | `DefStream[Redis]` | `DefStream.Broker.Implements.Redis` | [Redis 사용 방법](./Redis.md#redis-사용-방법) |
 
-기존 `DefStream-RabbitMQ`와 `DefStream-Redis` 패키지의 별도 배포는 종료하며,
-기존 프로젝트는 삭제 예정입니다. 기존 패키지와의 하위 호환성은 지원하지 않습니다.
-새 환경에 위 명령으로 통합 패키지를 설치하세요. 기존 환경을 전환한다면 먼저
-`python -m pip uninstall DefStream-RabbitMQ DefStream-Redis`로 별도 어댑터를 제거한 후
-통합된 DefStream을 다시 설치하세요. 같은 import 경로의 파일을 제공하므로 함께 설치하지 마세요.
-기존 환경에서 재설치할 때는 `python -m pip install --force-reinstall "DefStream[RabbitMQ,Redis]"`를
-사용하고, 실제 사용하는 브로커에 맞게 extra를 선택하세요.
+코어와 구현체는 같은 저장소에서 함께 빌드·버전 관리하지만 별도 배포물로 설치됩니다.
+기존 통합 버전이나 과거 별도 어댑터를 전환할 때는 먼저 기존 패키지를 제거하여 파일 소유권 충돌을 피하세요.
+절차와 editable 개발 설치는 [설치 격리와 개발·배포](./Packaging.md)를 참고하세요.
 
 
 ## 빠르게 시작하기

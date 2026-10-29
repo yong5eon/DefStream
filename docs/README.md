@@ -29,6 +29,7 @@ Producer가 발행한 메시지는 브로커를 거쳐 Worker의 Consumer로 전
 
 ## 매뉴얼 찾아보기
 
+- [설치 격리와 개발·배포](./Packaging.md): 선택 구현체 파일 분리, 기존 환경 전환, editable 설치와 다중 배포 빌드
 - [설치와 빠른 시작](./GettingStarted.md): 설치 방식, 브로커 전제 조건, 첫 Worker 실행
 - [작업 처리와 실행](./Tasks.md): 작업 API, 성공·실패 정책과 실행 풀
 - [생명주기 훅](./LifecycleHooks.md): Worker·풀·작업 훅의 실행 순서와 자원 관리

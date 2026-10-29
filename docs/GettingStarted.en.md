@@ -20,9 +20,9 @@ python -m pip install "DefStream[RabbitMQ,Redis]"
 ```
 
 For the core alone, use `python -m pip install DefStream`.
-Both broker implementations are included in the DefStream distribution, but the default
-installation has no broker client dependencies. The `RabbitMQ` extra installs `pika>=1.3.2`;
-the `Redis` extra installs `redis>=5.1.1`.
+The base installation excludes both broker implementations and clients.
+The `RabbitMQ` extra installs the same-version `DefStream-RabbitMQ` and `pika>=1.3.2`;
+the `Redis` extra installs the same-version `DefStream-Redis` and `redis>=5.1.1`.
 
 | Installation choice | Python import path | Guide |
 | --- | --- | --- |
@@ -30,15 +30,9 @@ the `Redis` extra installs `redis>=5.1.1`.
 | `DefStream[RabbitMQ]` | `DefStream.Broker.Implements.RabbitMQ` | [RabbitMQ usage](./RabbitMQ.en.md#rabbitmq-usage) |
 | `DefStream[Redis]` | `DefStream.Broker.Implements.Redis` | [Redis usage](./Redis.en.md#redis-usage) |
 
-Separate releases of `DefStream-RabbitMQ` and `DefStream-Redis` are discontinued,
-and their projects are scheduled for deletion. Backward compatibility with those
-packages is not supported. Install the merged package in a new environment using
-the commands above. To migrate an existing environment, first run
-`python -m pip uninstall DefStream-RabbitMQ DefStream-Redis`, then reinstall the
-merged DefStream. Do not install them together: they provide files at the same import paths.
-For an existing environment, use
-`python -m pip install --force-reinstall "DefStream[RabbitMQ,Redis]"`,
-selecting extras for the brokers you actually use.
+The core and implementations share one repository and version but install as separate distributions.
+Uninstall an older integrated version or historical standalone adapters before migrating to avoid overlapping file ownership.
+See [installation isolation, development and distribution](./Packaging.en.md) for migration and editable development.
 
 
 ## Quick start
