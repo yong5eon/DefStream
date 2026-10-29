@@ -66,13 +66,14 @@ Cluster는 Redis Cluster를 사용하며 `database=0`이어야 합니다.
 ### 로깅
 
 `Connection`, `Consumer`, `Queue`, `Event`는 각각
-`DefStream.Broker.Implements.Redis.<클래스명>` 로거를 사용하며 상위
-`DefStream` 로거와 루트 로거로 전파합니다. 라이브러리는 핸들러나 로그 수준을
+`Broker.Redis.<클래스명>` 로거를 사용하며 상위 `Broker` 로거와 루트 로거로
+전파합니다. 기존 `DefStream.Broker.Implements.Redis` 이름으로 설정한 필터나
+핸들러는 `Broker.Redis`로 갱신하세요. 라이브러리는 핸들러나 로그 수준을
 설정하지 않으므로 애플리케이션에서 필요한 출력 대상과 필터를 구성하세요.
 기록에는 메시지 본문과 인증 정보가 포함되지 않으며, 오류 로그 후에도 기존
 예외는 호출자에게 전파됩니다. 호출자가 같은 실패를 다시 기록할 수 있으므로
 traceback은 담당 경계 한 곳에서만 남기세요. 예제는 실행 진입점에서만 `Sample`
-및 Redis 로거 계층을 DEBUG로 출력하도록 설정합니다.
+및 `Broker.Redis` 로거 계층을 DEBUG로 출력하도록 설정합니다.
 
 ### 소비자 그룹과 이력
 
@@ -109,8 +110,12 @@ for event in connection.stream('defstream.example.redis').read(
 ```python
 from signal import SIGINT, signal
 
-from DefStream.Broker.Policies import Reject
-from DefStream.Broker.Implements.Redis import Configuration, Connection, Subscription
+from DefStream.Broker.Implements.Redis import (
+  Configuration,
+  Connection,
+  Reject,
+  Subscription,
+)
 from DefStream.Worker import Run, ThreadPool, Worker, WorkerSetup, declare
 
 

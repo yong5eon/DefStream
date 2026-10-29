@@ -92,14 +92,19 @@ For a class-based factory, you can inherit `BrokerFactory` and implement `__call
 
 DefStream records messages through standard `logging` without configuring handlers,
 formatters, or levels. Select the sources your application needs. The samples
-output only the `Sample` and `DefStream` logger hierarchies, replacing their
+output only the `Sample`, `Worker`, `Task`, and `Broker` logger hierarchies, replacing their
 `print()` calls with logging. The Worker's existing startup banner is still
 printed regardless of logging configuration.
 
 ```python
 from logging import DEBUG, Filter, Formatter, StreamHandler, getLogger
 
-sources = (Filter('Sample'), Filter('DefStream'))
+sources = (
+  Filter('Sample'),
+  Filter('Worker'),
+  Filter('Task'),
+  Filter('Broker'),
+)
 handler = StreamHandler()
 handler.setFormatter(Formatter(
   '%(asctime)s %(processName)s %(name)s %(levelname)s %(message)s'
@@ -113,24 +118,28 @@ logger = getLogger('Sample')
 logger.info('Application started')
 ```
 
-Apply filters to the **handler**, not the root logger. `Filter('DefStream')`
-includes `DefStream` and names below `DefStream.`, but not `DefStreamExtra`.
+Apply filters to the **handler**, not the root logger. `Filter('Worker')`
+includes `Worker` and names below `Worker.`, but not `WorkerExtra`.
+Broker loggers use the separate `Broker` hierarchy and are not included by a
+`Worker` filter.
 This configuration is an example for a standalone application; it does not change
 output from other handlers already installed. To receive only broker logs, select
-`DefStream.Broker.RabbitMQ` or `DefStream.Broker.Implements.Redis`
-instead of `DefStream`.
+`Broker.RabbitMQ` or `Broker.Redis`.
 
-- The class member `logger` uses `DefStream.Worker`, `DefStream.Run`,
-  `DefStream.Executor`, `DefStream.Pool`, `DefStream.ThreadPool`, and
-  `DefStream.ProcessPool`.
+- The `Worker` and `Run` loggers use `Worker` and `Task`, respectively.
+  `Executor`, `Pool`, `ThreadPool`, and `ProcessPool` use the `Worker` hierarchy.
 - Shared Pool methods also use the concrete pool's logger member. User subclasses
   inherit the default name and can explicitly override `logger`.
-- Inspector, Server, and RequestHandler share `DefStream.Inspector`.
+- Inspector, Server, and RequestHandler share `Worker.Inspector`.
   HTTP request receipt is DEBUG; response status and transmission results are INFO.
-  Extension-specific logs use `DefStream.Inspector.Extensions.<extension name>`.
+  Extension-specific logs use `Worker.Inspector.<extension name>`.
 - Normal per-message processing is DEBUG, lifecycle events are INFO, events
   requiring attention are WARNING, and processing failures are ERROR.
   Bodies, results, and credentials are excluded from the default log context.
+- RabbitMQ and Redis broker loggers use the `Broker.RabbitMQ` and `Broker.Redis`
+  hierarchies. Update filters and handlers that use the former `DefStream.Broker...` names.
+- Worker logs use the `Worker` and `Task` hierarchies, while Inspector logs use
+  `Worker.Inspector`. Update filters and handlers configured with former `DefStream.*` names.
 - Without any handlers, Python's `lastResort` may write WARNING and higher to
   stderr. Do not put sensitive values in user exception messages: failure
   tracebacks include those messages.

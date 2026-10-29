@@ -121,8 +121,8 @@ result = request(
 ### Success, failures, and retries
 
 - ACK follows successful execution and completion hooks. RabbitMQ RPC also publishes the reply before ACK.
-- Failures use the task's `on_error` policy. The default is `Requeue()`; choose `Reject()` explicitly if needed.
-- Both policies can be imported from `DefStream.Broker.Policies`.
+- Failures use the task's `on_error` policy. If omitted, the broker's default behavior applies; choose a policy provided by that broker, such as `Reject()`, when needed.
+- `Policy` is the shared broker contract. Import `Requeue` and `Reject` from the selected broker package; behavior can differ by broker.
 - Rejection is broker-specific: RabbitMQ dead-letters to a configured DLQ or discards the message;
   Redis acknowledges it for the group while preserving stream history.
 - There is no automatic retry-count limit. Choose a policy that avoids endless redelivery of permanently invalid messages.

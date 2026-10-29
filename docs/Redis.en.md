@@ -67,14 +67,16 @@ Read production credentials from environment variables or a secret store.
 ### Logging
 
 `Connection`, `Consumer`, `Queue`, and `Event` each use a class-level logger named
-`DefStream.Broker.Implements.Redis.<ClassName>`. Records propagate to the parent
-`DefStream` logger and the root logger. The library does not configure handlers
-or logging levels; configure output destinations and filters in your application.
+`Broker.Redis.<ClassName>`. Records propagate to the parent `Broker` logger and
+the root logger. Update filters or handlers configured for the former
+`DefStream.Broker.Implements.Redis` names to use `Broker.Redis`. The library does
+not configure handlers or logging levels; configure output destinations and filters
+in your application.
 Records exclude message bodies and credentials, and existing exceptions still
 propagate to callers after an error is logged. Since callers may log the same
 failure again, keep traceback logging at the boundary responsible for that failure.
 The examples configure output only at their execution entry points, selecting
-the `Sample` and Redis logger hierarchies at DEBUG level.
+the `Sample` and `Broker.Redis` logger hierarchies at DEBUG level.
 
 ### Consumer groups and history
 
@@ -111,8 +113,12 @@ This executable example prepares a task stream and group, then consumes tasks.
 ```python
 from signal import SIGINT, signal
 
-from DefStream.Broker.Policies import Reject
-from DefStream.Broker.Implements.Redis import Configuration, Connection, Subscription
+from DefStream.Broker.Implements.Redis import (
+  Configuration,
+  Connection,
+  Reject,
+  Subscription,
+)
 from DefStream.Worker import Run, ThreadPool, Worker, WorkerSetup, declare
 
 

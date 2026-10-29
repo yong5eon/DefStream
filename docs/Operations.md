@@ -89,14 +89,19 @@ Console의 `broker` 인자는 `DefStream.Broker.BrokerFactory` 계약을 사용�
 ## 로깅
 
 DefStream은 표준 `logging`으로 기록하며 핸들러·포매터·레벨을 설정하지 않습니다.
-애플리케이션에서 필요한 출처만 선택해 출력하세요. 샘플은 `Sample`과 `DefStream`
-이름 및 그 하위 로거만 출력하며, 샘플의 `print()`는 로그로 대체했습니다.
+애플리케이션에서 필요한 출처만 선택해 출력하세요. 샘플은 `Sample`, `Worker`, `Task`,
+`Broker` 이름 및 그 하위 로거만 출력하며, 샘플의 `print()`는 로그로 대체했습니다.
 Worker의 기존 시작 배너는 로깅 설정과 무관하게 그대로 출력됩니다.
 
 ```python
 from logging import DEBUG, Filter, Formatter, StreamHandler, getLogger
 
-sources = (Filter('Sample'), Filter('DefStream'))
+sources = (
+  Filter('Sample'),
+  Filter('Worker'),
+  Filter('Task'),
+  Filter('Broker'),
+)
 handler = StreamHandler()
 handler.setFormatter(Formatter(
   '%(asctime)s %(processName)s %(name)s %(levelname)s %(message)s'
@@ -110,21 +115,25 @@ logger = getLogger('Sample')
 logger.info('Application started')
 ```
 
-필터는 루트 로거가 아닌 **핸들러**에 적용합니다. `Filter('DefStream')`은
-`DefStream`과 `DefStream.` 하위 이름을 포함하지만 `DefStreamExtra`는 포함하지 않습니다.
+필터는 루트 로거가 아닌 **핸들러**에 적용합니다. `Filter('Worker')`는
+`Worker`와 `Worker.` 하위 이름을 포함하지만 `WorkerExtra`는 포함하지 않습니다.
+브로커 로그는 `Broker` 계층을 사용하므로 `Worker` 필터에 포함되지 않습니다.
 위 설정은 독립 실행 애플리케이션을 위한 예제이며, 이미 있는 다른 핸들러의 출력은 바꾸지 않습니다.
-브로커만 보고 싶으면 `DefStream` 대신 `DefStream.Broker.RabbitMQ` 또는
-`DefStream.Broker.Implements.Redis`를 선택할 수 있습니다.
+브로커만 보고 싶으면 `Broker.RabbitMQ` 또는 `Broker.Redis`를 선택할 수 있습니다.
 
-- 클래스 멤버 `logger`에 `DefStream.Worker`, `DefStream.Run`, `DefStream.Executor`,
-  `DefStream.Pool`, `DefStream.ThreadPool`, `DefStream.ProcessPool`을 사용합니다.
+- `Worker`와 `Run`의 `logger`는 각각 `Worker`와 `Task`를 사용합니다.
+  `Executor`, `Pool`, `ThreadPool`, `ProcessPool`의 로거는 `Worker` 계층을 사용합니다.
 - Pool 공통 메서드도 실제 풀의 로거 멤버를 사용합니다. 사용자 하위 클래스는 기본 이름을
   상속하며 원하면 `logger`를 명시적으로 재정의할 수 있습니다.
-- Inspector·Server·RequestHandler는 `DefStream.Inspector`를 공유합니다.
+- Inspector·Server·RequestHandler는 `Worker.Inspector`를 공유합니다.
   HTTP 요청 수신은 DEBUG, 응답 상태와 전송 결과는 INFO입니다.
-  확장 고유 로그는 `DefStream.Inspector.Extensions.<확장 이름>`을 사용합니다.
+  확장 고유 로그는 `Worker.Inspector.<확장 이름>`을 사용합니다.
 - 정상 메시지별 처리 흐름은 DEBUG, 생명주기는 INFO, 주의할 사건은 WARNING,
   처리 실패는 ERROR로 기록합니다. 본문·결과·인증정보는 기본 로그에 포함하지 않습니다.
+- RabbitMQ와 Redis 브로커 로그는 각각 `Broker.RabbitMQ`와 `Broker.Redis` 이름 계층을
+  사용합니다. 기존 `DefStream.Broker...` 이름으로 구성한 필터·핸들러는 새 이름에 맞춰야 합니다.
+- Worker 로그는 `Worker` 및 `Task` 계층을, Inspector 로그는 `Worker.Inspector` 계층을
+  사용합니다. 기존 `DefStream.*` 이름에 의존한 필터·핸들러를 새 이름에 맞춰 갱신하세요.
 - 핸들러가 전혀 없으면 Python의 `lastResort`에 의해 WARNING 이상이 stderr에 나올 수 있습니다.
   사용자 예외 메시지에는 민감한 값을 넣지 마세요. 실패 traceback에 예외 메시지가 포함됩니다.
 
