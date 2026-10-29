@@ -175,7 +175,7 @@ class Queue(
 		try:
 			channel = connection.channel()
 			reply_queue = channel.queue_declare(
-				queue='',
+				queue=f'{self.queue}.{uuid4().hex}',
 				exclusive=True,
 				auto_delete=True,
 			).method.queue

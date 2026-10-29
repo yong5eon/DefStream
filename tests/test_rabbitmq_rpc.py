@@ -3,6 +3,7 @@ from json import (
 	dumps,
 	loads,
 )
+from typing import List
 from unittest import (
 	TestCase,
 	main,
@@ -310,6 +311,20 @@ class QueueClientTests(TestCase):
 		connect = self.connect
 		connection = connect.return_value
 		channel = connection.channel.return_value
+		reply_queues: List[str] = []
+
+		def declare_reply_queue(
+			*,
+			queue: str,
+			exclusive: bool,
+			auto_delete: bool,
+		) -> Mock:
+			declaration: Mock = Mock()
+			declaration.method.queue = queue if queue else 'amq.gen-test'
+			reply_queues.append(declaration.method.queue)
+			return declaration
+
+		channel.queue_declare.side_effect = declare_reply_queue
 
 		def respond(**kwargs):
 			callback = channel.basic_consume.call_args.kwargs['on_message_callback']
@@ -338,7 +353,28 @@ class QueueClientTests(TestCase):
 			7,
 		)
 		connection.close.assert_called_once_with()
-		self.assertTrue(channel.queue_declare.call_args.kwargs['exclusive'])
+		queue_declaration = channel.queue_declare.call_args.kwargs
+		if self.client_class is Queue:
+			self.assertRegex(
+				queue_declaration['queue'],
+				r'^requests\.[0-9a-f]{32}$',
+			)
+		else:
+			self.assertEqual(
+				queue_declaration['queue'],
+				'',
+			)
+		self.assertTrue(queue_declaration['exclusive'])
+		self.assertTrue(queue_declaration['auto_delete'])
+		properties = channel.basic_publish.call_args.kwargs['properties']
+		self.assertEqual(
+			channel.basic_consume.call_args.args[0],
+			reply_queues[0],
+		)
+		self.assertEqual(
+			properties.reply_to,
+			reply_queues[0],
+		)
 		self.assertTrue(channel.basic_publish.call_args.kwargs['mandatory'])
 
 	def test_timeout_closes_connection(self):
