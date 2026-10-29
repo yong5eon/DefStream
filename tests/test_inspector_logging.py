@@ -29,7 +29,7 @@ from DefStream.Inspector.Inspector import (
 	Server,
 )
 from DefStream.Inspector.Response import Response
-from tests._support import require_value
+from _support import require_value
 
 
 class Example(Extension):

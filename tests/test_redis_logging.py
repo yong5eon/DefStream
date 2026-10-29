@@ -31,7 +31,7 @@ from DefStream.Broker.Implements.Redis.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
-from tests._support import require_value
+from _support import require_value
 
 
 class RedisLoggingTests(TestCase):

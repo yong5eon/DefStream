@@ -36,7 +36,7 @@ from DefStream.Worker import (
 	Worker,
 	WorkerSetup,
 )
-from tests._support import (
+from _support import (
 	RejectPolicy,
 	require_value,
 )

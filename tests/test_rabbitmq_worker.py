@@ -13,7 +13,7 @@ from DefStream.Broker.Implements.RabbitMQ import (
 	Reject,
 	Subscription,
 )
-from tests._support import call_with_invalid_input
+from _support import call_with_invalid_input
 
 
 class SubscriptionTests(TestCase):

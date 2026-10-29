@@ -25,7 +25,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
-from tests._support import require_value
+from _support import require_value
 
 
 class RedisRunner(

@@ -65,7 +65,7 @@ from DefStream.Worker import (
 	WorkerSetup,
 	request,
 )
-from tests._support import (
+from _support import (
 	call_with_invalid_input,
 	require_instance,
 	require_value,

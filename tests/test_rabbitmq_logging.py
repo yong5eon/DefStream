@@ -48,7 +48,7 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
-from tests._support import require_value
+from _support import require_value
 
 
 NAMESPACE = 'Broker.RabbitMQ'

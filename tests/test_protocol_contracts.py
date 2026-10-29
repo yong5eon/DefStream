@@ -59,7 +59,7 @@ from DefStream.Worker import (
 	Worker,
 )
 from DefStream.Worker import __all__ as worker_exports
-from tests._support import call_with_invalid_input
+from _support import call_with_invalid_input
 
 
 def queue_provider(

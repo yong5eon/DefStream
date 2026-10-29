@@ -12,7 +12,7 @@ from unittest import (
 	main,
 )
 
-from tests._support import require_value
+from _support import require_value
 
 
 class BrokerPackagingTests(TestCase):

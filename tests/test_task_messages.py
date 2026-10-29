@@ -41,7 +41,7 @@ from DefStream.Worker import (
 	request,
 )
 from DefStream.Worker import __all__ as worker_exports
-from tests._support import (
+from _support import (
 	call_with_invalid_input,
 	require_value,
 )
