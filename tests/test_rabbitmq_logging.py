@@ -49,7 +49,7 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 )
 
 
-NAMESPACE = 'DefStream.Broker.RabbitMQ'
+NAMESPACE = 'Broker.RabbitMQ'
 PACKAGE = 'DefStream.Broker.Implements.RabbitMQ'
 PROJECT = Path(__file__).resolve().parents[1]
 SECRET = '비밀본문_인증정보_헤더'
@@ -124,8 +124,7 @@ class LoggingTests(TestCase):
 		for name in (
 			NAMESPACE + '.Event',
 			NAMESPACE,
-			'DefStream.Broker',
-			'DefStream',
+			'Broker',
 			'',
 		):
 			with self.subTest(name=name), self.assertLogs(name, level=DEBUG) as logs:
@@ -486,7 +485,7 @@ class LoggingTests(TestCase):
 						'SampleOther',
 						NAMESPACE + 'Other',
 						'pika',
-						'DefStream.Worker',
+						'Worker',
 					):
 						console.handle(getLogger(name).makeRecord(name, DEBUG, '', 1, name, (), None))
 					self.assertEqual(len(output.getvalue().splitlines()), 4)

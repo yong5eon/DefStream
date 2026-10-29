@@ -973,7 +973,7 @@ class SpecificationRPCTests(TestCase):
 				5,
 			)
 			with self.assertLogs(
-				'DefStream.Worker',
+				'Worker',
 				level='ERROR',
 			), self.assertRaises(RemoteError):
 				request(

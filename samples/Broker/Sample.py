@@ -33,7 +33,7 @@ def configure_logging() -> None:
 	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
 	sources = (
 		Filter('Sample'),
-		Filter('DefStream'),
+		Filter('Worker'),
 	)
 	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
 	root = getLogger()

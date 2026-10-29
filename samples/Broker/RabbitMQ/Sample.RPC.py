@@ -96,7 +96,7 @@ if __name__ == '__main__':
 	console = StreamHandler()
 	console.setLevel(DEBUG)
 	sample_filter = Filter('Sample')
-	rabbitmq_filter = Filter('DefStream.Broker.RabbitMQ')
+	rabbitmq_filter = Filter('Broker.RabbitMQ')
 	console.addFilter(lambda record: sample_filter.filter(record) or rabbitmq_filter.filter(record))
 	console.setFormatter(Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
 	root.addHandler(console)

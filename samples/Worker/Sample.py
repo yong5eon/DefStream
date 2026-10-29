@@ -215,7 +215,8 @@ class SetupLogger(WorkerSetup):
 		handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
 		sources = (
 			Filter('Sample'),
-			Filter('DefStream'),
+			Filter('Worker'),
+			Filter('Task'),
 		)
 		handler.addFilter(lambda record: any(source.filter(record) for source in sources))
 		root = getLogger()

@@ -281,7 +281,7 @@ class RedisIntegrationTests(TestCase):
 				})
 				try:
 					with self.assertLogs(
-						'DefStream.Worker',
+						'Worker',
 						level='ERROR',
 					) as logs:
 						thread, errors = self.start(worker.run)

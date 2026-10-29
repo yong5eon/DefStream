@@ -163,7 +163,7 @@ class RpcIntegrationTests(TestCase):
 							event='missing',
 						)
 					with self.assertLogs(
-						'DefStream.Worker',
+						'Worker',
 						level='ERROR',
 					):
 						self.assertEqual(
@@ -201,7 +201,7 @@ class RpcIntegrationTests(TestCase):
 							timeout=2,
 						)
 					with self.assertLogs(
-						'DefStream.Broker.RabbitMQ.Consumer',
+						'Broker.RabbitMQ.Consumer',
 						level='WARNING',
 					):
 						with self.assertRaises(TimeoutError):

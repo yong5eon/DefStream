@@ -106,7 +106,7 @@ class RabbitMQIntegrationTests(TestCase):
 							errors.append(error)
 
 					thread = Thread(target=run)
-					with self.assertLogs('DefStream.Worker', level='ERROR') as logs:
+					with self.assertLogs('Worker', level='ERROR') as logs:
 						thread.start()
 						dead_letter = None
 						deadline = monotonic() + 15

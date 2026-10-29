@@ -660,7 +660,7 @@ class RabbitMessageTests(TestCase):
 				7,
 			)
 			with self.assertLogs(
-				'DefStream.Worker',
+				'Worker',
 				level='ERROR',
 			), self.assertRaises(RemoteError):
 				request(

@@ -72,7 +72,8 @@ class InspectorLoggingTests(TestCase):
 			Server,
 			RequestHandler,
 		):
-			self.assertEqual(cls.logger.name, 'DefStream.Inspector')
+			self.assertEqual(cls.logger.name, 'Worker.Inspector')
+			self.assertTrue(cls.logger.propagate)
 		for cls in (
 			Console,
 			Status,
@@ -80,11 +81,25 @@ class InspectorLoggingTests(TestCase):
 			Metrics,
 			Specifications,
 		):
-			self.assertEqual(cls.logger.name, 'DefStream.Inspector.Extensions.' + cls.__name__)
+			self.assertEqual(cls.logger.name, 'Worker.Inspector.' + cls.__name__)
 			self.assertEqual(cls.logger.handlers, [])
+			self.assertTrue(cls.logger.propagate)
+
+	def test_logs_propagate_through_worker_inspector_to_root(self):
+		for name in (
+			'Worker.Inspector',
+			'Worker',
+			'',
+		):
+			with self.subTest(logger=name), self.assertLogs(name, level=DEBUG) as logs:
+				self.fetch(Example('/sample'))
+			self.assertTrue(any(
+				record.name.startswith('Worker.Inspector')
+				for record in logs.records
+			))
 
 	def test_one_request_debug_and_one_response_info_without_query_or_body(self):
-		with self.assertLogs('DefStream.Inspector', level=DEBUG) as logs:
+		with self.assertLogs('Worker.Inspector', level=DEBUG) as logs:
 			status, body = self.fetch(Example('/sample'))
 		self.assertEqual(status, 200)
 		self.assertEqual(body, b'private-response')
@@ -100,7 +115,7 @@ class InspectorLoggingTests(TestCase):
 		self.assertNotIn('private-response', '\n'.join(logs.output))
 
 	def test_wsgi_failure_is_logged_once_and_returns_500(self):
-		with self.assertLogs('DefStream.Inspector', level=DEBUG) as logs:
+		with self.assertLogs('Worker.Inspector', level=DEBUG) as logs:
 			status, _ = self.fetch(Failure('/failure'))
 		self.assertEqual(status, 500)
 		errors = [record for record in logs.records if record.levelno == ERROR]

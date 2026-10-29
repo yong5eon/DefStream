@@ -44,9 +44,31 @@ class RedisLoggingTests(TestCase):
 			with self.subTest(class_name=name):
 				self.assertEqual(
 					log_class.logger.name,
-					'DefStream.Broker.Implements.Redis.' + name,
+					'Broker.Redis.' + name,
 				)
 				self.assertTrue(log_class.logger.propagate)
+
+	def test_namespace_and_root_propagation(self):
+		connection = Mock()
+		connection.xadd.return_value = b'7-0'
+		queue = Queue(
+			connection,
+			lambda body: body,
+			lambda body: body,
+			'safe-stream',
+		)
+		for name in (
+			'Broker.Redis.Queue',
+			'Broker.Redis',
+			'Broker',
+			'',
+		):
+			with self.subTest(name=name), self.assertLogs(name, level=DEBUG) as captured:
+				queue.send({'message': 'safe'})
+			self.assertTrue(any(
+				record.name == Queue.logger.name
+				for record in captured.records
+			))
 
 	def test_connection_failure_log_omits_credentials_and_exception_text(self):
 		broker = Connection(Configuration(password='private-password'))
@@ -324,10 +346,10 @@ class RedisLoggingTests(TestCase):
 				('Sample', True),
 				('Sample.worker', True),
 				('Sampled', False),
-				('DefStream.Broker.Implements.Redis', True),
-				('DefStream.Broker.Implements.Redis.Queue', True),
-				('DefStream.Broker.Implements.RedisExtra.Queue', False),
-				('DefStream.Worker', False),
+				('Broker.Redis', True),
+				('Broker.Redis.Queue', True),
+				('Broker.RedisExtra.Queue', False),
+				('Worker', False),
 			):
 				with self.subTest(name=name):
 					self.assertEqual(
