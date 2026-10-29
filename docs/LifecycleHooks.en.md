@@ -20,6 +20,8 @@ All hook interfaces are available from `DefStream.Worker`. Each hook option acce
 
 Set task hooks on the `Run` class with `setups=`, `completes=`, and `errors=`. Pool constructors accept `setups=` and `cleanups=`; the Worker constructor uses the same option names.
 
+RabbitMQ consumption recovery preserves the Pool object and replaces its internal executor. `PoolSetup` runs again when a new execution unit starts. A retired ThreadPool runs `PoolCleanup` after its running task finishes; forcibly terminated ProcessPool processes do not guarantee task/pool cleanup. `WorkerSetup` runs only at initial startup and `WorkerCleanup` only at final shutdown, not on each recovery. See [consumption recovery](./RabbitMQ.en.md#worker-consumption-recovery) for limitations.
+
 ```python
 from signal import SIGINT, signal
 

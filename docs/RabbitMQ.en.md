@@ -4,6 +4,44 @@
 
 Connections, queues, exchanges, workers, and RPC.
 
+## Worker consumption recovery
+
+After a RabbitMQ consumption connection or channel failure, the Worker recovers its executor and connection in the same process, without a separate supervisor. This constructor excerpt uses an already configured `broker` and a DefStream `ThreadPool` or `ProcessPool` named `pool`; it is not a standalone program.
+
+```python
+from DefStream.Worker import Worker
+
+
+worker = Worker(
+  broker,
+  pool,
+  recovery_attempts=5,
+  recovery_interval=60,
+)
+```
+
+- `recovery_attempts` is the maximum number of recovery attempts after a failure, defaulting to `5`. Set it to `0` to propagate failure without recovery. Only non-negative integers are accepted; `bool` is rejected.
+- `recovery_interval` is the fixed delay in seconds between failed recovery attempts, defaulting to `60`. Only finite non-negative `int` and `float` values are accepted; `bool` is rejected.
+- The first attempt is immediate. Restoring the connection and every subscription resets the budget for the next failure. A `stop()` request interrupts the retry delay. Repeated short-lived recoveries can therefore continue indefinitely, with a new budget for each failure.
+- Initial Worker connection/subscription errors propagate immediately. Recovery applies after the consumption loop starts, not to task-code errors, normal stop requests, or standalone Queue/Exchange RPC calls.
+
+```mermaid
+flowchart TD
+  A[Consumption connection or channel failure] --> B[Invalidate previous task generation]
+  B --> C[Keep Pool object · replace internal executor]
+  C --> D[Recreate connection · Consumer · QoS · all subscriptions]
+  D -->|Success| E[Resume consumption · reset budget]
+  D -->|Recoverable failure within budget| F[Wait fixed interval]
+  F --> D
+  D -->|Unrecoverable or exhausted| G[Propagate Worker failure]
+```
+
+Recovery covers connection-layer failures such as `StreamLostError`, broker connection/channel closure codes `320` and `541`, ACK-timeout closure code `406`, and consumption ending without an explicit stop request. Authentication, access-denial and incompatible-protocol errors, missing queues, and other `PRECONDITION_FAILED` errors are not blindly retried. ACK-timeout logs include the broker reason and affected subscription queue list; a shared channel's queue list does not identify which task caused the timeout.
+
+The supplied Pool object is preserved. Previous ProcessPool task processes are forcibly terminated, so task/pool cleanup hooks are not guaranteed. Running ThreadPool tasks continue; the previous executor receives a shutdown request so its threads exit after those tasks finish. Unstarted tasks are discarded, and old success/failure callbacks cannot settle deliveries, publish RPC replies, or modify the new generation's state. A base `Pool` supplied with a custom executor does not support this recovery and raises an explicit error.
+
+The broker may redeliver unacknowledged messages from the closed channel. Previous threads may overlap with redelivered tasks, and effects such as completed database updates are not undone; message-processing idempotency remains the caller's responsibility. A thread whose task never finishes can retain resources and delay Python process exit. Exhaustion propagates Worker failure without waiting for previous tasks, but does not guarantee forced process termination.
+
 ## RabbitMQ usage
 
 Requires Python 3.9 or newer and a reachable RabbitMQ server; uses Pika.

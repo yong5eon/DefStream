@@ -4,6 +4,8 @@
 
 Inspector tools, logging, and broker selection.
 
+During RabbitMQ consumption recovery, the Worker clears its readiness state: Ping returns 503 until all subscriptions are restored and the consumption loop resumes. Unfinished Inspector contexts from the previous generation are closed as discarded, and old callbacks cannot change the new generation's metrics. See [RabbitMQ consumption recovery](./RabbitMQ.en.md#worker-consumption-recovery) for settings, retired-thread behavior, and redelivery limitations.
+
 ## Health checks and Play
 
 Inspector is optional and uses a Python standard-library HTTP server.
