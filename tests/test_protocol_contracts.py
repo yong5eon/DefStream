@@ -313,6 +313,8 @@ class ProtocolContractTests(TestCase):
 			RabbitConnection(RabbitConfiguration(
 				host='127.0.0.1',
 				port=5672,
+				username='guest',
+				password='guest',
 			)),
 			RedisConnection(RedisConfiguration()),
 		)
@@ -433,6 +435,8 @@ class ProtocolContractTests(TestCase):
 		rabbit_connection = RabbitConnection(RabbitConfiguration(
 			host='127.0.0.1',
 			port=5672,
+			username='guest',
+			password='guest',
 		))
 		redis_connection = RedisConnection(RedisConfiguration())
 		rabbit_connection.connection = Mock()
