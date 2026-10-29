@@ -1,0 +1,78 @@
+name: Create pull request from issue branch
+
+on:
+  push:
+    branches:
+      - bug/**
+      - fix/**
+      - feature/**
+      - task/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  create-pr:
+    name: Create pull request from issue records
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Validate App private key without exposing its contents
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.PR_APP_PRIVATE_KEY }}
+        run: |
+          node <<'NODE'
+          const { createPrivateKey } = require('node:crypto');
+          const value = process.env.APP_PRIVATE_KEY;
+          if (!value) {
+            throw new Error('PR_APP_PRIVATE_KEY is empty or unavailable in this run.');
+          }
+          const key = value.trim();
+          console.log(JSON.stringify({
+            hasActualNewlines: key.includes('\n'),
+            hasLiteralBackslashN: key.includes('\\n'),
+            hasRsaPemHeader: key.startsWith('-----BEGIN RSA PRIVATE KEY-----'),
+            hasRsaPemFooter: key.endsWith('-----END RSA PRIVATE KEY-----'),
+          }));
+          let parsed;
+          try {
+            parsed = createPrivateKey(key);
+          } catch {
+            throw new Error('PR_APP_PRIVATE_KEY reached the runner but Node.js cannot parse it. The failure occurs before create-github-app-token; inspect the format flags above. Key contents have not been logged.');
+          }
+          if (parsed.asymmetricKeyType !== 'rsa') {
+            throw new Error('PR_APP_PRIVATE_KEY is not an RSA private key.');
+          }
+          parsed.export({ type: 'pkcs8', format: 'pem' });
+          console.log('App private key parsing and PKCS#8 conversion passed.');
+          NODE
+      - name: Generate PR automation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.PR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PR_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+      - name: Create pull request if needed
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: node .github/scripts/create-pr-from-issue.mjs
