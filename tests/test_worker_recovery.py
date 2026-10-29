@@ -139,6 +139,40 @@ class WaitingChannel(BlockingChannel):
 
 
 class RecoveryTests(TestCase):
+	def test_retired_thread_failures_are_reported_once_per_worker(self):
+		executor = Executor(3, (), ())
+		executor.closed = True
+		executor.stopping.set()
+		executor.failure = RuntimeError('Execution generation discarded')
+		first: Future = Future()
+		second: Future = Future()
+		running: Future = Future()
+		error = ValueError('cleanup failed')
+		first.set_exception(error)
+		executor.workers = [first, second, running]
+		outgoing = Mock()
+		executor.outgoing = outgoing
+		polls = 0
+
+		def receive(timeout: float):
+			nonlocal polls
+			polls += 1
+			if polls == 3:
+				second.set_exception(error)
+			if polls == 5:
+				running.set_result(None)
+			raise Empty
+
+		outgoing.get.side_effect = receive
+		with self.assertLogs(executor.logger, level='ERROR') as logs:
+			executor.collect_results()
+		self.assertEqual(polls, 5)
+		self.assertEqual(len(logs.records), 2)
+		self.assertTrue(all(
+			record.exc_info is not None and record.exc_info[1] is error
+			for record in logs.records
+		))
+
 	def consumer(self):
 		connection = Mock()
 		consumer = Consumer(connection, Mock())

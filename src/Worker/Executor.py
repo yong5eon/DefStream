@@ -34,6 +34,7 @@ from typing import (
 	List,
 	Optional,
 	Sequence,
+	Set,
 	TypeVar,
 	Union,
 )
@@ -392,6 +393,7 @@ class Executor(PyExecutor):
 			future.set_exception(error)
 
 	def collect_results(self) -> None:
+		observed: Set[Future] = set()
 		while True:
 			no_outcome = False
 			try:
@@ -432,16 +434,12 @@ class Executor(PyExecutor):
 						if traceback is not None:
 							value.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
 						future.set_exception(value)
-			failure = next(
-				(
-					worker.exception()
-					for worker in self.workers
-					if worker.done() and worker.exception() is not None
-				),
-				None,
-			)
-			if failure is not None:
-				self.fail(failure)
+			for worker in self.workers:
+				if worker.done() and worker not in observed:
+					observed.add(worker)
+					failure: Optional[BaseException] = worker.exception()
+					if failure is not None:
+						self.fail(failure)
 			if not self.stopping.is_set() and any(
 				process.pid is not None and process.exitcode is not None and (
 					process.exitcode != 0 or not self.completed[process.pid].is_set()
