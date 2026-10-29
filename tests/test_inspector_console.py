@@ -333,7 +333,7 @@ class ConsoleExtensionTests(TestCase):
 			),
 		):
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Console',
 				level='WARNING',
 			):
 				status, body, headers = self.fetch(
@@ -406,7 +406,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_configured_token_rejects_missing_authorization(self):
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Console',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -492,7 +492,7 @@ class ConsoleExtensionTests(TestCase):
 
 		self.worker.tasks.append(NamedTask)
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Console',
 			level='WARNING',
 		) as logs:
 			status, body, headers = self.fetch(
@@ -507,7 +507,7 @@ class ConsoleExtensionTests(TestCase):
 		payload = self.payload()
 		payload['task'] = 'not-registered'
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Console',
 			level='WARNING',
 		) as logs:
 			status, body, headers = self.fetch(
@@ -579,7 +579,7 @@ class ConsoleExtensionTests(TestCase):
 				'wsgi.input': BytesIO(raw),
 			}
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Console',
 				level='WARNING',
 			) if expected == 400 else nullcontext():
 				response = self.extension.handle(
@@ -593,7 +593,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_malformed_origin_is_rejected_explicitly(self):
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Console',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -628,7 +628,7 @@ class ConsoleExtensionTests(TestCase):
 		):
 			self.extension.broker = lambda: producer
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Console',
 				level='ERROR',
 			):
 				self.assertEqual(
@@ -645,7 +645,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_cross_origin_and_invalid_requests_do_not_publish(self):
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Console',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -722,7 +722,7 @@ class ConsoleExtensionTests(TestCase):
 			producer.error = error
 			self.extension.broker = lambda: producer
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Console',
 				level='WARNING',
 			):
 				status, body, headers = self.fetch(
@@ -745,7 +745,7 @@ class ConsoleExtensionTests(TestCase):
 	def test_worker_connection_is_rejected_without_closing_it(self):
 		self.extension.broker = lambda: self.worker.broker
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Console',
 			level='ERROR',
 		):
 			self.assertEqual(

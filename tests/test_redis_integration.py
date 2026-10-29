@@ -72,7 +72,10 @@ class RedisIntegrationTests(TestCase):
 			self.broker.delete_queue,
 			name,
 		)
-		return self.broker.queue(name)
+		return self.broker.queue(
+			name,
+			group='integration',
+		)
 
 	def start(
 		self,
@@ -170,7 +173,7 @@ class RedisIntegrationTests(TestCase):
 			deliveries.append(event)
 
 		consumer.subs(
-			str(queue),
+			queue.subscription,
 			handler,
 		)
 		thread, errors = self.start(consumer.run)
@@ -232,7 +235,7 @@ class RedisIntegrationTests(TestCase):
 			consumer.stop()
 
 		consumer.subs(
-			str(queue),
+			queue.subscription,
 			handler,
 		)
 		thread, errors = self.start(consumer.run)
@@ -262,8 +265,8 @@ class RedisIntegrationTests(TestCase):
 				rejected = self.queue()
 				old_parameters = RedisRunner.parameters
 				old_rejected = RejectRedisRunner.parameters
-				RedisRunner.parameters = Subscription(str(queue))
-				RejectRedisRunner.parameters = Subscription(str(rejected))
+				RedisRunner.parameters = queue.subscription
+				RejectRedisRunner.parameters = rejected.subscription
 				worker = Worker(
 					Connection(Configuration()),
 					pool_type(2),

@@ -382,8 +382,6 @@ class WorkerLifecycleTests(TestCase):
 
 	def test_worker_setup_can_provision_registered_runs_before_subscription(self):
 		trace = []
-		broker = self.broker
-		pool = self.pool
 
 		class Provision(WorkerSetup):
 			def __call__(
@@ -408,6 +406,8 @@ class WorkerLifecycleTests(TestCase):
 			setups=Provision(),
 			cleanups=Release(),
 		)
+		broker = self.broker
+		pool = self.pool
 		worker.run()
 		self.assertEqual(
 			trace,

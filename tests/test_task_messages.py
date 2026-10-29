@@ -523,14 +523,15 @@ class RedisMessageTests(TestCase):
 				results,
 				[7],
 			)
-			for name in (
-				first,
-				second,
+			for task in (
+				First,
+				Next,
 			):
+				subscription = RedisSubscription.parse(task.parameters)
 				self.assertEqual(
 					client.connected().xpending(
-						name,
-						'DefStream',
+						subscription.queue,
+						subscription.group,
 					)['pending'],
 					0,
 				)
