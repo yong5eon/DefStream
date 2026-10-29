@@ -136,7 +136,7 @@ class Connection(
 		if self.connection and self.connection.is_open:
 			self.logger.debug('Reusing open connection')
 			return
-		self.logger.info('Connecting to RabbitMQ: host=%s port=%s vhost=%s', self.conf.host, self.conf.port, self.conf.vhost)
+		self.logger.debug('Connecting to RabbitMQ: host=%s port=%s vhost=%s', self.conf.host, self.conf.port, self.conf.vhost)
 		with self.observe('RabbitMQ connection'):
 			self.connection = BlockingConnection(parameters=self.parameters)
 		return
@@ -154,7 +154,7 @@ class Connection(
 			self.logger.error(operation + ' failed: error_type=%s', *context, type(error).__name__)
 			raise
 		else:
-			self.logger.info(operation + ' completed', *context)
+			self.logger.debug(operation + ' completed', *context)
 		return
 
 	def connected(self):
