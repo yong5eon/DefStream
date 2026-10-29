@@ -13,13 +13,11 @@ from .Queue import Queue
 from .Stream import Stream
 from .Consumer import Consumer
 from .Subscription import Subscription
-from .Policies import (
-	Requeue,
-	Reject,
-)
 from .Event import (
 	Event,
 	EventHandler,
+	Requeue,
+	Reject,
 )
 from .Serializer import (
 	Encoder,

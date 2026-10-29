@@ -14,7 +14,6 @@ from DefStream.Broker import (
 	BrokerFactory,
 	Consumer,
 	Event,
-	EventError,
 	Emittable,
 	GetConsumer,
 	GetExchange,
@@ -23,16 +22,22 @@ from DefStream.Broker import (
 	Declarable,
 	Requestable,
 )
+from DefStream.Broker import __all__ as broker_exports
 from DefStream.Broker.Connection import __all__ as connection_exports
-from DefStream.Inspector.Extensions import Console
+from DefStream.Inspector.Extensions import Play
 from DefStream.Broker.Implements.RabbitMQ import __all__ as rabbit_exports
 from DefStream.Broker.Implements.Redis import __all__ as redis_exports
-from DefStream.Broker.Event import EventHandler
+from DefStream.Broker.Event import (
+	EventErrorPolicy,
+	EventHandler,
+)
 from DefStream.Broker.Implements.RabbitMQ import (
 	Configuration as RabbitConfiguration,
 	Connection as RabbitConnection,
 	Event as RabbitEvent,
 	Queue as RabbitQueue,
+	Reject as RabbitReject,
+	Requeue as RabbitRequeue,
 )
 from DefStream.Broker.Implements.RabbitMQ.Consumer import FailedRequest
 from DefStream.Broker.Implements.Redis import (
@@ -40,6 +45,8 @@ from DefStream.Broker.Implements.Redis import (
 	Connection as RedisConnection,
 	Event as RedisEvent,
 	Queue as RedisQueue,
+	Reject as RedisReject,
+	Requeue as RedisRequeue,
 )
 from DefStream.Broker.Implements.Redis.Serializer import (
 	Decoder,
@@ -47,15 +54,12 @@ from DefStream.Broker.Implements.Redis.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
-from DefStream.Broker.Policies import (
-	Reject,
-	Requeue,
-)
 from DefStream.Worker import (
 	Run,
 	Worker,
 )
 from DefStream.Worker import __all__ as worker_exports
+from _support import call_with_invalid_input
 
 
 def queue_provider(
@@ -82,7 +86,7 @@ class StructuralConnection:
 
 
 class ProtocolContractTests(TestCase):
-	def test_broker_factory_contract_and_console_annotation(self):
+	def test_broker_factory_contract_and_play_annotation(self):
 		from DefStream.Broker.Connection import BrokerFactory as FactoryContract
 
 		self.assertIs(
@@ -94,7 +98,7 @@ class ProtocolContractTests(TestCase):
 			connection_exports,
 		)
 		self.assertIs(
-			get_type_hints(Console.__init__)['broker'],
+			get_type_hints(Play.__init__)['broker'],
 			BrokerFactory,
 		)
 		self.assertIs(
@@ -107,7 +111,7 @@ class ProtocolContractTests(TestCase):
 
 		self.assertTrue(isabstract(IncompleteFactory))
 		with self.assertRaises(TypeError):
-			IncompleteFactory()
+			call_with_invalid_input(IncompleteFactory)
 
 		def factory_function() -> Connection:
 			return StructuralConnection()
@@ -128,12 +132,12 @@ class ProtocolContractTests(TestCase):
 		)
 		for factory in factories:
 			with self.subTest(factory=factory):
-				console = Console(
-					'/console',
+				play = Play(
+					'/play',
 					broker=factory,
 				)
-				first = console.broker()
-				second = console.broker()
+				first = play.broker()
+				second = play.broker()
 				self.assertIsInstance(
 					first,
 					StructuralConnection,
@@ -205,13 +209,11 @@ class ProtocolContractTests(TestCase):
 			RedisEventHandler,
 			EventHandler,
 		)
-		self.assertTrue(EventHandler._is_protocol)
-
 		class IncompleteHandler(EventHandler):
 			pass
 
 		with self.assertRaises(TypeError):
-			IncompleteHandler()
+			call_with_invalid_input(IncompleteHandler)
 
 		class Handler(EventHandler):
 			def __call__(
@@ -220,9 +222,10 @@ class ProtocolContractTests(TestCase):
 			) -> None:
 				event.ack()
 
-		event = Mock(spec=Event)
+		ack = Mock()
+		event = Mock(spec=Event, ack=ack)
 		Handler()(event)
-		event.ack.assert_called_once()
+		ack.assert_called_once()
 
 	def test_protocols_are_abstract(self):
 		self.assertNotIn(
@@ -237,16 +240,15 @@ class ProtocolContractTests(TestCase):
 			GetConsumer,
 		):
 			with self.subTest(protocol=protocol):
-				self.assertTrue(protocol._is_protocol)
 				with self.assertRaises(TypeError):
-					protocol()
+					call_with_invalid_input(protocol)
 
 		class IncompleteQueue(GetQueue):
 			pass
 
 		self.assertTrue(isabstract(IncompleteQueue))
 		with self.assertRaises(TypeError):
-			IncompleteQueue()
+			call_with_invalid_input(IncompleteQueue)
 
 	def test_concrete_connections_declare_only_supported_capabilities(self):
 		for exports in (
@@ -280,7 +282,6 @@ class ProtocolContractTests(TestCase):
 					implementation.__bases__,
 				)
 				self.assertFalse(isabstract(implementation))
-				self.assertFalse(implementation._is_protocol)
 				for capability in capabilities:
 					self.assertIn(
 						capability,
@@ -387,12 +388,20 @@ class ProtocolContractTests(TestCase):
 				Event,
 			),
 			(
-				Requeue,
-				EventError,
+				RabbitRequeue,
+				EventErrorPolicy,
 			),
 			(
-				Reject,
-				EventError,
+				RabbitReject,
+				EventErrorPolicy,
+			),
+			(
+				RedisRequeue,
+				EventErrorPolicy,
+			),
+			(
+				RedisReject,
+				EventErrorPolicy,
 			),
 			(
 				JavaScriptObjectNotationEncoder,
@@ -408,7 +417,14 @@ class ProtocolContractTests(TestCase):
 					contract,
 					implementation.__bases__,
 				)
-				self.assertFalse(implementation._is_protocol)
+		self.assertNotIn('EventError', broker_exports)
+		self.assertIn('EventErrorPolicy', broker_exports)
+		self.assertNotIn('Requeue', broker_exports)
+		self.assertNotIn('Reject', broker_exports)
+		self.assertIn('Requeue', rabbit_exports)
+		self.assertIn('Reject', rabbit_exports)
+		self.assertIn('Requeue', redis_exports)
+		self.assertIn('Reject', redis_exports)
 
 	def test_redis_event_body_is_readable_after_protocol_inheritance(self):
 		body = {'value': 1}

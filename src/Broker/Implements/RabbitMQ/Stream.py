@@ -21,7 +21,7 @@ from uuid import uuid4
 
 from typing import (
 	Dict,
-	Iterable,
+	Generator,
 	Optional,
 )
 
@@ -35,7 +35,7 @@ class Stream(
 	Readable,
 ):
 	"""Stream of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.RabbitMQ.Stream')
+	logger = getLogger('Broker.RabbitMQ.Stream')
 
 	def __init__(
 		self,
@@ -101,7 +101,7 @@ class Stream(
 		self.logger.debug('Stream publish API call completed: queue=%s message_id=%s', self.queue, id)
 		return id
 
-	def read(self, offset: int = 0, timeout: Optional[int] = None) -> Iterable[Event]:
+	def read(self, offset: int = 0, timeout: Optional[int] = None) -> Generator[Event, None, None]:
 		channel = self.channel
 		self.logger.debug('Starting Stream read: queue=%s offset=%s timeout_ms=%s qos=1', self.queue, offset, timeout)
 		try:

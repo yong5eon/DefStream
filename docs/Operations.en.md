@@ -4,7 +4,7 @@
 
 Inspector tools, logging, and broker selection.
 
-## Health checks and task console
+## Health checks and Play
 
 Inspector is optional and uses a Python standard-library HTTP server.
 Configure it before starting the Worker and pass `Worker(..., inspector=inspector)`.
@@ -13,7 +13,7 @@ This snippet reuses the `Connection` and `Configuration` imports from `worker.py
 ```python
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-  Console,
+  Play,
   Metrics,
   Ping,
   Specifications,
@@ -38,8 +38,8 @@ inspector = Inspector(
     Metrics('/metrics'),
     Status('/status'),
     Specifications('/asyncapi.json'),
-    Console(
-      '/console',
+    Play(
+      '/play',
       broker=create_connection,
       title='DefStream',
     ),
@@ -53,7 +53,7 @@ inspector = Inspector(
 | `/metrics` | Prometheus metrics with the `defstream_` prefix |
 | `/status` | Successes, failures, throughput, and duration; register with exactly one `Metrics` |
 | `/asyncapi.json` | Registered task request/reply contracts as AsyncAPI JSON |
-| `/console` | Browse tasks and schemas, send JSON messages, and execute RPC on supported brokers |
+| `/play` | Browse tasks and schemas, send JSON messages, and execute RPC on supported brokers |
 
 There are no default routes. Metrics describe one Worker and reset on restart.
 Execution counts include retries and hooks, not unique messages or ACKs.
@@ -67,22 +67,26 @@ flowchart LR
   I --> M[Prometheus metrics]
   I --> S[Status endpoint]
   I --> A[AsyncAPI document]
-  I --> C[Task console]
+  I --> C[Play task execution]
   C --> F[BrokerFactory]
   F --> B[New broker connection per use]
 ```
 
-**Restrict access.** The console example above publishes real tasks without
+The `Console` extension has been renamed to `Play`. Update existing imports and
+class usages to `Play`. The example above uses `/play`, but you can keep your
+configured URL path. The extension logger is now `Worker.Inspector.Play`.
+
+**Restrict access.** The Play example above publishes real tasks without
 authentication. For authentication, pass a random token of at least 16 characters
-using `Console(token=...)` and enter it in the browser. Load the token from an
+using `Play(token=...)` and enter it in the browser. Load the token from an
 environment variable or secret store. Other built-in endpoints remain
 unauthenticated: bind to loopback or a trusted management network, and use an
 HTTPS reverse proxy with additional access control for remote access.
 Inspector has no built-in TLS and is not a public web server.
-The console's connection factory must return a new connection on every call,
+Play's connection factory must return a new connection on every call,
 never the Worker's connection.
 
-Console's `broker` parameter uses the `DefStream.Broker.BrokerFactory` contract.
+Play's `broker` parameter uses the `DefStream.Broker.BrokerFactory` contract.
 Its `__call__() -> Connection` takes no arguments and returns a new connection.
 Functions such as `create_connection` above and lambdas remain valid without changes.
 For a class-based factory, you can inherit `BrokerFactory` and implement `__call__`.
@@ -92,14 +96,19 @@ For a class-based factory, you can inherit `BrokerFactory` and implement `__call
 
 DefStream records messages through standard `logging` without configuring handlers,
 formatters, or levels. Select the sources your application needs. The samples
-output only the `Sample` and `DefStream` logger hierarchies, replacing their
+output only the `Sample`, `Worker`, `Task`, and `Broker` logger hierarchies, replacing their
 `print()` calls with logging. The Worker's existing startup banner is still
 printed regardless of logging configuration.
 
 ```python
 from logging import DEBUG, Filter, Formatter, StreamHandler, getLogger
 
-sources = (Filter('Sample'), Filter('DefStream'))
+sources = (
+  Filter('Sample'),
+  Filter('Worker'),
+  Filter('Task'),
+  Filter('Broker'),
+)
 handler = StreamHandler()
 handler.setFormatter(Formatter(
   '%(asctime)s %(processName)s %(name)s %(levelname)s %(message)s'
@@ -113,24 +122,28 @@ logger = getLogger('Sample')
 logger.info('Application started')
 ```
 
-Apply filters to the **handler**, not the root logger. `Filter('DefStream')`
-includes `DefStream` and names below `DefStream.`, but not `DefStreamExtra`.
+Apply filters to the **handler**, not the root logger. `Filter('Worker')`
+includes `Worker` and names below `Worker.`, but not `WorkerExtra`.
+Broker loggers use the separate `Broker` hierarchy and are not included by a
+`Worker` filter.
 This configuration is an example for a standalone application; it does not change
 output from other handlers already installed. To receive only broker logs, select
-`DefStream.Broker.RabbitMQ` or `DefStream.Broker.Implements.Redis`
-instead of `DefStream`.
+`Broker.RabbitMQ` or `Broker.Redis`.
 
-- The class member `logger` uses `DefStream.Worker`, `DefStream.Run`,
-  `DefStream.Executor`, `DefStream.Pool`, `DefStream.ThreadPool`, and
-  `DefStream.ProcessPool`.
+- The `Worker` and `Run` loggers use `Worker` and `Task`, respectively.
+  `Executor`, `Pool`, `ThreadPool`, and `ProcessPool` use the `Worker` hierarchy.
 - Shared Pool methods also use the concrete pool's logger member. User subclasses
   inherit the default name and can explicitly override `logger`.
-- Inspector, Server, and RequestHandler share `DefStream.Inspector`.
+- Inspector, Server, and RequestHandler share `Worker.Inspector`.
   HTTP request receipt is DEBUG; response status and transmission results are INFO.
-  Extension-specific logs use `DefStream.Inspector.Extensions.<extension name>`.
+  Extension-specific logs use `Worker.Inspector.<extension name>`.
 - Normal per-message processing is DEBUG, lifecycle events are INFO, events
   requiring attention are WARNING, and processing failures are ERROR.
   Bodies, results, and credentials are excluded from the default log context.
+- RabbitMQ and Redis broker loggers use the `Broker.RabbitMQ` and `Broker.Redis`
+  hierarchies. Update filters and handlers that use the former `DefStream.Broker...` names.
+- Worker logs use the `Worker` and `Task` hierarchies, while Inspector logs use
+  `Worker.Inspector`. Update filters and handlers configured with former `DefStream.*` names.
 - Without any handlers, Python's `lastResort` may write WARNING and higher to
   stderr. Do not put sensitive values in user exception messages: failure
   tracebacks include those messages.

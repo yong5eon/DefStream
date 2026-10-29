@@ -20,11 +20,13 @@ from DefStream.Broker.Implements.RabbitMQ import (
 )
 from DefStream.Worker import (
 	PoolFull,
+	PoolSetup,
 	ProcessPool,
 	Run,
 	ThreadPool,
 	Worker,
 )
+from _support import call_with_invalid_input
 
 
 class FileRunner(Run, parameters={'queue': 'file'}):
@@ -45,12 +47,14 @@ class RejectingRunner(
 	pass
 
 
-class FileSetup:
-	def __init__(self, path):
+class FileSetup(PoolSetup):
+	def __init__(self, path: str) -> None:
 		self.path = path
+		return
 
-	def __call__(self):
+	def __call__(self) -> None:
 		Path(self.path).write_text('ready', encoding='utf-8')
+		return
 
 
 class FakeConsumer:
@@ -112,7 +116,7 @@ class RunnerTests(TestCase):
 			'abstract_task',
 		)
 		with self.assertRaisesRegex(TypeError, 'abstract'):
-			Abstract()
+			call_with_invalid_input(Abstract)
 
 		class Concrete(
 			Abstract,
@@ -148,7 +152,7 @@ class RunnerTests(TestCase):
 		with self.assertRaises(TypeError):
 			first.add(Run)
 		with self.assertRaises(TypeError):
-			first.add(object)
+			call_with_invalid_input(first.add, object)
 
 	def test_parameters_and_policy_are_inherited_without_global_registration(self):
 		class Child(FileRunner):
@@ -282,7 +286,7 @@ class PoolTests(TestCase):
 	def test_pool_size_and_setup_validation(self):
 		for size in (0, -1, True, 1.5):
 			with self.assertRaises(ValueError):
-				ThreadPool(size)
+				call_with_invalid_input(ThreadPool, size)
 		first, second = Mock(), Mock()
 		pool = ThreadPool(
 			1,
@@ -352,7 +356,7 @@ class WorkerTests(TestCase):
 					worker.stop()
 
 				consumer.on_run = receive
-				with self.assertLogs('DefStream.Worker', level='ERROR'):
+				with self.assertLogs('Worker', level='ERROR'):
 					worker.run()
 				self.assertEqual(threads, [consumer.owner])
 				delivery.ack.assert_not_called()
@@ -374,7 +378,8 @@ class WorkerTests(TestCase):
 		delivery.ack.assert_not_called()
 
 	def test_invalid_body_uses_run_on_error(self):
-		worker, consumer, _ = self.make_worker(RejectingRunner, Mock())
+		pool = Mock()
+		worker, consumer, _ = self.make_worker(RejectingRunner, pool)
 		delivery = Mock()
 		delivery.body = 'not a mapping'
 
@@ -383,10 +388,10 @@ class WorkerTests(TestCase):
 			worker.stop()
 
 		consumer.on_run = receive
-		with self.assertLogs('DefStream.Worker', level='WARNING'):
+		with self.assertLogs('Worker', level='WARNING'):
 			worker.run()
 		delivery.reject.assert_called_once_with()
-		worker.pool.submit.assert_not_called()
+		pool.submit.assert_not_called()
 
 	def test_stop_from_another_thread_waits_for_processing_and_ack(self):
 		started, release = Event(), Event()
@@ -433,7 +438,8 @@ class WorkerTests(TestCase):
 		broker.close.assert_called_once_with()
 
 	def test_delivery_received_after_stop_is_nacked_without_submission(self):
-		worker, consumer, _ = self.make_worker(FileRunner, Mock())
+		pool = Mock()
+		worker, consumer, _ = self.make_worker(FileRunner, pool)
 		delivery = Mock()
 		delivery.body = {}
 
@@ -444,7 +450,7 @@ class WorkerTests(TestCase):
 		consumer.on_run = receive
 		worker.run()
 		delivery.nack.assert_called_once_with()
-		worker.pool.submit.assert_not_called()
+		pool.submit.assert_not_called()
 
 	def test_ack_failure_is_propagated_and_resources_are_closed(self):
 		pool = Mock()

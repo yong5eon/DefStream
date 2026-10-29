@@ -24,7 +24,7 @@ if __name__ == '__main__':
 	console = StreamHandler()
 	console.setLevel(DEBUG)
 	sample_filter = Filter('Sample')
-	rabbitmq_filter = Filter('DefStream.Broker.RabbitMQ')
+	rabbitmq_filter = Filter('Broker.RabbitMQ')
 	console.addFilter(lambda record: sample_filter.filter(record) or rabbitmq_filter.filter(record))
 	console.setFormatter(Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
 	root.addHandler(console)
@@ -72,12 +72,16 @@ if __name__ == '__main__':
 	})
 
 	reader = con.queue('queue')
-	e = reader.pop()
-	logger.debug('Single message received: queue=%s message_id=%s', e.src, e.id)
-	e.ack()
-	e = reader.pop()
-	logger.debug('Single message received: queue=%s message_id=%s', e.src, e.id)
-	e.ack()
+	event = reader.pop()
+	if event is None:
+		raise RuntimeError('Queue unexpectedly returned no message')
+	logger.debug('Single message received: queue=%s message_id=%s', event.src, event.id)
+	event.ack()
+	event = reader.pop()
+	if event is None:
+		raise RuntimeError('Queue unexpectedly returned no message')
+	logger.debug('Single message received: queue=%s message_id=%s', event.src, event.id)
+	event.ack()
 
 	exchange.send(
 		{

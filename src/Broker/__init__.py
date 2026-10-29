@@ -21,15 +21,11 @@ from .Protocol import (
 )
 from .Errors import RemoteError
 from .Consumer import Consumer
-from .Policies import (
-	Requeue,
-	Reject,
-)
 from .Priority import validate_priority
 from .Event import (
 	Event,
 	EventHandler,
-	EventError,
+	EventErrorPolicy,
 )
 
 __all__ = (
@@ -52,8 +48,6 @@ __all__ = (
 	'Consumer',
 	'EventHandler',
 	'Event',
-	'EventError',
-	'Requeue',
-	'Reject',
+	'EventErrorPolicy',
 	'validate_priority',
 )

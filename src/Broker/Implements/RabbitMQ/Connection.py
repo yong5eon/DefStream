@@ -116,7 +116,7 @@ class Connection(
 	PrioritySupport,
 ):
 	"""Connection of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.RabbitMQ.Connection')
+	logger = getLogger('Broker.RabbitMQ.Connection')
 
 	def __init__(self, conf: Configuration):
 		self.conf = conf

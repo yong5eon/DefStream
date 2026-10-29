@@ -26,7 +26,6 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 from DefStream.Broker import RemoteError
-from DefStream.Broker.Policies import Reject
 from DefStream.Descriptor import (
 	AllOf,
 	Array,
@@ -63,7 +62,13 @@ from DefStream.Worker import (
 	Specification,
 	ThreadPool,
 	Worker,
+	WorkerSetup,
 	request,
+)
+from _support import (
+	call_with_invalid_input,
+	require_instance,
+	require_value,
 )
 
 
@@ -149,7 +154,10 @@ class ContractTests(TestCase):
 			'application/json\r\nInjected: header',
 		):
 			with self.subTest(format=invalid), self.assertRaises(ValueError):
-				Specification(format=invalid)
+				call_with_invalid_input(
+					Specification,
+					format=invalid,
+				)
 
 	def test_original_descriptor_and_validator_api_without_datamodel(self):
 		self.assertEqual(
@@ -231,7 +239,8 @@ class ContractTests(TestCase):
 			)),
 		)
 		with self.assertRaises(TypeError):
-			DumpSchema(Schema(
+			DumpSchema(call_with_invalid_input(
+				Schema,
 				'Unsupported',
 				object(),
 			))
@@ -350,7 +359,10 @@ class ContractTests(TestCase):
 		with self.assertRaises(TypeError):
 			Specification(schema=object())
 		with self.assertRaises(TypeError):
-			Specification(validator=1)
+			call_with_invalid_input(
+				Specification,
+				validator=1,
+			)
 
 		class NonMapping(
 			Add,
@@ -383,7 +395,7 @@ class DocumentTests(TestCase):
 				pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Plain)
+		self.require_worker(inspector).add(Plain)
 		self.assertEqual(
 			Specifications('/spec').document(inspector)['defaultContentType'],
 			'application/json',
@@ -417,7 +429,8 @@ class DocumentTests(TestCase):
 			'application/json\r\nInjected: header',
 		):
 			with self.subTest(format=invalid), self.assertRaises(ValueError):
-				Specifications(
+				call_with_invalid_input(
+					Specifications,
 					'/spec',
 					format=invalid,
 				)
@@ -440,8 +453,8 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Described)
-		inspector.worker.add(Empty)
+		self.require_worker(inspector).add(Described)
+		self.require_worker(inspector).add(Empty)
 		operations = Specifications('/spec').document(inspector)['operations']
 		self.assertEqual(
 			operations['Orders.create-v2_Job']['description'],
@@ -572,16 +585,19 @@ class DocumentTests(TestCase):
 				pass
 
 		inspector = self.inspector()
-		inspector.worker.add(First)
+		self.require_worker(inspector).add(First)
 		with self.assertRaisesRegex(ValueError, 'Duplicate Run name'):
-			inspector.worker.add(Second)
-		inspector.worker.tasks.append(Second)
+			self.require_worker(inspector).add(Second)
+		self.require_worker(inspector).tasks.append(Second)
 		with self.assertRaisesRegex(ValueError, 'Duplicate task specification'):
 			Specifications('/spec').document(inspector)
 
 	def test_specification_does_not_accept_description(self):
 		with self.assertRaises(TypeError):
-			Specification(description='No longer supported')
+			call_with_invalid_input(
+				Specification,
+				description='No longer supported',
+			)
 
 	def test_request_and_response_formats_are_preserved_in_asyncapi(self):
 		class Formatted(
@@ -596,7 +612,7 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Formatted)
+		self.require_worker(inspector).add(Formatted)
 		document = Specifications('/spec').document(inspector)
 		formats = {
 			message['contentType']
@@ -612,7 +628,7 @@ class DocumentTests(TestCase):
 			formats,
 		)
 
-	def inspector(self):
+	def inspector(self) -> Inspector:
 		worker = Worker(
 			Mock(),
 			ThreadPool(1),
@@ -622,6 +638,9 @@ class DocumentTests(TestCase):
 		inspector.worker = worker
 		self.addCleanup(worker.pool.stop)
 		return inspector
+
+	def require_worker(self, inspector: Inspector) -> Worker:
+		return require_instance(inspector.worker, Worker)
 
 	def test_asyncapi_references_and_response_contract(self):
 		inspector = self.inspector()
@@ -692,7 +711,7 @@ class DocumentTests(TestCase):
 
 	def test_http_serving_json_and_head(self):
 		inspector = self.inspector()
-		worker = inspector.worker
+		worker = self.require_worker(inspector)
 		extension = Specifications('/asyncapi.json')
 		inspector = Inspector(
 			port=0,
@@ -702,7 +721,7 @@ class DocumentTests(TestCase):
 		self.addCleanup(inspector.stop)
 		connection = HTTPConnection(
 			'127.0.0.1',
-			inspector.server.server_port,
+			require_value(inspector.server).server_port,
 			timeout=3,
 		)
 		try:
@@ -743,7 +762,7 @@ class DocumentTests(TestCase):
 			def run(self):
 				pass
 
-		inspector.worker.add(Unknown)
+		self.require_worker(inspector).add(Unknown)
 		with self.assertRaisesRegex(
 			ValueError,
 			'queue',
@@ -758,7 +777,7 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Local)
+		self.require_worker(inspector).add(Local)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
 			set(document['operations']),
@@ -776,7 +795,7 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Custom)
+		self.require_worker(inspector).add(Custom)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
 			document['channels']['orders/add~v1']['address'],
@@ -809,12 +828,12 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Plain)
+		self.require_worker(inspector).add(Plain)
 		self.assertIn(
 			'plain',
 			Specifications('/spec').document(inspector)['channels'],
 		)
-		inspector.worker.add(Duplicate)
+		self.require_worker(inspector).add(Duplicate)
 		with self.assertRaisesRegex(
 			ValueError,
 			'Duplicate',
@@ -823,7 +842,10 @@ class DocumentTests(TestCase):
 
 	def test_removed_channel_option_is_rejected(self):
 		with self.assertRaises(TypeError):
-			Specification(channel='unused')
+			call_with_invalid_input(
+				Specification,
+				channel='unused',
+			)
 
 	def test_shared_reply_channel_and_no_response(self):
 		class Custom(
@@ -840,8 +862,8 @@ class DocumentTests(TestCase):
 				pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Custom)
-		inspector.worker.add(Plain)
+		self.require_worker(inspector).add(Custom)
+		self.require_worker(inspector).add(Plain)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
 			document['operations'][Custom.name]['reply']['channel'],
@@ -864,7 +886,7 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(Conflict)
+		self.require_worker(inspector).add(Conflict)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
 			set(document['channels']),
@@ -883,7 +905,7 @@ class DocumentTests(TestCase):
 
 		Other.name = Add.name
 		inspector = self.inspector()
-		inspector.worker.tasks.append(Other)
+		self.require_worker(inspector).tasks.append(Other)
 		with self.assertRaisesRegex(
 			ValueError,
 			'Duplicate task specification',
@@ -904,8 +926,8 @@ class DocumentTests(TestCase):
 			pass
 
 		inspector = self.inspector()
-		inspector.worker.add(First)
-		inspector.worker.add(Later)
+		self.require_worker(inspector).add(First)
+		self.require_worker(inspector).add(Later)
 		document = Specifications('/spec').document(inspector)
 		self.assertEqual(
 			document['operations'][Later.name]['reply']['channel'],
@@ -922,6 +944,7 @@ class SpecificationRPCTests(TestCase):
 		from DefStream.Broker.Implements.RabbitMQ import (
 			Connection,
 			Configuration,
+			Reject,
 		)
 
 		class Checked(
@@ -939,15 +962,17 @@ class SpecificationRPCTests(TestCase):
 		))
 		connection.connect()
 		ready = Event()
+		worker_broker = Connection(connection.conf)
 
-		def prepare(worker):
-			worker.broker.declare(Checked.parameters)
-			ready.set()
+		class Prepare(WorkerSetup):
+			def __call__(self, worker: Worker) -> None:
+				worker_broker.declare(Checked.parameters)
+				ready.set()
 
 		worker = Worker(
-			Connection(connection.conf),
+			worker_broker,
 			ThreadPool(1),
-			setups=prepare,
+			setups=Prepare(),
 		)
 		worker.add(Checked)
 		failures = []
@@ -973,7 +998,7 @@ class SpecificationRPCTests(TestCase):
 				5,
 			)
 			with self.assertLogs(
-				'DefStream.Worker',
+				'Worker',
 				level='ERROR',
 			), self.assertRaises(RemoteError):
 				request(

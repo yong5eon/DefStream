@@ -38,7 +38,7 @@ class Connection(
 	Declarable,
 	Emittable,
 ):
-	logger = getLogger('DefStream.Broker.Implements.Redis.Connection')
+	logger = getLogger('Broker.Redis.Connection')
 
 	def __init__(
 		self,

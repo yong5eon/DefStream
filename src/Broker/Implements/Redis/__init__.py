@@ -1,8 +1,4 @@
-from DefStream.Broker import (
-	EventHandler,
-	Reject,
-	Requeue,
-)
+from DefStream.Broker import EventHandler
 from .Configuration import (
 	Configuration,
 	ConnectionType,
@@ -11,7 +7,11 @@ from .Connection import (
 	Connection,
 )
 from .Consumer import Consumer
-from .Event import Event
+from .Event import (
+	Event,
+	Reject,
+	Requeue,
+)
 from .Queue import Queue
 from .Subscription import Subscription
 

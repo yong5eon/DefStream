@@ -2,7 +2,10 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from DefStream.Validator import Patterns
-from DefStream.Validator.Patterns import IsOptional
+from DefStream.Validator.Patterns import (
+	IsOptional,
+	IsTypeOf,
+)
 from DefStream.Validator.Patterns.Common import (
 	IsOptional as CommonIsOptional,
 	__all__ as common_exports,
@@ -10,6 +13,17 @@ from DefStream.Validator.Patterns.Common import (
 
 
 class IsOptionalTests(TestCase):
+	def test_type_sequences_are_normalized_for_runtime_checks(self):
+		pattern = IsTypeOf([
+			int,
+			float,
+		])
+
+		self.assertEqual(pattern(1), 1)
+		self.assertEqual(pattern(1.5), 1.5)
+		with self.assertRaises(TypeError):
+			pattern('1')
+
 	def test_none_is_returned_without_running_patterns(self):
 		pattern = Mock()
 

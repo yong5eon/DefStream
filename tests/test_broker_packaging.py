@@ -12,12 +12,39 @@ from unittest import (
 	main,
 )
 
+from _support import require_value
+
 
 class BrokerPackagingTests(TestCase):
-	def test_distribution_contains_both_brokers(self):
+	def test_distribution_contains_play_extension_and_template(self):
+		package = distribution('DefStream')
 		files = {
 			str(path).replace('\\', '/')
-			for path in distribution('DefStream').files
+			for path in require_value(package.files)
+		}
+		for name in (
+			'Play.py',
+			'Play.html',
+		):
+			self.assertIn(
+				'DefStream/Inspector/Extensions/' + name,
+				files,
+			)
+		for name in (
+			'Console.py',
+			'Console.html',
+		):
+			self.assertNotIn(
+				'DefStream/Inspector/Extensions/' + name,
+				files,
+			)
+		return
+
+	def test_distribution_contains_both_brokers(self):
+		package = distribution('DefStream')
+		files = {
+			str(path).replace('\\', '/')
+			for path in require_value(package.files)
 		}
 		for broker in (
 			'RabbitMQ',
@@ -41,7 +68,7 @@ class BrokerPackagingTests(TestCase):
 		return
 
 	def test_extras_depend_on_clients_not_adapter_distributions(self):
-		dependencies = requires('DefStream')
+		dependencies = require_value(requires('DefStream'))
 		self.assertEqual(
 			len(dependencies),
 			2,

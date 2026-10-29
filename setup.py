@@ -42,7 +42,7 @@ setup(
 	include_package_data=False,
 	package_data={
 		'DefStream.Inspector.Extensions': [
-			'Console.html',
+			'Play.html',
 			'Status.html',
 		],
 	},

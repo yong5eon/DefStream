@@ -21,17 +21,19 @@ from redis.cluster import RedisCluster
 from DefStream.Broker import (
 	Consumer as BaseConsumer,
 	Event as BaseEvent,
-	EventError,
 	EventHandler,
+)
+from .Event import (
+	Event,
 	Requeue,
 )
-from .Event import Event
 from .Queue import Queue
 from .Serializer import (
 	Decoder,
 	Encoder,
 )
 from .Subscription import Subscription
+from DefStream.Broker.Event import EventErrorPolicy
 
 __all__ = (
 	'Consumer',
@@ -39,7 +41,7 @@ __all__ = (
 
 
 class Consumer(BaseConsumer):
-	logger = getLogger('DefStream.Broker.Implements.Redis.Consumer')
+	logger = getLogger('Broker.Redis.Consumer')
 
 	def __init__(
 		self,
@@ -140,7 +142,7 @@ class Consumer(BaseConsumer):
 	def fail(
 		self,
 		event: BaseEvent,
-		policy: Optional[EventError] = None,
+		policy: Optional[EventErrorPolicy] = None,
 	) -> None:
 		self.logger.debug(
 			'Applying message failure policy: consumer=%s policy=%s',
@@ -331,6 +333,8 @@ class Consumer(BaseConsumer):
 					)
 					raise
 				for _, entries in messages:
+					if not isinstance(entries, list):
+						raise TypeError('Redis Stream read returned invalid entries')
 					self.deliver(
 						stream,
 						handler,

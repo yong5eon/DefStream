@@ -43,7 +43,7 @@ class PoolFull(RuntimeError):
 
 
 class Pool:
-	logger = getLogger('DefStream.Pool')
+	logger = getLogger('Worker.Pool')
 
 	def __init__(
 		self,
@@ -205,7 +205,7 @@ def pool_size(max: Optional[int]) -> int:
 
 
 class ThreadPool(Pool):
-	logger = getLogger('DefStream.ThreadPool')
+	logger = getLogger('Worker.ThreadPool')
 
 	def __init__(
 		self,
@@ -225,7 +225,7 @@ class ThreadPool(Pool):
 
 
 class ProcessPool(Pool):
-	logger = getLogger('DefStream.ProcessPool')
+	logger = getLogger('Worker.ProcessPool')
 
 	def __init__(
 		self,

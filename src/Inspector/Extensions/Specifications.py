@@ -32,7 +32,7 @@ def reference(
 
 
 class Specifications(Extension):
-	logger = getLogger('DefStream.Inspector.Extensions.Specifications')
+	logger = getLogger('Worker.Inspector.Specifications')
 
 	def __init__(
 		self,

@@ -70,7 +70,7 @@ def worker_hooks(
 
 
 class Worker:
-	logger = getLogger('DefStream.Worker')
+	logger = getLogger('Worker')
 
 	def __init__(
 		self,

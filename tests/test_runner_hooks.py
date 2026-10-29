@@ -156,7 +156,7 @@ class HookTests(TestCase):
 					if failure is None:
 						worker.run()
 					else:
-						with self.assertLogs('DefStream.Worker', level='ERROR'):
+						with self.assertLogs('Worker', level='ERROR'):
 							worker.run()
 					self.assertEqual(observed, [(consumer.owner, expected)])
 					getattr(delivery, action).assert_called_once_with()

@@ -33,7 +33,7 @@ def configure_logging() -> None:
 	handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
 	sources = (
 		Filter('Sample'),
-		Filter('DefStream'),
+		Filter('Worker'),
 	)
 	handler.addFilter(lambda record: any(source.filter(record) for source in sources))
 	root = getLogger()
@@ -145,7 +145,7 @@ class Queue(Sendable):
 
 	def get(
 		self,
-		timeout: int = None,
+		timeout: Optional[int] = None,
 	):
 		try:
 			return self.con.q[self.queue].get(
@@ -181,6 +181,9 @@ class Consumer(BaseConsumer):
 		return
 
 	def run(self):
+		handler = self.handler
+		if handler is None:
+			raise ValueError('A subscription handler is required')
 		q: SimpleQueue = self.con.q[self.queue]
 		while self.alive:
 			try:
@@ -189,7 +192,7 @@ class Consumer(BaseConsumer):
 					timeout=1,
 				)
 				if v:
-					self.handler(v)
+					handler(v)
 			except Empty:
 				if self.alive:
 					continue

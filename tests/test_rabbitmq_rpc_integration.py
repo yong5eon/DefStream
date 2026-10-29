@@ -27,6 +27,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
+from _support import require_value
 
 
 class RpcRun(Run):
@@ -80,7 +81,7 @@ class RpcIntegrationTests(TestCase):
 					'defstream-rpc-' + uuid4().hex
 					for index in range(3)
 				]
-				channel = client.connection.channel()
+				channel = require_value(client.connection).channel()
 				exchange = 'defstream-rpc-' + uuid4().hex
 				worker = Worker(
 					Connection(client.conf),
@@ -163,7 +164,7 @@ class RpcIntegrationTests(TestCase):
 							event='missing',
 						)
 					with self.assertLogs(
-						'DefStream.Worker',
+						'Worker',
 						level='ERROR',
 					):
 						self.assertEqual(
@@ -201,7 +202,7 @@ class RpcIntegrationTests(TestCase):
 							timeout=2,
 						)
 					with self.assertLogs(
-						'DefStream.Broker.RabbitMQ.Consumer',
+						'Broker.RabbitMQ.Consumer',
 						level='WARNING',
 					):
 						with self.assertRaises(TimeoutError):

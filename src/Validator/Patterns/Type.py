@@ -6,7 +6,13 @@ from collections.abc import (
 	Iterable,
 	Mapping,
 )
-from typing import Type, Sequence, Union
+from builtins import type as type_of
+from typing import (
+	Optional,
+	Sequence,
+	Type,
+	Union,
+)
 
 __all__ = (
 	'IsTypeOf',
@@ -45,88 +51,87 @@ class IsTypeOf(Pattern):
 		self, 
 		type: Union[Type, Sequence[Type]],
 		patterns: Sequence[Pattern] = (),
-		error: BaseException = None
+		error: Optional[BaseException] = None,
 	):
-		self.type = type
+		self.type = type if isinstance(type, type_of) else tuple(type)
 		self.patterns = patterns if isinstance(patterns, Iterable) else (patterns,)
 		self.error = error
 		return
 
 	def __call__(self, parameter):
-		def op(parameter):
-			if isinstance(self.type, Iterable):
-				return isinstance(parameter, self.type)
-			return type(parameter) is self.type
-		if not op(parameter):
+		if isinstance(self.type, tuple):
+			matches = isinstance(parameter, self.type)
+		else:
+			matches = type(parameter) is self.type
+		if not matches:
 			if self.error:
 				raise self.error
+			expected = ', '.join(
+				item.__name__
+				for item in self.type
+			) if isinstance(self.type, tuple) else self.type.__name__
 			raise TypeError('{} must be {}'.format(
-				'\'{}\''.format(parameter) if isinstance(parameter, str) else parameter, 
-				', '.join([t.__name__ for t in self.type]) if isinstance(self.type, Iterable) else self.type.__name__
+				'\'{}\''.format(parameter) if isinstance(parameter, str) else parameter,
+				expected,
 			))
 		for pattern in self.patterns:
 			parameter = pattern(parameter)
 		return parameter
 
 	def __repr__(self):
-		if issubclass(self.__class__, IsTypeOf):	
-			return '{}({})'.format(
-				self.__class__.__name__,
-				', '.join([p.__repr__() for p in self.patterns]) if self.patterns and len(self.patterns) else ''
-			)
-		return '{}({}{})'.format(
+		return '{}({})'.format(
 			self.__class__.__name__,
-			self.type.__name__,
-			', ({})'.format(
-				', '.join([p.__repr__() for p in self.patterns])
-			) if self.patterns and len(self.patterns) else ''
+			', '.join(
+				p.__repr__()
+				for p in self.patterns
+			),
 		)
 
 
 class IsBool(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(bool, patterns=args, error=error)
 		return
 
 
 class IsInteger(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(int, patterns=args, error=error)
 		return
 
 
 class IsFloat(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(float, patterns=args, error=error)
 		return
 
 
 class IsNumber(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__((int, float), patterns=args, error=error)
 		return
 
 
 class IsString(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(str, patterns=args, error=error)
 		return
 
 
 class IsList(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(list, patterns=args, error=error)
 		return
 
 
 class IsTuple(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(tuple, patterns=args, error=error)
 		return
 
 
 class IsSet(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(set, patterns=args, error=error)
 		return
 
@@ -154,25 +159,25 @@ class IsArray(Pattern):
 
 
 class IsObject(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(dict, patterns=args, error=error)
 		return
 
 
 class IsByteString(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(bytes, patterns=args, error=error)
 		return
 
 
 class IsByteArray(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(bytearray, patterns=args, error=error)
 		return
 	
 
 class IsDecimal(IsTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		from decimal import Decimal
 		super().__init__(Decimal, patterns=args, error=error)
 		return
@@ -182,7 +187,7 @@ class IsDataObject(Pattern):
 	def __init__(
 		self, 
 		*patterns: Pattern,
-		error: BaseException = None
+		error: Optional[BaseException] = None,
 	):
 		self.patterns = patterns if isinstance(patterns, Iterable) else (patterns,)
 		self.error = error
@@ -206,7 +211,7 @@ class ToTypeOf(Pattern):
 		self,
 		type : type,
 		patterns: Sequence[Pattern] = (),
-		error: BaseException = None,
+		error: Optional[BaseException] = None,
 		eval: bool = False,
 	):
 		self.type = type
@@ -250,67 +255,67 @@ class ToTypeOf(Pattern):
 
 
 class ToBool(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(bool, patterns=args, error=error, eval=True)
 		return
 
 
 class ToInteger(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(int, patterns=args, error=error, eval=True)
 		return
 
 
 class ToFloat(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(float, patterns=args, error=error, eval=True)
 		return
 
 
 class ToString(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(str, patterns=args, error=error)
 		return
 
 
 class ToList(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(list, patterns=args, error=error)
 		return
 
 
 class ToTuple(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(tuple, patterns=args, error=error)
 		return
 	
 
 class ToSet(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(set, patterns=args, error=error)
 		return
 
 
 class ToObject(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(dict, patterns=args, error=error)
 		return
 
 
 class ToByteString(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(bytes, patterns=args, error=error)
 		return
 
 
 class ToByteArray(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		super().__init__(bytearray, patterns=args, error=error)
 		return
 
 
 class ToDecimal(ToTypeOf):
-	def __init__(self, *args, error: BaseException = None):
+	def __init__(self, *args, error: Optional[BaseException] = None):
 		from decimal import Decimal
 		super().__init__(Decimal, patterns=args, error=error)
 		return
@@ -320,7 +325,7 @@ class ToDataObject(Pattern):
 	def __init__(
 		self, 
 		*patterns: Pattern,
-		error: BaseException = None
+		error: Optional[BaseException] = None,
 	):
 		self.patterns = patterns if isinstance(patterns, Iterable) else (patterns,)
 		self.error = error
@@ -329,7 +334,7 @@ class ToDataObject(Pattern):
 	def __call__(self, parameter: Mapping) -> object:
 		from dataclasses import is_dataclass, make_dataclass
 		try:
-			parameter = make_dataclass(
+			data_object = make_dataclass(
 				'DynamicDataClass',
 				[(key, type(value)) for key, value in parameter.items()]
 			)(**parameter)
@@ -339,12 +344,12 @@ class ToDataObject(Pattern):
 			raise ValueError('{} cannot be converted to dataclass'.format(
 				'\'{}\''.format(parameter) if isinstance(parameter, str) else parameter
 			))
-		if not is_dataclass(parameter.__class__):
+		if not is_dataclass(data_object.__class__):
 			if self.error:
 				raise self.error
 			raise TypeError('{} must be dataclass'.format(
-				'\'{}\''.format(parameter) if isinstance(parameter, str) else parameter, 
+				'\'{}\''.format(data_object) if isinstance(data_object, str) else data_object,
 			))
 		for pattern in self.patterns:
-			parameter = pattern(parameter)
-		return parameter
+			data_object = pattern(data_object)
+		return data_object

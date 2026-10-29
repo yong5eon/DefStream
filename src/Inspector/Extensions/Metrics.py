@@ -103,7 +103,7 @@ def label(
 
 
 class Metrics(Extension):
-	logger = getLogger('DefStream.Inspector.Extensions.Metrics')
+	logger = getLogger('Worker.Inspector.Metrics')
 
 	def __init__(
 		self,

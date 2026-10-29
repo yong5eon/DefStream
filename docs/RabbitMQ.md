@@ -61,28 +61,31 @@ finally:
 
 ### 로깅
 
-여섯 클래스는 `DefStream.Broker.RabbitMQ.ClassName` 이름의 클래스 멤버
+여섯 클래스는 `Broker.RabbitMQ.ClassName` 이름의 클래스 멤버
 `logger`를 사용합니다(`Connection`, `Consumer`, `Queue`, `Exchange`, `Stream`, `Event`).
 로거 이름은 모듈 경로(`DefStream.Broker.Implements.RabbitMQ`)와 다릅니다.
 하위 클래스는 같은 로거를 상속하며 필요하면 멤버를 재정의할 수 있습니다.
 라이브러리는 핸들러·`NullHandler`·레벨·필터를 설정하지 않고 루트로 전파합니다.
 미설정 시 표준 `logging.lastResort` 동작을 유지합니다.
+기존 `DefStream.Broker.RabbitMQ` 이름으로 필터나 핸들러를 설정했다면
+`Broker.RabbitMQ`로 갱신하세요.
 
 RabbitMQ 구현은 정상 동작을 INFO로 기록하지 않습니다.
 연결 시도·성공·종료, 큐·Exchange·Stream 선언·삭제·바인딩 성공, Consumer의 구독 적용·채널 종료·소비 루프 생명주기,
 메시지·RPC·정산 추적은 모두 DEBUG입니다.
 작업마다 연결을 열고 닫아도 INFO 로그가 늘어나지 않습니다.
-Worker 시작·준비·종료 같은 실행 생명주기는 `DefStream.Worker` 로거의 INFO로 확인할 수 있습니다.
+Worker 시작·준비·종료 같은 실행 생명주기는 `Worker` 로거의 INFO로 확인할 수 있습니다.
 RPC 시간 초과·원격 오류·응답 라우팅 불가는 WARNING, 연결·자원 작업 실패를 포함한 내부 I/O·코덱 오류는 ERROR입니다.
 본문·결과·헤더·인증정보와 예외 문자열·traceback은 기록하지 않으며 예외는 그대로 전파합니다.
 애플리케이션이 같은 예외를 다시 기록하면 중복될 수 있습니다.
 발행 API 반환은 소비자 처리 완료가 아니며, RPC 응답 시간 초과도 전달된 작업을 취소하지 않습니다.
 
 `samples/Broker/RabbitMQ/*.py`는 실행 진입점에서만 루트 DEBUG 콘솔 출력을 구성합니다.
-핸들러의 `Filter('Sample')` 또는 `Filter('DefStream.Broker.RabbitMQ')`
+핸들러의 `Filter('Sample')` 또는 `Filter('Broker.RabbitMQ')`
 통과 조건으로 두 이름과 점으로 구분된 하위 로거만 출력하며 Pika·코어 등은 제외합니다.
-다른 애플리케이션에서는 원하는 상위 이름(`DefStream`, `DefStream.Broker` 등)이나
-클래스 이름을 선택하고 핸들러·레벨·필터를 직접 구성하세요.
+브로커 로거는 `DefStream` 계층 밖에 있으므로 다른 애플리케이션에서는 `Broker`,
+`Broker.RabbitMQ` 또는 클래스 이름으로 선택하세요. `DefStream`은 Worker 등
+코어 로거를 선택할 때 사용합니다.
 
 ### Worker로 작업 처리하기
 

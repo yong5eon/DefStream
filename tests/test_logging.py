@@ -90,8 +90,8 @@ class LoggingTests(TestCase):
 				)
 				self.assertIn('Sample INFO', result.stderr)
 				if relative[0] == 'Worker':
-					self.assertIn('DefStream.Worker INFO', result.stderr)
-					self.assertIn('DefStream.Run DEBUG', result.stderr)
+					self.assertIn('Worker INFO', result.stderr)
+					self.assertIn('Task DEBUG', result.stderr)
 					self.assertIn('Starting Worker', result.stdout)
 				else:
 					self.assertEqual(result.stdout, '')
@@ -108,8 +108,8 @@ class LoggingTests(TestCase):
 			finally:
 				pool.stop()
 			output = path.read_text(encoding='utf-8')
-			self.assertIn('DefStream.Run', output)
-			self.assertIn('DefStream.Executor', output)
+			self.assertIn('Task', output)
+			self.assertIn('Worker.Executor', output)
 			self.assertIn('SpawnProcess', output)
 			self.assertNotIn('private-payload', output)
 
@@ -120,35 +120,35 @@ class LoggingTests(TestCase):
 		for cls, name in (
 			(
 				Pool,
-				'DefStream.Pool',
+				'Worker.Pool',
 			),
 			(
 				ThreadPool,
-				'DefStream.ThreadPool',
+				'Worker.ThreadPool',
 			),
 			(
 				ProcessPool,
-				'DefStream.ProcessPool',
+				'Worker.ProcessPool',
 			),
 			(
 				CustomPool,
-				'DefStream.ThreadPool',
+				'Worker.ThreadPool',
 			),
 			(
 				Run,
-				'DefStream.Run',
+				'Task',
 			),
 			(
 				Example,
-				'DefStream.Run',
+				'Task',
 			),
 			(
 				Worker,
-				'DefStream.Worker',
+				'Worker',
 			),
 			(
 				Executor,
-				'DefStream.Executor',
+				'Worker.Executor',
 			),
 		):
 			with self.subTest(cls=cls):
@@ -186,7 +186,7 @@ class LoggingTests(TestCase):
 		executor = Mock()
 		future = Mock()
 		executor.submit.return_value = future
-		with self.assertLogs('DefStream.Pool', level=DEBUG) as logs:
+		with self.assertLogs('Worker.Pool', level=DEBUG) as logs:
 			pool = Pool(executor, max=1)
 			pool.submit(Example, {})
 			with self.assertRaises(PoolFull):
@@ -195,7 +195,7 @@ class LoggingTests(TestCase):
 		self.assertFalse(any(record.levelno >= WARNING for record in logs.records))
 		with ThreadPoolExecutor(max_workers=1) as external:
 			pool = Pool(external, max=1)
-			with self.assertLogs('DefStream.Pool', level=WARNING) as warnings:
+			with self.assertLogs('Worker.Pool', level=WARNING) as warnings:
 				release = Event()
 				pending = external.submit(release.wait)
 				pool.futures.add(pending)
@@ -208,13 +208,13 @@ class LoggingTests(TestCase):
 			self.assertEqual(warnings.records[0].levelno, WARNING)
 
 	def test_run_logs_framework_name_and_not_arguments_or_results(self):
-		with self.assertLogs('DefStream.Run', level=DEBUG) as logs:
+		with self.assertLogs('Task', level=DEBUG) as logs:
 			self.assertEqual(Example()(), 'private-payload')
 		output = '\n'.join(logs.output)
 		self.assertIn(__name__ + '.Example', output)
 		self.assertNotIn('private-payload', output)
 		self.assertTrue(all(record.levelno == DEBUG for record in logs.records))
-		with self.assertLogs('DefStream.Run', level=DEBUG) as failed:
+		with self.assertLogs('Task', level=DEBUG) as failed:
 			with self.assertRaises(ValueError):
 				Failure()()
 		self.assertFalse(any(record.exc_info for record in failed.records))
@@ -235,7 +235,7 @@ class LoggingTests(TestCase):
 		broker = Broker()
 		worker = Worker(broker, Mock())
 		output = StringIO()
-		with self.assertLogs('DefStream.Worker', level=DEBUG) as logs, redirect_stdout(output):
+		with self.assertLogs('Worker', level=DEBUG) as logs, redirect_stdout(output):
 			worker.add(Example)
 			worker.run()
 		self.assertIn('Starting Worker', output.getvalue())
@@ -249,7 +249,7 @@ class LoggingTests(TestCase):
 		worker.consumer = Mock()
 		event = Mock()
 		event.body = 'private-payload'
-		with self.assertLogs('DefStream', level=DEBUG) as invalid:
+		with self.assertLogs('Worker', level=DEBUG) as invalid:
 			worker.receive(Example, event)
 		self.assertEqual(sum(record.levelno == WARNING for record in invalid.records), 1)
 		self.assertFalse(any(record.levelno >= ERROR for record in invalid.records))
@@ -257,12 +257,12 @@ class LoggingTests(TestCase):
 		try:
 			raise ValueError('작업 실패 예제')
 		except ValueError as error:
-			with self.assertLogs('DefStream', level=DEBUG) as failed:
+			with self.assertLogs('Worker', level=DEBUG) as failed:
 				worker.failed(Failure, event, error)
 		self.assertEqual(sum(record.levelno == ERROR for record in failed.records), 1)
 		self.assertEqual(sum(bool(record.exc_info) for record in failed.records), 1)
 
-	def test_sample_filter_allows_only_sample_and_defstream_hierarchies(self):
+	def test_sample_filter_allows_only_sample_worker_and_task_hierarchies(self):
 		root = getLogger()
 		handlers = root.handlers[:]
 		level = root.level
@@ -286,19 +286,27 @@ class LoggingTests(TestCase):
 					True,
 				),
 				(
-					'DefStream',
+					'Worker',
 					True,
 				),
 				(
-					'DefStream.Worker',
+					'Worker.Pool',
 					True,
+				),
+				(
+					'Task',
+					True,
+				),
+				(
+					'TaskExtra',
+					False,
 				),
 				(
 					'SampleExtra',
 					False,
 				),
 				(
-					'DefStreamExtra',
+					'WorkerExtra',
 					False,
 				),
 				(

@@ -146,7 +146,7 @@ class Add(
 검증 예외는 작업 실패로 처리되어 오류 훅과 `on_error` 정책을 따릅니다.
 예제의 `Reject()`는 잘못된 입력을 무한 재시도하지 않게 합니다. DLQ에 보관하려면
 `Subscription(error=...)`도 지정하고 `declare()`로 해당 큐를 준비하세요.
-스키마·예제는 Inspector의 AsyncAPI와 콘솔에 표시되며,
+스키마·예제는 Inspector의 AsyncAPI와 Play에 표시되며,
 사용자 정의 Validator 패턴을 자동으로 JSON Schema로 역변환하지는 않습니다.
 
 ```mermaid

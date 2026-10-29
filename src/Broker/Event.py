@@ -7,7 +7,7 @@ from typing import (
 __all__ = (
 	'Event',
 	'EventHandler',
-	'EventError',
+	'EventErrorPolicy',
 )
 
 
@@ -28,7 +28,7 @@ class EventHandler(Protocol):
 	) -> None: ...
 
 
-class EventError(Protocol):
+class EventErrorPolicy(Protocol):
 	def __call__(
 		self,
 		event: Event,

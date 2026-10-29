@@ -156,7 +156,7 @@ def run_cleanups(
 
 
 class Executor(PyExecutor):
-	logger = getLogger('DefStream.Executor')
+	logger = getLogger('Worker.Executor')
 
 	def __init__(
 		self,

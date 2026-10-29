@@ -20,9 +20,9 @@ from DefStream.Broker import (
 	Sendable,
 	Consumer as BaseConsumer,
 	Event as BaseEvent,
-	EventError,
 )
 from DefStream.Broker.Event import EventHandler
+from DefStream.Broker.Event import EventErrorPolicy
 from DefStream.Worker import (
 	Run,
 	ThreadPool,
@@ -151,7 +151,7 @@ class Consumer(BaseConsumer):
 	def fail(
 		self,
 		event: BaseEvent,
-		policy: Optional[EventError] = None,
+		policy: Optional[EventErrorPolicy] = None,
 	) -> None:
 		if policy is None:
 			event.reject()
@@ -215,7 +215,8 @@ class SetupLogger(WorkerSetup):
 		handler.setFormatter(Formatter('%(asctime)s %(name)s %(levelname)s %(message)s'))
 		sources = (
 			Filter('Sample'),
-			Filter('DefStream'),
+			Filter('Worker'),
+			Filter('Task'),
 		)
 		handler.addFilter(lambda record: any(source.filter(record) for source in sources))
 		root = getLogger()

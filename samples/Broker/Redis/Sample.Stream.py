@@ -21,7 +21,7 @@ class SampleLogFilter(Filter):
 			record.name == prefix or record.name.startswith(prefix + '.')
 			for prefix in (
 				'Sample',
-				'DefStream.Broker.Implements.Redis',
+				'Broker.Redis',
 			)
 		)
 

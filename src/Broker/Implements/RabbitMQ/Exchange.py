@@ -28,7 +28,6 @@ from time import (
 	time,
 	monotonic,
 )
-from enum import Enum
 from uuid import uuid4
 
 from typing import (
@@ -47,7 +46,7 @@ class Exchange(
 	Callable,
 ):
 	"""Exchange of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.RabbitMQ.Exchange')
+	logger = getLogger('Broker.RabbitMQ.Exchange')
 
 	def __init__(
 		self,

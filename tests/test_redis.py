@@ -114,6 +114,14 @@ class RedisTests(TestCase):
 			body,
 		)
 
+	def test_send_accepts_decoded_message_ids(self):
+		self.connection.xadd.return_value = '1-0'
+
+		self.assertEqual(
+			self.queue.send({'value': 1}),
+			'1-0',
+		)
+
 	def test_ack_reject_and_requeue_are_idempotent(self):
 		for operation in (
 			'ack',

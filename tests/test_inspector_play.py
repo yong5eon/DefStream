@@ -11,6 +11,7 @@ from threading import (
 	Event,
 	Thread,
 )
+from typing import Optional
 from unittest import (
 	TestCase,
 	main,
@@ -23,10 +24,9 @@ from unittest.mock import (
 from uuid import uuid4
 
 from DefStream.Broker.Errors import RemoteError
-from DefStream.Broker.Policies import Reject
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-	Console,
+	Play,
 	Specifications,
 )
 from DefStream.Worker import (
@@ -34,6 +34,11 @@ from DefStream.Worker import (
 	Specification,
 	ThreadPool,
 	Worker,
+	WorkerSetup,
+)
+from _support import (
+	RejectPolicy,
+	require_value,
 )
 
 TOKEN = 'test-token-at-least-32-characters!'
@@ -47,7 +52,7 @@ class Task(
 		'b': 2,
 	}),
 	response=Specification(),
-	on_error=Reject(),
+	on_error=RejectPolicy(),
 ):
 	def run(
 		self,
@@ -75,7 +80,7 @@ class Producer:
 		self.connected = 0
 		self.closed = 0
 		self.sent = []
-		self.error = None
+		self.error: Optional[BaseException] = None
 
 	def connect(self):
 		self.connected += 1
@@ -113,7 +118,7 @@ class RPCProducer(Producer):
 		return body['a'] / body['b']
 
 
-class ConsoleExtensionTests(TestCase):
+class PlayExtensionTests(TestCase):
 	def setUp(self):
 		self.producers = []
 
@@ -122,15 +127,13 @@ class ConsoleExtensionTests(TestCase):
 			self.producers.append(producer)
 			return producer
 
-		self.extension = Console(
-			'/console',
+		self.extension = Play(
+			'/play',
 			broker=factory,
 			token=TOKEN,
 		)
-		self.worker = Worker(
-			Mock(),
-			ThreadPool(1),
-		)
+		self.broker = Mock()
+		self.worker = Worker(self.broker, ThreadPool(1))
 		self.worker.add(Task)
 		self.worker.running.set()
 		self.inspector = Inspector(
@@ -145,12 +148,12 @@ class ConsoleExtensionTests(TestCase):
 		self,
 		method='GET',
 		payload=None,
-		token=TOKEN,
+		token: Optional[str] = TOKEN,
 		headers=None,
 	):
 		connection = HTTPConnection(
 			'127.0.0.1',
-			self.inspector.server.server_port,
+			require_value(self.inspector.server).server_port,
 			timeout=5,
 		)
 		request_headers = {
@@ -167,7 +170,7 @@ class ConsoleExtensionTests(TestCase):
 		try:
 			connection.request(
 				method,
-				'/console',
+				'/play',
 				body=body,
 				headers=request_headers,
 			)
@@ -199,6 +202,10 @@ class ConsoleExtensionTests(TestCase):
 			b'<title>DefStream</title>',
 			body,
 		)
+		self.assertIn(
+			b'DefStream Inspector &middot; Play',
+			body,
+		)
 		self.assertNotIn(
 			TOKEN.encode(),
 			body,
@@ -217,11 +224,11 @@ class ConsoleExtensionTests(TestCase):
 		)
 
 	def test_custom_title_and_description_are_escaped_before_authentication(self):
-		self.inspector.exts['/console'] = Console(
-			'/console',
+		self.inspector.exts['/play'] = Play(
+			'/play',
 			broker=RPCProducer,
 			token=TOKEN,
-			title='My <Worker> & {{console_description}}',
+			title='My <Worker> & {{play_description}}',
 			description='<script>alert("subtitle")</script>',
 		)
 		status, body, headers = self.fetch(
@@ -233,11 +240,11 @@ class ConsoleExtensionTests(TestCase):
 			200,
 		)
 		self.assertIn(
-			b'<title>My &lt;Worker&gt; &amp; {{console_description}}</title>',
+			b'<title>My &lt;Worker&gt; &amp; {{play_description}}</title>',
 			body,
 		)
 		self.assertIn(
-			b'<h1 id="title">My &lt;Worker&gt; &amp; {{console_description}}</h1>',
+			b'<h1 id="title">My &lt;Worker&gt; &amp; {{play_description}}</h1>',
 			body,
 		)
 		self.assertIn(
@@ -282,13 +289,13 @@ class ConsoleExtensionTests(TestCase):
 			body,
 		)
 		self.assertNotIn(
-			b' - Console',
+			b' - Play',
 			body,
 		)
 
 	def test_html_is_read_again_on_each_refresh(self):
 		with patch.object(
-			import_module('DefStream.Inspector.Extensions.Console'),
+			import_module('DefStream.Inspector.Extensions.Play'),
 			'files',
 		) as resources:
 			resource = resources.return_value.joinpath.return_value
@@ -317,6 +324,7 @@ class ConsoleExtensionTests(TestCase):
 				resource.read_bytes.call_count,
 				2,
 			)
+			resources.return_value.joinpath.assert_called_with('Play.html')
 
 	def test_unauthorized_catalog_and_execution_never_create_producer(self):
 		for method, payload in (
@@ -330,7 +338,7 @@ class ConsoleExtensionTests(TestCase):
 			),
 		):
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Play',
 				level='WARNING',
 			):
 				status, body, headers = self.fetch(
@@ -348,16 +356,19 @@ class ConsoleExtensionTests(TestCase):
 		)
 
 	def test_optional_token_allows_catalog_send_and_rpc_without_authorization(self):
-		for options in (
-			{},
-			{'token': None},
-		):
-			self.extension = Console(
-				'/console',
+		for extension in (
+			Play(
+				'/play',
 				broker=RPCProducer,
-				**options,
-			)
-			self.inspector.exts['/console'] = self.extension
+			),
+			Play(
+				'/play',
+				broker=RPCProducer,
+				token=None,
+			),
+		):
+			self.extension = extension
+			self.inspector.exts['/play'] = self.extension
 			status, body, headers = self.fetch(
 				token=None,
 				headers={'Accept': 'text/html'},
@@ -400,7 +411,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_configured_token_rejects_missing_authorization(self):
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Play',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -418,8 +429,8 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_empty_token_is_not_an_implicit_authentication_bypass(self):
 		with self.assertRaises(ValueError):
-			Console(
-				'/console',
+			Play(
+				'/play',
 				broker=RPCProducer,
 				token='',
 			)
@@ -469,8 +480,8 @@ class ConsoleExtensionTests(TestCase):
 			],
 		)
 		self.assertTrue(all(producer.closed == 1 for producer in self.producers))
-		self.worker.broker.connect.assert_not_called()
-		self.worker.broker.close.assert_not_called()
+		self.broker.connect.assert_not_called()
+		self.broker.close.assert_not_called()
 
 	def test_custom_task_name_is_resolved_and_duplicate_names_are_rejected(self):
 		self.worker.add(NamedTask)
@@ -486,7 +497,7 @@ class ConsoleExtensionTests(TestCase):
 
 		self.worker.tasks.append(NamedTask)
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Play',
 			level='WARNING',
 		) as logs:
 			status, body, headers = self.fetch(
@@ -501,7 +512,7 @@ class ConsoleExtensionTests(TestCase):
 		payload = self.payload()
 		payload['task'] = 'not-registered'
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Play',
 			level='WARNING',
 		) as logs:
 			status, body, headers = self.fetch(
@@ -573,7 +584,7 @@ class ConsoleExtensionTests(TestCase):
 				'wsgi.input': BytesIO(raw),
 			}
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Play',
 				level='WARNING',
 			) if expected == 400 else nullcontext():
 				response = self.extension.handle(
@@ -587,7 +598,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_malformed_origin_is_rejected_explicitly(self):
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Play',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -622,7 +633,7 @@ class ConsoleExtensionTests(TestCase):
 		):
 			self.extension.broker = lambda: producer
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Play',
 				level='ERROR',
 			):
 				self.assertEqual(
@@ -639,7 +650,7 @@ class ConsoleExtensionTests(TestCase):
 
 	def test_cross_origin_and_invalid_requests_do_not_publish(self):
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Play',
 			level='WARNING',
 		):
 			self.assertEqual(
@@ -716,7 +727,7 @@ class ConsoleExtensionTests(TestCase):
 			producer.error = error
 			self.extension.broker = lambda: producer
 			with self.assertLogs(
-				'DefStream.Inspector.Extensions.Console',
+				'Worker.Inspector.Play',
 				level='WARNING',
 			):
 				status, body, headers = self.fetch(
@@ -739,7 +750,7 @@ class ConsoleExtensionTests(TestCase):
 	def test_worker_connection_is_rejected_without_closing_it(self):
 		self.extension.broker = lambda: self.worker.broker
 		with self.assertLogs(
-			'DefStream.Inspector.Extensions.Console',
+			'Worker.Inspector.Play',
 			level='ERROR',
 		):
 			self.assertEqual(
@@ -749,7 +760,7 @@ class ConsoleExtensionTests(TestCase):
 				)[0],
 				500,
 			)
-		self.worker.broker.close.assert_not_called()
+		self.broker.close.assert_not_called()
 
 	def test_concurrency_limit_and_existing_routes_keep_methods(self):
 		for _ in range(4):
@@ -779,13 +790,15 @@ class ConsoleExtensionTests(TestCase):
 			pass
 
 		ready = Event()
+		worker_broker = factory()
 
-		def prepare(worker):
-			worker.broker.declare(Live.parameters)
-			ready.set()
+		class Prepare(WorkerSetup):
+			def __call__(self, worker: Worker) -> None:
+				worker_broker.declare(Live.parameters)
+				ready.set()
 
-		extension = Console(
-			'/console',
+		extension = Play(
+			'/play',
 			broker=factory,
 			token=TOKEN,
 		)
@@ -794,9 +807,9 @@ class ConsoleExtensionTests(TestCase):
 			exts=(extension,),
 		)
 		worker = Worker(
-			factory(),
+			worker_broker,
 			ThreadPool(2),
-			setups=prepare,
+			setups=Prepare(),
 			inspector=inspector,
 		)
 		worker.add(Live)

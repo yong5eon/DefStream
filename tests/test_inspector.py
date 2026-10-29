@@ -14,6 +14,10 @@ from time import (
 	monotonic,
 	sleep,
 )
+from typing import (
+	Callable,
+	Protocol,
+)
 from unittest import (
 	TestCase,
 	main,
@@ -22,7 +26,6 @@ from unittest import (
 from unittest.mock import Mock
 from uuid import uuid4
 
-from DefStream.Broker.Policies import Reject
 from DefStream.Inspector import (
 	Extension,
 	Inspector,
@@ -38,6 +41,12 @@ from DefStream.Worker import (
 	Run,
 	ThreadPool,
 	Worker,
+	WorkerSetup,
+)
+from _support import (
+	RejectPolicy,
+	require_instance,
+	require_value,
 )
 
 
@@ -56,7 +65,7 @@ class Add(
 class Divide(
 	Run,
 	parameters={'queue': 'divide'},
-	on_error=Reject(),
+	on_error=RejectPolicy(),
 ):
 	def run(
 		self,
@@ -64,6 +73,26 @@ class Divide(
 		b: int,
 	):
 		return a / b
+
+
+class LiveConnection(Protocol):
+	def connect(self) -> None: ...
+
+	def close(self) -> None: ...
+
+	def declare(self, parameters: object) -> None: ...
+
+	def emit(
+		self,
+		body: object,
+		parameters: object,
+	) -> object: ...
+
+	def delete_queue(
+		self,
+		name: str,
+		/,
+	) -> object: ...
 
 
 class Consumer:
@@ -232,9 +261,12 @@ class InspectorTests(TestCase):
 		)
 		consumer = Consumer()
 		broker = Mock(consumer=Mock(return_value=consumer))
+		pool = ThreadPool(2)
+		self.broker = broker
+		self.pool = pool
 		worker = Worker(
 			broker,
-			ThreadPool(2),
+			pool,
 			inspector=inspector,
 			**kwargs,
 		)
@@ -276,10 +308,10 @@ class InspectorTests(TestCase):
 		path,
 		method='GET',
 	):
-		self.assertIsNotNone(inspector.server)
+		server = require_value(inspector.server)
 		connection = HTTPConnection(
 			'127.0.0.1',
-			inspector.server.server_port,
+			server.server_port,
 			timeout=3,
 		)
 		try:
@@ -414,9 +446,9 @@ class InspectorTests(TestCase):
 			cleaned.set()
 			worker.stop()
 			thread.join(10)
-		self.assertFalse(inspector.thread.is_alive())
+		self.assertFalse(require_value(inspector.thread).is_alive())
 		self.assertEqual(
-			inspector.server.fileno(),
+			require_value(inspector.server).fileno(),
 			-1,
 		)
 
@@ -444,7 +476,7 @@ class InspectorTests(TestCase):
 		))
 		self.assertTrue(acked.wait(5))
 		with self.assertLogs(
-			'DefStream.Worker',
+			'Worker',
 			level='ERROR',
 		):
 			consumer.call(lambda: worker.receive(
@@ -564,12 +596,13 @@ class InspectorTests(TestCase):
 
 	def test_active_execution_and_pool_full_are_not_counted_as_failures(self):
 		worker, consumer, inspector = self.make_worker()
-		worker.pool.stop()
-		worker.pool = Mock()
+		self.pool.stop()
+		pool = Mock()
+		worker.pool = pool
 		self.launch(worker)
 		self.assertTrue(consumer.ready.wait(5))
 		submitted = Event()
-		worker.pool.submit.side_effect = lambda *args, **kwargs: submitted.set()
+		pool.submit.side_effect = lambda *args, **kwargs: submitted.set()
 		delivery = Mock()
 		delivery.body = {'a': 1}
 		consumer.call(lambda: worker.receive(
@@ -578,11 +611,7 @@ class InspectorTests(TestCase):
 		))
 		self.assertTrue(submitted.wait(5))
 		task = Add.name
-		metrics = inspector.exts['/stats']
-		self.assertIsInstance(
-			metrics,
-			Metrics,
-		)
+		metrics = require_instance(inspector.exts['/stats'], Metrics)
 		with metrics.lock:
 			self.assertEqual(
 				metrics.tasks[task].active,
@@ -590,10 +619,10 @@ class InspectorTests(TestCase):
 			)
 		completed = Event()
 		delivery.ack.side_effect = completed.set
-		callback = worker.pool.submit.call_args.kwargs['callback']
+		callback = pool.submit.call_args.kwargs['callback']
 		callback(1)
 		self.assertTrue(completed.wait(5))
-		worker.pool.submit.side_effect = PoolFull()
+		pool.submit.side_effect = PoolFull()
 		nacked = Event()
 		delivery.nack.side_effect = nacked.set
 		consumer.call(lambda: worker.receive(
@@ -670,11 +699,11 @@ class InspectorTests(TestCase):
 			'setup failed',
 		):
 			worker.run()
-		worker.broker.close.assert_called_once()
+		self.broker.close.assert_called_once()
 		self.assertFalse(worker.running.is_set())
-		self.assertFalse(inspector.thread.is_alive())
+		self.assertFalse(require_value(inspector.thread).is_alive())
 		self.assertEqual(
-			inspector.server.fileno(),
+			require_value(inspector.server).fileno(),
 			-1,
 		)
 
@@ -689,9 +718,9 @@ class InspectorTests(TestCase):
 			inspector.port = occupied.getsockname()[1]
 			with self.assertRaises(OSError):
 				worker.run()
-		worker.broker.connect.assert_not_called()
+		self.broker.connect.assert_not_called()
 		self.assertTrue(worker.finished.is_set())
-		self.assertTrue(worker.pool.closed)
+		self.assertTrue(self.pool.closed)
 
 	def test_validation(self):
 		for path in (
@@ -737,7 +766,7 @@ class InspectorTests(TestCase):
 			'only be attached',
 		):
 			other.run()
-		self.assertTrue(inspector.thread.is_alive())
+		self.assertTrue(require_value(inspector.thread).is_alive())
 		self.assertEqual(
 			self.fetch(
 				inspector,
@@ -748,10 +777,11 @@ class InspectorTests(TestCase):
 
 	def exercise_live_broker(
 		self,
-		connection,
+		connection: Callable[[], LiveConnection],
 	):
 		producer = connection()
 		producer.connect()
+		worker_broker = connection()
 		name = 'defstream-inspector-' + uuid4().hex
 		original = Divide.parameters
 		Divide.parameters = {'queue': name}
@@ -763,13 +793,14 @@ class InspectorTests(TestCase):
 			),
 		)
 
-		def prepare(worker):
-			worker.broker.declare(Divide.parameters)
+		class Prepare(WorkerSetup):
+			def __call__(self, worker: Worker) -> None:
+				worker_broker.declare(Divide.parameters)
 
 		worker = Worker(
-			connection(),
+			worker_broker,
 			ProcessPool(1),
-			setups=prepare,
+			setups=Prepare(),
 			inspector=inspector,
 		)
 		worker.add(Divide)
@@ -791,7 +822,7 @@ class InspectorTests(TestCase):
 			)
 			task = Divide.name
 			with self.assertLogs(
-				'DefStream.Worker',
+				'Worker',
 				level='ERROR',
 			):
 				for divisor in (
@@ -806,11 +837,7 @@ class InspectorTests(TestCase):
 						Divide.parameters,
 					)
 				deadline = monotonic() + 15
-				metrics = inspector.exts['/stats']
-				self.assertIsInstance(
-					metrics,
-					Metrics,
-				)
+				metrics = require_instance(inspector.exts['/stats'], Metrics)
 				while True:
 					with metrics.lock:
 						stats = metrics.tasks[task]
@@ -823,7 +850,7 @@ class InspectorTests(TestCase):
 					)
 					sleep(0.01)
 				settled = Event()
-				worker.consumer.call(settled.set)
+				require_value(worker.consumer).call(settled.set)
 				self.assertTrue(settled.wait(5))
 			self.assertEqual(
 				self.fetch(

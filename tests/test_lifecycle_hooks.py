@@ -26,6 +26,10 @@ from DefStream.Worker import (
 	WorkerCleanup,
 	WorkerSetup,
 )
+from _support import (
+	call_with_invalid_input,
+	require_value,
+)
 
 
 def identity():
@@ -189,9 +193,10 @@ class LifecycleTests(TestCase):
 					):
 						future.result(timeout=15)
 					if pool_class is ProcessPool:
+						exception = require_value(future.exception())
 						self.assertIn(
 							"raise ValueError('task failed')",
-							str(future.exception().__cause__),
+							str(exception.__cause__),
 						)
 				finally:
 					pool.stop()
@@ -335,12 +340,14 @@ class LifecycleTests(TestCase):
 			ProcessPool,
 		):
 			with self.assertRaises(TypeError):
-				owner(
+				call_with_invalid_input(
+					owner,
 					1,
 					cleanups=[object()],
 				)
 		with self.assertRaises(TypeError):
-			Worker(
+			call_with_invalid_input(
+				Worker,
 				Mock(),
 				Mock(),
 				setups=[object()],
@@ -362,6 +369,8 @@ class WorkerLifecycleTests(TestCase):
 
 		broker = Mock(consumer=Mock())
 		pool = Mock()
+		self.broker = broker
+		self.pool = pool
 		worker = Worker(
 			broker,
 			pool,
@@ -381,22 +390,24 @@ class WorkerLifecycleTests(TestCase):
 			):
 				for run in worker.tasks:
 					trace.append(run.parameters['queue'])
-				worker.broker.connect.assert_called_once_with()
-				worker.broker.consumer.assert_not_called()
+				broker.connect.assert_called_once_with()
+				broker.consumer.assert_not_called()
 
 		class Release(WorkerCleanup):
 			def __call__(
 				self,
 				worker,
 			):
-				worker.pool.stop.assert_called_once_with()
-				worker.broker.close.assert_not_called()
+				pool.stop.assert_called_once_with()
+				broker.close.assert_not_called()
 				trace.append('cleanup')
 
 		worker = self.make_worker(
 			setups=Provision(),
 			cleanups=Release(),
 		)
+		broker = self.broker
+		pool = self.pool
 		worker.run()
 		self.assertEqual(
 			trace,
@@ -405,8 +416,8 @@ class WorkerLifecycleTests(TestCase):
 				'cleanup',
 			],
 		)
-		worker.broker.consumer.return_value.close.assert_called_once_with()
-		worker.broker.close.assert_called_once_with()
+		broker.consumer.return_value.close.assert_called_once_with()
+		broker.close.assert_called_once_with()
 
 	def test_setup_failure_still_runs_cleanup_and_closes_resources(self):
 		setup = Mock(side_effect=ValueError('setup failed'))
@@ -421,9 +432,9 @@ class WorkerLifecycleTests(TestCase):
 		):
 			worker.run()
 		cleanup.assert_called_once_with(worker)
-		worker.broker.consumer.assert_not_called()
-		worker.pool.stop.assert_called_once_with()
-		worker.broker.close.assert_called_once_with()
+		self.broker.consumer.assert_not_called()
+		self.pool.stop.assert_called_once_with()
+		self.broker.close.assert_called_once_with()
 
 	def test_cleanup_failure_does_not_skip_hooks_or_resource_closure(self):
 		first = Mock(side_effect=ValueError('cleanup failed'))
@@ -438,8 +449,8 @@ class WorkerLifecycleTests(TestCase):
 		):
 			worker.run()
 		last.assert_called_once_with(worker)
-		worker.broker.consumer.return_value.close.assert_called_once_with()
-		worker.broker.close.assert_called_once_with()
+		self.broker.consumer.return_value.close.assert_called_once_with()
+		self.broker.close.assert_called_once_with()
 
 
 if __name__ == '__main__':

@@ -1,5 +1,8 @@
 from http.client import HTTPConnection
-from io import StringIO
+from io import (
+	BytesIO,
+	StringIO,
+)
 from logging import (
 	DEBUG,
 	ERROR,
@@ -14,7 +17,7 @@ from unittest.mock import Mock
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extension import Extension
 from DefStream.Inspector.Extensions import (
-	Console,
+	Play,
 	Metrics,
 	Ping,
 	Specifications,
@@ -26,6 +29,7 @@ from DefStream.Inspector.Inspector import (
 	Server,
 )
 from DefStream.Inspector.Response import Response
+from _support import require_value
 
 
 class Example(Extension):
@@ -51,7 +55,7 @@ class InspectorLoggingTests(TestCase):
 		inspector.start(Mock())
 		connection = HTTPConnection(
 			'127.0.0.1',
-			inspector.server.server_port,
+			require_value(inspector.server).server_port,
 			timeout=5,
 		)
 		try:
@@ -72,19 +76,34 @@ class InspectorLoggingTests(TestCase):
 			Server,
 			RequestHandler,
 		):
-			self.assertEqual(cls.logger.name, 'DefStream.Inspector')
+			self.assertEqual(cls.logger.name, 'Worker.Inspector')
+			self.assertTrue(cls.logger.propagate)
 		for cls in (
-			Console,
+			Play,
 			Status,
 			Ping,
 			Metrics,
 			Specifications,
 		):
-			self.assertEqual(cls.logger.name, 'DefStream.Inspector.Extensions.' + cls.__name__)
+			self.assertEqual(cls.logger.name, 'Worker.Inspector.' + cls.__name__)
 			self.assertEqual(cls.logger.handlers, [])
+			self.assertTrue(cls.logger.propagate)
+
+	def test_logs_propagate_through_worker_inspector_to_root(self):
+		for name in (
+			'Worker.Inspector',
+			'Worker',
+			'',
+		):
+			with self.subTest(logger=name), self.assertLogs(name, level=DEBUG) as logs:
+				self.fetch(Example('/sample'))
+			self.assertTrue(any(
+				record.name.startswith('Worker.Inspector')
+				for record in logs.records
+			))
 
 	def test_one_request_debug_and_one_response_info_without_query_or_body(self):
-		with self.assertLogs('DefStream.Inspector', level=DEBUG) as logs:
+		with self.assertLogs('Worker.Inspector', level=DEBUG) as logs:
 			status, body = self.fetch(Example('/sample'))
 		self.assertEqual(status, 200)
 		self.assertEqual(body, b'private-response')
@@ -100,7 +119,7 @@ class InspectorLoggingTests(TestCase):
 		self.assertNotIn('private-response', '\n'.join(logs.output))
 
 	def test_wsgi_failure_is_logged_once_and_returns_500(self):
-		with self.assertLogs('DefStream.Inspector', level=DEBUG) as logs:
+		with self.assertLogs('Worker.Inspector', level=DEBUG) as logs:
 			status, _ = self.fetch(Failure('/failure'))
 		self.assertEqual(status, 500)
 		errors = [record for record in logs.records if record.levelno == ERROR]
@@ -112,26 +131,27 @@ class InspectorLoggingTests(TestCase):
 
 	def test_interrupted_response_does_not_log_success(self):
 		handler = InspectorServerHandler(
-			StringIO(),
-			StringIO(),
+			BytesIO(),
+			BytesIO(),
 			StringIO(),
 			{},
 		)
-		handler.request_handler = Mock()
-		handler.result = [b'private-response']
+		request_handler = Mock()
+		handler.request_handler = request_handler
+		setattr(handler, 'result', [b'private-response'])
 		handler.write = Mock(side_effect=ConnectionResetError())
 		with self.assertRaises(ConnectionResetError):
 			handler.finish_response()
-		handler.request_handler.log_request.assert_not_called()
+		request_handler.log_request.assert_not_called()
 
-	def test_console_handled_failure_retains_error_type_not_private_message(self):
-		console = Console(
-			'/console',
+	def test_play_handled_failure_retains_error_type_not_private_message(self):
+		play = Play(
+			'/play',
 			broker=Mock(),
 		)
-		console.catalog = Mock(side_effect=ValueError('private-exception-message'))
-		with self.assertLogs(console.logger, level=ERROR) as logs:
-			response = console.handle(
+		play.catalog = Mock(side_effect=ValueError('private-exception-message'))
+		with self.assertLogs(play.logger, level=ERROR) as logs:
+			response = play.handle(
 				Mock(),
 				{
 					'REQUEST_METHOD': 'GET',
