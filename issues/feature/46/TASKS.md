@@ -19,3 +19,4 @@
 - [최종 기능 회귀와 제한](./tasks/1793275501812.md)
 - [Recoverable Protocol 전환 검증](./tasks/1793275955973.md)
 - [is_recoverable 이름 변경 검증](./tasks/1793276099601.md)
+- [Python 3.9·3.10 복구 테스트 호환성 검증](./tasks/1793276518341.md)

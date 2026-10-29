@@ -1,3 +1,4 @@
+from importlib import import_module
 from pathlib import Path
 from queue import Queue
 from tempfile import TemporaryDirectory
@@ -114,7 +115,7 @@ class RecoveryTests(TestCase):
 		return worker
 
 	def run_worker(self, worker):
-		with patch('DefStream.Worker.Worker.startup'):
+		with patch.object(import_module('DefStream.Worker.Worker'), 'startup'):
 			worker.run()
 
 	def test_first_attempt_is_immediate_and_recovery_resets_budget(self):
@@ -356,7 +357,8 @@ class RecoveryTests(TestCase):
 			self.assertTrue(worker.finished.is_set())
 		finally:
 			release.set()
-			require_value(previous.monitor).join(5)
+			if previous.monitor is not None:
+				previous.monitor.join(5)
 		event.ack.assert_not_called()
 
 	def test_unstarted_tasks_are_discarded_by_retired_executor(self):
