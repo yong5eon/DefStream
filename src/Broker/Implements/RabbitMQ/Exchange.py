@@ -47,7 +47,7 @@ class Exchange(
 	Callable,
 ):
 	"""Exchange of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.Implements.RabbitMQ.Exchange')
+	logger = getLogger('DefStream.Broker.RabbitMQ.Exchange')
 
 	def __init__(
 		self,

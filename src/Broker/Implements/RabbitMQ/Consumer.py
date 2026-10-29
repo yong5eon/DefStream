@@ -35,7 +35,7 @@ __all__ = (
 
 class Consumer(BaseConsumer):
 	"""Consumer of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.Implements.RabbitMQ.Consumer')
+	logger = getLogger('DefStream.Broker.RabbitMQ.Consumer')
 
 	def __init__(
 		self,

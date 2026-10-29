@@ -50,7 +50,7 @@ class Queue(
 	Poppable,
 ):
 	"""Queue of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.Implements.RabbitMQ.Queue')
+	logger = getLogger('DefStream.Broker.RabbitMQ.Queue')
 
 	def __init__(
 		self,

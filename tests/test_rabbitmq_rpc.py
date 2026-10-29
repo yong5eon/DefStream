@@ -262,7 +262,7 @@ class RpcTests(TestCase):
 		event = self.request()
 		consumer.connection.channel.return_value.basic_publish.side_effect = UnroutableError([])
 		with self.assertLogs(
-			'DefStream.Broker.Implements.RabbitMQ.Consumer',
+			'DefStream.Broker.RabbitMQ.Consumer',
 			level='WARNING',
 		):
 			consumer.complete(

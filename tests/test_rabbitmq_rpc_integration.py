@@ -201,7 +201,7 @@ class RpcIntegrationTests(TestCase):
 							timeout=2,
 						)
 					with self.assertLogs(
-						'DefStream.Broker.Implements.RabbitMQ.Consumer',
+						'DefStream.Broker.RabbitMQ.Consumer',
 						level='WARNING',
 					):
 						with self.assertRaises(TimeoutError):

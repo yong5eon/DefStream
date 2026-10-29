@@ -49,7 +49,8 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 )
 
 
-NAMESPACE = 'DefStream.Broker.Implements.RabbitMQ'
+NAMESPACE = 'DefStream.Broker.RabbitMQ'
+PACKAGE = 'DefStream.Broker.Implements.RabbitMQ'
 PROJECT = Path(__file__).resolve().parents[1]
 SECRET = '비밀본문_인증정보_헤더'
 
@@ -175,7 +176,7 @@ class LoggingTests(TestCase):
 		return
 
 	def test_connection_lifecycle_resources_confirm_and_request_delegation(self):
-		module = import_module(NAMESPACE + '.Connection')
+		module = import_module(PACKAGE + '.Connection')
 		broker = Connection(Configuration(
 			host='127.0.0.1',
 			port=5672,
@@ -198,16 +199,20 @@ class LoggingTests(TestCase):
 			broker.delete_queue('queue')
 			broker.delete_stream('stream')
 			broker.delete_exchange('exchange')
-		self.assertTrue(any(record.levelno == INFO for record in logs.records))
-		self.assertTrue(any('publisher_confirm=True' in record.getMessage() for record in logs.records))
+		self.assertFalse(any(record.levelno >= INFO for record in logs.records))
+		messages = [record.getMessage() for record in logs.records]
+		self.assertEqual(sum(message.startswith('Connecting to RabbitMQ') for message in messages), 1)
+		self.assertIn('RabbitMQ connection completed', messages)
+		self.assertTrue(any('publisher_confirm=True' in message for message in messages))
 		self.assert_safe(logs.records)
 		self.channel.confirm_delivery.assert_called_once_with()
 		with patch.object(Queue, 'call', side_effect=RuntimeError(SECRET)), self.assertLogs(NAMESPACE, level=DEBUG) as logs, self.assertRaises(RuntimeError):
 			broker.request(SECRET, {'queue': 'queue'})
 		self.assertFalse(any(record.levelno == ERROR for record in logs.records))
-		with self.assertLogs(NAMESPACE, level=INFO) as logs:
+		with self.assertLogs(NAMESPACE, level=DEBUG) as logs:
 			broker.close()
-		self.assertIn('connection close completed', logs.output[0])
+		self.assertEqual([record.levelno for record in logs.records], [DEBUG])
+		self.assertEqual(logs.records[0].getMessage(), 'RabbitMQ connection close completed')
 		return
 
 	def test_connection_resource_and_connect_failure(self):
@@ -216,7 +221,7 @@ class LoggingTests(TestCase):
 			port=5672,
 			password=SECRET,
 		))
-		module = import_module(NAMESPACE + '.Connection')
+		module = import_module(PACKAGE + '.Connection')
 		with patch.object(module, 'BlockingConnection', side_effect=RuntimeError(SECRET)), self.assertLogs(NAMESPACE, level=DEBUG) as logs, self.assertRaises(RuntimeError):
 			broker.connect()
 		self.assertEqual(sum(record.levelno == ERROR for record in logs.records), 1)
@@ -244,7 +249,7 @@ class LoggingTests(TestCase):
 			collect()
 			return
 
-		module = import_module(NAMESPACE + '.Queue')
+		module = import_module(PACKAGE + '.Queue')
 		self.channel.basic_get.return_value = (None, None, None)
 		with patch.object(module, 'time', side_effect=[0, 0, 1]), patch.object(module, 'sleep', side_effect=collect_unrelated_queue), self.assertLogs(queue.logger, level=DEBUG) as logs:
 			self.assertIsNone(queue.pop(timeout=1))
@@ -274,6 +279,10 @@ class LoggingTests(TestCase):
 			consumer.run()
 			consumer.stop()
 		self.assert_safe(logs.records)
+		self.assertFalse(any(record.levelno >= INFO for record in logs.records))
+		messages = [record.getMessage() for record in logs.records]
+		for expected in ('Subscription applied', 'Starting consumption loop', 'Consumption loop ended', 'Consumption loop stop requested', 'Consumption loop stopped'):
+			self.assertTrue(any(message.startswith(expected) for message in messages), expected)
 		handler.assert_called_once()
 		self.assertEqual(handler.call_args.args[0].body, SECRET)
 		for decoder, expected_errors in (
@@ -291,6 +300,10 @@ class LoggingTests(TestCase):
 		with self.assertLogs(NAMESPACE, level=DEBUG) as logs, self.assertRaises(RuntimeError):
 			consumer.run()
 		self.assertEqual(sum(record.levelno == ERROR for record in logs.records), 1)
+		self.channel.is_open = True
+		with self.assertLogs(NAMESPACE, level=DEBUG) as logs:
+			consumer.close()
+		self.assertEqual([(record.levelno, record.getMessage()) for record in logs.records], [(DEBUG, 'Consumption channel closed')])
 		return
 
 	def test_consumer_rpc_unroutable_settles_and_ack_failure_logs_only_event(self):
@@ -322,7 +335,7 @@ class LoggingTests(TestCase):
 
 	def test_rpc_success_mismatch_remote_error_malformed_and_transport_failure(self):
 		for cls in (Queue, Exchange):
-			module = import_module(NAMESPACE + '.' + cls.__name__)
+			module = import_module(PACKAGE + '.' + cls.__name__)
 			publisher = self.queue() if cls is Queue else Exchange(
 				self.connection,
 				self.encode,
@@ -373,7 +386,7 @@ class LoggingTests(TestCase):
 
 	def test_rpc_pre_and_post_publication_timeout(self):
 		for cls in (Queue, Exchange):
-			module = import_module(NAMESPACE + '.' + cls.__name__)
+			module = import_module(PACKAGE + '.' + cls.__name__)
 			publisher = self.queue() if cls is Queue else Exchange(
 				self.connection,
 				self.encode,
