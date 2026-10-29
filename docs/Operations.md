@@ -113,7 +113,7 @@ logger.info('Application started')
 필터는 루트 로거가 아닌 **핸들러**에 적용합니다. `Filter('DefStream')`은
 `DefStream`과 `DefStream.` 하위 이름을 포함하지만 `DefStreamExtra`는 포함하지 않습니다.
 위 설정은 독립 실행 애플리케이션을 위한 예제이며, 이미 있는 다른 핸들러의 출력은 바꾸지 않습니다.
-브로커만 보고 싶으면 `DefStream` 대신 `DefStream.Broker.Implements.RabbitMQ` 또는
+브로커만 보고 싶으면 `DefStream` 대신 `DefStream.Broker.RabbitMQ` 또는
 `DefStream.Broker.Implements.Redis`를 선택할 수 있습니다.
 
 - 클래스 멤버 `logger`에 `DefStream.Worker`, `DefStream.Run`, `DefStream.Executor`,

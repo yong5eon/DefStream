@@ -47,13 +47,20 @@ discarded when none is configured.
 ### Logging
 
 `Connection`, `Consumer`, `Queue`, `Exchange`, `Stream`, and `Event` expose a class
-member `logger` named `DefStream.Broker.Implements.RabbitMQ.ClassName`. Subclasses
+member `logger` named `DefStream.Broker.RabbitMQ.ClassName`; the logger name differs
+from the module path `DefStream.Broker.Implements.RabbitMQ`. Subclasses
 inherit that logger unless they explicitly override it. The library adds no handlers
 (including `NullHandler`), levels, or filters; propagation and `logging.lastResort`
 keep their standard behavior.
 
-Lifecycle and resource changes use INFO, per-message/RPC/settlement tracing uses DEBUG,
-expected RPC anomalies use WARNING, and internal I/O or codec failures use ERROR.
+The RabbitMQ implementation does not log normal operation at INFO.
+Connection attempts, successful connects and closes, successful queue/exchange/stream
+declaration, deletion, and binding, consumer subscription, channel close, and
+consumption-loop lifecycle events, and per-message/RPC/settlement tracing all use DEBUG,
+so opening and closing a connection per task does not add INFO records.
+Worker start, readiness, and shutdown remain visible at INFO through the `DefStream.Worker` logger.
+Expected RPC anomalies use WARNING, and internal I/O or codec failures, including
+failed connection and resource operations, use ERROR.
 Payloads, results, headers, credentials, exception text, and tracebacks are omitted.
 Exceptions still propagate; application-side logging may duplicate a library record.
 A publish return does not mean consumer processing completed, and an RPC response
@@ -61,7 +68,7 @@ timeout does not cancel delivered work.
 
 The Python samples configure a root DEBUG console handler only in their main entry
 points. Its filter accepts `Filter('Sample')` **or**
-`Filter('DefStream.Broker.Implements.RabbitMQ')`, including dotted descendants only;
+`Filter('DefStream.Broker.RabbitMQ')`, including dotted descendants only;
 Pika and core logs are excluded. Applications configure their own handlers, levels,
 and filters at a chosen ancestor (`DefStream`, `DefStream.Broker`, etc.) or class.
 

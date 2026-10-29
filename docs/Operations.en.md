@@ -117,7 +117,7 @@ Apply filters to the **handler**, not the root logger. `Filter('DefStream')`
 includes `DefStream` and names below `DefStream.`, but not `DefStreamExtra`.
 This configuration is an example for a standalone application; it does not change
 output from other handlers already installed. To receive only broker logs, select
-`DefStream.Broker.Implements.RabbitMQ` or `DefStream.Broker.Implements.Redis`
+`DefStream.Broker.RabbitMQ` or `DefStream.Broker.Implements.Redis`
 instead of `DefStream`.
 
 - The class member `logger` uses `DefStream.Worker`, `DefStream.Run`,
