@@ -16,7 +16,7 @@ __all__ = (
 
 class Event(BaseEvent):
 	"""Event of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.Implements.RabbitMQ.Event')
+	logger = getLogger('DefStream.Broker.RabbitMQ.Event')
 
 	def __init__(
 		self,

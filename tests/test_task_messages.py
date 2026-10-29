@@ -320,6 +320,8 @@ class MessageTests(TestCase):
 		connection = RabbitConnection(RabbitConfiguration(
 			host='127.0.0.1',
 			port=5672,
+			username='guest',
+			password='guest',
 		))
 		with self.assertRaises(RuntimeError):
 			emit(
@@ -362,6 +364,8 @@ class MessageTests(TestCase):
 		connection = RabbitConnection(RabbitConfiguration(
 			host='127.0.0.1',
 			port=5672,
+			username='guest',
+			password='guest',
 		))
 		connection.connection = Mock()
 		channel = connection.connection.channel.return_value
@@ -394,6 +398,8 @@ class MessageTests(TestCase):
 		connection = RabbitConnection(RabbitConfiguration(
 			host='127.0.0.1',
 			port=5672,
+			username='guest',
+			password='guest',
 		))
 		connection.connection = Mock()
 		channel = connection.connection.channel.return_value

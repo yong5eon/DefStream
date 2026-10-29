@@ -30,12 +30,12 @@ from pika import (
 from pika.exceptions import UnroutableError
 
 __all__ = (
-	'Consumer'
+	'Consumer',
 )
 
 class Consumer(BaseConsumer):
 	"""Consumer of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.Implements.RabbitMQ.Consumer')
+	logger = getLogger('DefStream.Broker.RabbitMQ.Consumer')
 
 	def __init__(
 		self,
@@ -43,7 +43,7 @@ class Consumer(BaseConsumer):
 		decode: Decoder,
 		handler: Optional[EventHandler] = None,
 		qos: int = 1,
-		offset: int = None,
+		offset: Optional[int] = None,
 		encode: Optional[Encoder] = None,
 	):
 		self.connection = connection
@@ -59,7 +59,6 @@ class Consumer(BaseConsumer):
 			self.logger.error('Consumption channel initialization failed: qos=%s error_type=%s', qos, type(error).__name__)
 			raise
 		self.logger.debug('Consumption channel created: qos=%s offset=%s', qos, offset)
-		self.channel.auto_decode = False
 		self.offset = offset
 		self.handler = handler
 		self.encode = encode if encode is not None else JavaScriptObjectNotationEncoder()
@@ -118,7 +117,7 @@ class Consumer(BaseConsumer):
 			self.logger.error('Subscription failed: queue=%s error_type=%s', subscription.queue, type(error).__name__)
 			raise
 		self.queues.add(subscription.queue)
-		self.logger.info('Subscription applied: queue=%s consumer_tag=%s', subscription.queue, tag)
+		self.logger.debug('Subscription applied: queue=%s consumer_tag=%s', subscription.queue, tag)
 		return
 
 	def call(self, callback: Callable[[], None]) -> None:
@@ -220,18 +219,18 @@ class Consumer(BaseConsumer):
 		try:
 			if response_channel is not None and response_channel.is_open:
 				response_channel.close()
-				self.logger.info('RPC response channel closed')
+				self.logger.debug('RPC response channel closed')
 			channel = getattr(self, 'channel', None)
 			if channel is not None and channel.is_open:
 				channel.close()
-				self.logger.info('Consumption channel closed')
+				self.logger.debug('Consumption channel closed')
 		except Exception as error:
 			self.logger.error('Channel close failed: error_type=%s', type(error).__name__)
 			raise
 		return
 
 	def run(self):
-		self.logger.info('Starting consumption loop')
+		self.logger.debug('Starting consumption loop')
 		try:
 			self.channel.start_consuming()
 		except Exception as error:
@@ -255,19 +254,19 @@ class Consumer(BaseConsumer):
 			raise
 		finally:
 			self.callback_error = None
-			self.logger.info('Consumption loop ended')
+			self.logger.debug('Consumption loop ended')
 		return
 
 	def stop(self):
 		if not self.stopped:
 			self.stopped = True
-			self.logger.info('Consumption loop stop requested')
+			self.logger.debug('Consumption loop stop requested')
 			try:
 				self.channel.stop_consuming()
 			except Exception as error:
 				self.logger.error('Failed to stop consumption loop: error_type=%s', type(error).__name__)
 				raise
-			self.logger.info('Consumption loop stopped')
+			self.logger.debug('Consumption loop stopped')
 		return
 
 

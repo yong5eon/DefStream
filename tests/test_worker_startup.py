@@ -297,6 +297,8 @@ class StartupTests(TestCase):
 				RabbitConnection(RabbitConfiguration(
 					host='127.0.0.1',
 					port=5672,
+					username='guest',
+					password='guest',
 				)),
 				'  Broker: RabbitMQ://127.0.0.1:5672/\n',
 			),
@@ -359,6 +361,8 @@ class StartupTests(TestCase):
 				conf = RabbitConfiguration(
 					host='127.0.0.1',
 					port=5672,
+					username='guest',
+					password='guest',
 				)
 				worker = self.worker('jobs')
 				worker.broker = RabbitConnection(conf)

@@ -47,13 +47,13 @@ class Exchange(
 	Callable,
 ):
 	"""Exchange of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.Implements.RabbitMQ.Exchange')
+	logger = getLogger('DefStream.Broker.RabbitMQ.Exchange')
 
 	def __init__(
 		self,
 		connection: BlockingConnection,
 		encode: Encoder,
-		name: str = None,
+		name: str,
 		decode: Optional[Decoder] = None,
 		rpc_parameters: Optional[ConnectionParameters] = None,
 	):
@@ -64,7 +64,6 @@ class Exchange(
 		except Exception as error:
 			self.logger.error('Exchange channel creation failed: exchange=%s error_type=%s', name, type(error).__name__)
 			raise
-		self.channel.auto_decode = False
 		self.exchange = name
 		self.decode = decode
 		self.rpc_parameters = rpc_parameters
@@ -86,13 +85,13 @@ class Exchange(
 	def send(
 		self,
 		body,
-		event: str = None,
+		event: Optional[str] = None,
 		headers: Dict = {},
 		priority: Optional[int] = None,
-		expiration: int = None,
-		timestamp: int = None,
+		expiration: Optional[int] = None,
+		timestamp: Optional[int] = None,
 		persistent: bool = True,
-		id: str = None,
+		id: Optional[str] = None,
 	):
 		validate_priority(
 			priority,
@@ -148,7 +147,7 @@ class Exchange(
 		deadline = monotonic() + timeout
 		settings = deepcopy(self.rpc_parameters)
 		settings.connection_attempts = 1
-		settings.socket_timeout = min(
+		settings.socket_timeout = timeout if settings.socket_timeout is None else min(
 			settings.socket_timeout,
 			timeout,
 		)
@@ -222,7 +221,8 @@ class Exchange(
 					timed_out = True
 					self.logger.warning('RPC response timed out after publication; delivered work is not cancelled: exchange=%s routing_key=%s correlation_id=%s', self.exchange, event, correlation_id)
 					raise TimeoutError(f'RPC response timed out for exchange {self.exchange!r} routing_key={event!r}')
-				connection.process_data_events(time_limit=min(
+				# pika accepts a float time_limit; the bundled stub declares int only.
+				connection.process_data_events(time_limit=min(  # pyright: ignore[reportArgumentType]
 					remaining,
 					0.1,
 				))

@@ -37,6 +37,8 @@ class TaskPriorityTests(TestCase):
 		broker = Connection(Configuration(
 			host='127.0.0.1',
 			port=5672,
+			username='guest',
+			password='guest',
 		))
 		broker.connection = Mock()
 		self.addCleanup(broker.close)
