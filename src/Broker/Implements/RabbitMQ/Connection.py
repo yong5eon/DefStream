@@ -25,9 +25,13 @@ from pika import (
 	PlainCredentials,
 	BasicProperties,
 )
-from pika.exceptions import *
 
-from collections.abc import Mapping
+from collections.abc import (
+	Mapping,
+	KeysView,
+	ItemsView,
+	ValuesView,
+)
 from operator import (
 	eq,
 	ne,
@@ -39,6 +43,7 @@ from logging import getLogger
 
 from typing import (
 	Any as AnyValue,
+	Dict,
 	Iterator,
 	Union,
 	Optional,
@@ -91,13 +96,13 @@ class Parameters(Mapping):
 	def __ne__(self, other) -> bool:
 		return ne(self.args, other)
 	
-	def keys(self) -> Iterator:
+	def keys(self) -> KeysView:
 		return self.args.keys()
 	
-	def items(self):
+	def items(self) -> ItemsView:
 		return self.args.items()
 	
-	def values(self):
+	def values(self) -> ValuesView:
 		return self.args.values()
 
 
@@ -147,7 +152,7 @@ class Connection(
 		operation: str,
 		*context,
 	):
-		"""이 클래스가 소유하는 I/O 경계만 기록하며 예외 내용은 노출하지 않는다."""
+		"""Log failures only at I/O boundaries owned by this class, without exposing exception details."""
 		try:
 			yield
 		except Exception as error:
@@ -173,7 +178,7 @@ class Connection(
 		with self.observe('Task queue declaration'):
 			channel = connection.channel()
 			try:
-				arguments = {}
+				arguments: Dict[str, AnyValue] = {}
 				if subscription.error is not None:
 					channel.queue_declare(
 						subscription.error,
@@ -289,7 +294,7 @@ class Connection(
 	def exchange(self, exchange: str) -> Exchange:
 		self.logger.debug('Creating Exchange: exchange=%s', exchange)
 		return Exchange(
-			self.connection,
+			self.connected(),
 			self.conf.encode,
 			exchange,
 			decode=self.conf.decode,
@@ -299,7 +304,7 @@ class Connection(
 	def queue(self, queue: str) -> Queue:
 		self.logger.debug('Creating Queue: queue=%s', queue)
 		return Queue(
-			self.connection,
+			self.connected(),
 			self.conf.encode,
 			self.conf.decode,
 			queue,
@@ -308,17 +313,17 @@ class Connection(
 
 	def stream(self, queue: str) -> Stream:
 		self.logger.debug('Creating Stream: queue=%s', queue)
-		return Stream(self.connection, self.conf.encode, self.conf.decode, queue)
+		return Stream(self.connected(), self.conf.encode, self.conf.decode, queue)
 
 	def consumer(
 		self,
 		handler: Optional[EventHandler] = None,
 		qos: int = 1,
-		offset: int = None,
+		offset: Optional[int] = None,
 	) -> Consumer:
 		self.logger.debug('Creating Consumer: qos=%s offset=%s', qos, offset)
 		return Consumer(
-			self.connection,
+			self.connected(),
 			self.conf.decode,
 			handler,
 			qos=qos,
@@ -340,14 +345,14 @@ class Connection(
 		type: ExchangeType,
 		durable: bool = True,
 		autodelete: bool = False,
-		alter: Union[str, Exchange] = None,
+		alter: Optional[Union[str, Exchange]] = None,
 	):
-		args = {}
+		args: Dict[str, AnyValue] = {}
 		if alter:
 			args['alternate-exchange'] = str(alter)
 		self.logger.debug('Exchange declaration: exchange=%s type=%s durable=%s auto_delete=%s alternate_exchange=%s', name, type, durable, autodelete, str(alter) if alter else None)
 		with self.observe('Exchange declaration: exchange=%s', name):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			try:
 				channel.exchange_declare(
 					name,
@@ -366,7 +371,7 @@ class Connection(
 		name: str,
 	):
 		with self.observe('Exchange deletion: exchange=%s', name):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.exchange_delete(name)
 		return
 
@@ -374,16 +379,16 @@ class Connection(
 		self,
 		src: Union[str, Exchange],
 		to: Union[str, Exchange],
-		event: str = None,
-		parameters: Parameters = None,
+		event: Optional[str] = None,
+		parameters: Optional[Parameters] = None,
 	):
 		with self.observe('Exchange binding: src=%s to=%s routing_key=%s', str(src), str(to), event):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.exchange_bind(
 				str(src),
 				str(to),
 				routing_key=event if event else '',
-				arguments=parameters
+				arguments=dict(parameters) if parameters is not None else None
 			)
 		return
 
@@ -391,33 +396,33 @@ class Connection(
 		self,
 		src: Union[str, Exchange],
 		to: Union[str, Exchange],
-		event: str = None,
-		parameters: Parameters = None,
+		event: Optional[str] = None,
+		parameters: Optional[Parameters] = None,
 	):
 		with self.observe('Exchange unbinding: src=%s to=%s routing_key=%s', str(src), str(to), event):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.exchange_unbind(
 				str(src),
 				str(to),
 				routing_key=event if event else '',
-				arguments=parameters,
+				arguments=dict(parameters) if parameters is not None else None,
 			)
 		return
 
 	def create_queue(
 		self,
 		name: str,
-		expires: int = None,
-		ttl: int = None,
-		limit: int = None,
-		size: int = None,
-		maxPriority: int = None,
+		expires: Optional[int] = None,
+		ttl: Optional[int] = None,
+		limit: Optional[int] = None,
+		size: Optional[int] = None,
+		maxPriority: Optional[int] = None,
 		durable: bool = True,
 		autodelete: bool = False,
-		errorQueue: Union[str, Queue] = None,
-		errorExchange: Union[str, Exchange] = None,
+		errorQueue: Optional[Union[str, Queue]] = None,
+		errorExchange: Optional[Union[str, Exchange]] = None,
 	):
-		args = {}
+		args: Dict[str, AnyValue] = {}
 		if errorQueue:
 			args['x-dead-letter-exchange'] = ''
 			args['x-dead-letter-routing-key'] = str(errorQueue)
@@ -435,7 +440,7 @@ class Connection(
 			args['x-max-priority'] = maxPriority
 		self.logger.debug('Queue declaration options: queue=%s durable=%s auto_delete=%s expires=%s ttl=%s limit=%s size=%s max_priority=%s error_queue=%s error_exchange=%s', name, durable, autodelete, expires, ttl, limit, size, maxPriority, str(errorQueue) if errorQueue else None, str(errorExchange) if errorExchange else None)
 		with self.observe('Queue declaration: queue=%s', name):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.queue_declare(
 				name,
 				durable=durable,
@@ -449,7 +454,7 @@ class Connection(
 		queue: str,
 	):
 		with self.observe('Queue deletion: queue=%s', queue):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.queue_delete(queue)
 		return
 
@@ -457,16 +462,16 @@ class Connection(
 		self,
 		src: Union[str, Exchange],
 		to: Union[str, Queue],
-		event: str = None,
-		parameters: Parameters = None,
+		event: Optional[str] = None,
+		parameters: Optional[Parameters] = None,
 	):
 		with self.observe('Queue binding: exchange=%s queue=%s routing_key=%s', str(src), str(to), event):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.queue_bind(
 				str(to),
 				str(src),
 				routing_key=event if event else '',
-				arguments=parameters
+				arguments=dict(parameters) if parameters is not None else None
 			)
 		return
 
@@ -474,34 +479,34 @@ class Connection(
 		self,
 		src: Union[str, Exchange],
 		to: Union[str, Queue],
-		event: str = None,
-		parameters: Parameters = None,
+		event: Optional[str] = None,
+		parameters: Optional[Parameters] = None,
 	):
 		with self.observe('Queue unbinding: exchange=%s queue=%s routing_key=%s', str(src), str(to), event):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.queue_unbind(
 				str(to),
 				str(src),
 				routing_key=event if event else '',
-				arguments=parameters,
+				arguments=dict(parameters) if parameters is not None else None,
 			)
 		return
 	
 	def create_stream(
 		self,
 		name: str,
-		size: int = None,
+		size: Optional[int] = None,
 		durable: bool = True,
 		autodelete: bool = False,
 	):
-		args = {
+		args: Dict[str, AnyValue] = {
 			'x-queue-type': 'stream',
 		}
 		if size:
 			args['x-max-length-bytes'] = size
 		self.logger.debug('Stream declaration options: queue=%s durable=%s auto_delete=%s size=%s', name, durable, autodelete, size)
 		with self.observe('Stream declaration: queue=%s', name):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.queue_declare(
 				name,
 				durable=durable,
@@ -515,7 +520,7 @@ class Connection(
 		queue: str,
 	):
 		with self.observe('Stream deletion: queue=%s', queue):
-			channel = self.connection.channel()
+			channel = self.connected().channel()
 			channel.queue_delete(queue)
 		return
 

@@ -30,7 +30,7 @@ from pika import (
 from pika.exceptions import UnroutableError
 
 __all__ = (
-	'Consumer'
+	'Consumer',
 )
 
 class Consumer(BaseConsumer):
@@ -43,7 +43,7 @@ class Consumer(BaseConsumer):
 		decode: Decoder,
 		handler: Optional[EventHandler] = None,
 		qos: int = 1,
-		offset: int = None,
+		offset: Optional[int] = None,
 		encode: Optional[Encoder] = None,
 	):
 		self.connection = connection
@@ -59,7 +59,6 @@ class Consumer(BaseConsumer):
 			self.logger.error('Consumption channel initialization failed: qos=%s error_type=%s', qos, type(error).__name__)
 			raise
 		self.logger.debug('Consumption channel created: qos=%s offset=%s', qos, offset)
-		self.channel.auto_decode = False
 		self.offset = offset
 		self.handler = handler
 		self.encode = encode if encode is not None else JavaScriptObjectNotationEncoder()

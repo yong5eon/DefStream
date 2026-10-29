@@ -12,9 +12,10 @@ from .Serializer import (
 
 from pika import SSLOptions
 from ssl import create_default_context
+from typing import Optional
 
 __all__ = (
-	'Configuration'
+	'Configuration',
 )
 
 
@@ -26,12 +27,12 @@ class Configuration(BaseConfiguration):
 		self,
 		host: str,
 		port: int,
-		username: str = None,
-		password: str = None,
+		username: str,
+		password: str,
 		ssl: bool = False,
 		vhost: str = '/',
-		timeout: int = None,
-		heartbeat: int = None,
+		timeout: Optional[int] = None,
+		heartbeat: Optional[int] = None,
 		encode: Encoder = JavaScriptObjectNotationEncoder(),
 		decode: Decoder = JavaScriptObjectNotationDecoder(),
 	):

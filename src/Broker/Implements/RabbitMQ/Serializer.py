@@ -9,7 +9,10 @@ from json import (
 	dumps,
 	loads,
 )
-from typing import Any
+from typing import (
+	Any,
+	Optional,
+)
 
 __all__ = (
 	'Encoder',
@@ -38,7 +41,12 @@ class Encoder(metaclass=ABCMeta):
 class Decoder(metaclass=ABCMeta):
 	"""Decoder Interface"""
 	@abstractmethod
-	def __call__(self, obj: bytes, format: str, charset: str) -> Any:
+	def __call__(
+		self,
+		obj: bytes,
+		format: Optional[str],
+		charset: Optional[str],
+	) -> Any:
 		raise NotImplementedError('{} must be implemented __call__'.format(self.__class__.__name__))
 
 
@@ -56,6 +64,12 @@ class JavaScriptObjectNotationEncoder(Encoder):
 
 class JavaScriptObjectNotationDecoder(Decoder):
 	"""JavaScriptObjectNotation Decoder"""
-	def __call__(self, obj: bytes, format: str, charset: str) -> Any:
+	def __call__(
+		self,
+		obj: bytes,
+		format: Optional[str],
+		charset: Optional[str],
+	) -> Any:
 		if format != 'application/json': raise ValueError('format is not support')
+		if charset is None: raise ValueError('charset is required')
 		return loads(obj.decode(charset))

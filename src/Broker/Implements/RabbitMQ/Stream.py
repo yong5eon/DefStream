@@ -22,10 +22,11 @@ from uuid import uuid4
 from typing import (
 	Dict,
 	Iterable,
+	Optional,
 )
 
 __all__ = (
-	'Queue'
+	'Stream',
 )
 
 
@@ -41,7 +42,7 @@ class Stream(
 		connection: BlockingConnection,
 		encode: Encoder,
 		decode: Decoder,
-		name: str = None,
+		name: str,
 	):
 		self.connection = connection
 		self.encode = encode
@@ -51,7 +52,6 @@ class Stream(
 		except Exception as error:
 			self.logger.error('Stream channel creation failed: queue=%s error_type=%s', name, type(error).__name__)
 			raise
-		self.channel.auto_decode = False
 		self.queue = name
 		self.event = None
 		return
@@ -72,10 +72,10 @@ class Stream(
 	def send(
 		self,
 		body,
-		event: str = None,
+		event: Optional[str] = None,
 		headers: Dict = {},
-		timestamp: int = None,
-		id: str = None,
+		timestamp: Optional[int] = None,
+		id: Optional[str] = None,
 	):
 		if not timestamp: timestamp = int(time())
 		if not id: id = uuid4().hex
@@ -101,7 +101,7 @@ class Stream(
 		self.logger.debug('Stream publish API call completed: queue=%s message_id=%s', self.queue, id)
 		return id
 
-	def read(self, offset: int = 0, timeout: int = None) -> Iterable[Event]:
+	def read(self, offset: int = 0, timeout: Optional[int] = None) -> Iterable[Event]:
 		channel = self.channel
 		self.logger.debug('Starting Stream read: queue=%s offset=%s timeout_ms=%s qos=1', self.queue, offset, timeout)
 		try:
@@ -124,6 +124,8 @@ class Stream(
 					if deadline and time() >= deadline:
 						break
 					continue
+				# pika delivers properties and body together with every non-empty method frame.
+				assert properties is not None and body is not None
 
 				try:
 					decoded = self.decode(body, properties.content_type, properties.content_encoding)

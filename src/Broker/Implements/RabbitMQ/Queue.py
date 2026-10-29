@@ -40,7 +40,7 @@ from typing import (
 )
 
 __all__ = (
-	'Queue'
+	'Queue',
 )
 
 
@@ -57,7 +57,7 @@ class Queue(
 		connection: BlockingConnection,
 		encode: Encoder,
 		decode: Decoder,
-		name: str = None,
+		name: str,
 		rpc_parameters: Optional[ConnectionParameters] = None,
 	):
 		self.connection = connection
@@ -68,7 +68,6 @@ class Queue(
 		except Exception as error:
 			self.logger.error('Queue channel creation failed: queue=%s error_type=%s', name, type(error).__name__)
 			raise
-		self.channel.auto_decode = False
 		self.queue = name
 		self.event = None
 		self.rpc_parameters = rpc_parameters
@@ -90,15 +89,15 @@ class Queue(
 	def send(
 		self,
 		body,
-		event: str = None,
+		event: Optional[str] = None,
 		headers: Dict = {},
 		priority: Optional[int] = None,
-		expiration: int = None,
-		timestamp: int = None,
+		expiration: Optional[int] = None,
+		timestamp: Optional[int] = None,
 		persistent: bool = True,
-		id: str = None,
-		reply_to: str = None,
-		correlation_id: str = None,
+		id: Optional[str] = None,
+		reply_to: Optional[str] = None,
+		correlation_id: Optional[str] = None,
 	):
 		validate_priority(
 			priority,
@@ -160,7 +159,7 @@ class Queue(
 		deadline = monotonic() + timeout
 		settings = deepcopy(self.rpc_parameters)
 		settings.connection_attempts = 1
-		settings.socket_timeout = min(
+		settings.socket_timeout = timeout if settings.socket_timeout is None else min(
 			settings.socket_timeout,
 			timeout,
 		)
@@ -235,7 +234,8 @@ class Queue(
 					timed_out = True
 					self.logger.warning('RPC response timed out after publication; delivered work is not cancelled: queue=%s correlation_id=%s', self.queue, correlation_id)
 					raise TimeoutError(f'RPC response timed out for queue {self.queue!r}')
-				connection.process_data_events(time_limit=min(
+				# pika accepts a float time_limit; the bundled stub declares int only.
+				connection.process_data_events(time_limit=min(  # pyright: ignore[reportArgumentType]
 					remaining,
 					0.1,
 				))
@@ -290,7 +290,7 @@ class Queue(
 				self.logger.error('Dedicated RPC connection cleanup failed: queue=%s error_type=%s', self.queue, type(error).__name__)
 				raise
 
-	def pop(self, timeout: int = None) -> Optional[Event]:
+	def pop(self, timeout: Optional[int] = None) -> Optional[Event]:
 		self.logger.debug('Waiting for a single message: queue=%s timeout_ms=%s', self.queue, timeout)
 		channel = self.channel
 		try:
@@ -299,6 +299,8 @@ class Queue(
 			while True:
 				method, properties, body = channel.basic_get(queue=self.queue, auto_ack=False)
 				if method:
+					# pika returns properties and body together with a GetOk method frame.
+					assert properties is not None and body is not None
 					event = Event(
 						channel,
 						self.queue,
