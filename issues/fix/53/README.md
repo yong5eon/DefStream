@@ -8,7 +8,7 @@
 - 분기 기준·병합 대상: 사용자 확인에 따른 `master`
 - [요구사항](./REQUIREMENTS.md) · [계획](./PLAN.md)
 - [구현 결과](./IMPLEMENTS.md) · [작업·검증 결과](./TASKS.md) · [변경 로그](./CHANGELOG.md)
-- 최신 [구현 기록](./implements/1793301829543.md) · [검증 기록](./tasks/1793301829546.md)
+- 최신 [구현 기록](./implements/1793302547669.md) · [검증 기록](./tasks/1793302844699.md)
 - 상태: EXTRAS 단일 editable과 승인된 개발 환경 전환·검증 완료, 외부 서비스·원격 CI·게시 권한 검증은 미수행
 
 ## 원본 이슈 본문

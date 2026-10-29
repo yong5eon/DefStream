@@ -1,3 +1,0 @@
-include scripts/editable_view.py
-include scripts/build_backend.py
-include scripts/build_distributions.py

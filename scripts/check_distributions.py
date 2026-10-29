@@ -10,6 +10,7 @@ from shutil import (
 )
 from subprocess import run
 from sys import executable
+from tarfile import open as open_tar
 from tempfile import TemporaryDirectory
 from venv import EnvBuilder
 from zipfile import ZipFile
@@ -195,6 +196,14 @@ def main() -> None:
 			len(expected),
 		)
 		for index, source in enumerate(sources):
+			with open_tar(source) as archive:
+				root = archive.getnames()[0].split('/')[0]
+				for filename in (
+					'scripts/editable_view.py',
+					'scripts/build_backend.py',
+					'scripts/build_distributions.py',
+				):
+					assert archive.getmember(root + '/' + filename).isfile(), filename
 			rebuilt = directory / f'rebuilt-{index}'
 			check(
 				[
@@ -316,7 +325,6 @@ def main() -> None:
 				'pyproject.toml',
 				'README.setup.md',
 				'LICENSE',
-				'MANIFEST.in',
 			):
 				copy2(
 					ROOT / filename,

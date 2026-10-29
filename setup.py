@@ -100,6 +100,22 @@ class TargetBuild(build):
 
 
 class TargetEggInfo(egg_info):
+	def find_sources(self) -> None:
+		super().find_sources()
+		self.filelist.extend([
+			'scripts/editable_view.py',
+			'scripts/build_backend.py',
+			'scripts/build_distributions.py',
+		])
+		self.filelist.sort()
+		self.filelist.remove_duplicates()
+		self.write_file(
+			'manifest file',
+			str(Path(self.egg_info) / 'SOURCES.txt'),
+			'\n'.join(self.filelist.files) + '\n',
+		)
+		return
+
 	def finalize_options(self) -> None:
 		if self.egg_base is None:
 			self.egg_base = 'build/{}'.format(TARGET)
