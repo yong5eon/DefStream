@@ -21,7 +21,7 @@ __all__ = (
 )
 
 class Ping(Extension):
-	logger = getLogger('DefStream.Inspector.Extensions.Ping')
+	logger = getLogger('Worker.Inspector.Extensions.Ping')
 
 	def __init__(
 		self,

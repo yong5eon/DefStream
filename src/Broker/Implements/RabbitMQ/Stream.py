@@ -35,7 +35,7 @@ class Stream(
 	Readable,
 ):
 	"""Stream of Event Broker for RabbitMQ"""
-	logger = getLogger('DefStream.Broker.RabbitMQ.Stream')
+	logger = getLogger('Broker.RabbitMQ.Stream')
 
 	def __init__(
 		self,

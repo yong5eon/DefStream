@@ -37,7 +37,7 @@ class Queue(
 	Poppable,
 	Readable,
 ):
-	logger = getLogger('DefStream.Broker.Implements.Redis.Queue')
+	logger = getLogger('Broker.Redis.Queue')
 
 	def __init__(
 		self,

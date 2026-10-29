@@ -16,7 +16,7 @@ __all__ = (
 
 
 class Event(BaseEvent):
-	logger = getLogger('DefStream.Broker.Implements.Redis.Event')
+	logger = getLogger('Broker.Redis.Event')
 
 	def __init__(
 		self,

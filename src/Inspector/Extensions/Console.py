@@ -60,7 +60,7 @@ def json_response(
 
 
 class Console(Extension):
-	logger = getLogger('DefStream.Inspector.Extensions.Console')
+	logger = getLogger('Worker.Inspector.Extensions.Console')
 
 	methods = (
 		'GET',

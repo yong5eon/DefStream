@@ -39,7 +39,7 @@ __all__ = (
 
 
 class Consumer(BaseConsumer):
-	logger = getLogger('DefStream.Broker.Implements.Redis.Consumer')
+	logger = getLogger('Broker.Redis.Consumer')
 
 	def __init__(
 		self,

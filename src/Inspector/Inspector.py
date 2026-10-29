@@ -35,7 +35,7 @@ class Server(
 	ThreadingMixIn,
 	WSGIServer,
 ):
-	logger = getLogger('DefStream.Inspector')
+	logger = getLogger('Worker.Inspector')
 
 	daemon_threads = True
 	block_on_close = False
@@ -80,7 +80,7 @@ class InspectorServerHandler(ServerHandler):
 
 
 class RequestHandler(WSGIRequestHandler):
-	logger = getLogger('DefStream.Inspector')
+	logger = getLogger('Worker.Inspector')
 
 	def handle(self) -> None:
 		self.started_at = monotonic()
@@ -137,7 +137,7 @@ class RequestHandler(WSGIRequestHandler):
 
 
 class Inspector:
-	logger = getLogger('DefStream.Inspector')
+	logger = getLogger('Worker.Inspector')
 
 	def __init__(
 		self,
