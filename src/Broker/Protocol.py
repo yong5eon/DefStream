@@ -3,6 +3,7 @@ from typing import (
 	Generator,
 	Optional,
 	Protocol,
+	runtime_checkable,
 )
 
 from .Event import Event
@@ -12,7 +13,15 @@ __all__ = (
 	'Callable',
 	'Poppable',
 	'Readable',
+	'Recoverable',
 )
+
+
+@runtime_checkable
+class Recoverable(Protocol):
+	"""Classify failures eligible for consumer recovery."""
+
+	def is_recoverable(self, error: BaseException) -> bool: ...
 
 
 class Sendable(Protocol):

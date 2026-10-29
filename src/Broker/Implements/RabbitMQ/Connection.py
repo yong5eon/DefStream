@@ -334,11 +334,12 @@ class Connection(
 		)
 
 	def close(self):
-		if self.connection and self.connection.is_open:
-			with self.observe('RabbitMQ connection close'):
-				self.connection.close()
-				self.connection = None
+		connection = self.connection
+		self.connection = None
 		self.publisher = None
+		if connection and connection.is_open:
+			with self.observe('RabbitMQ connection close'):
+				connection.close()
 		return
 
 	def create_exchange(

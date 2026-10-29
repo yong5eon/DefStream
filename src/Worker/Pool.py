@@ -56,6 +56,7 @@ class Pool:
 		self.lock = Lock()
 		self.futures: Set[Future] = set()
 		self.closed = False
+		self.stopped = False
 		self.logger.info(
 			'Pool configured: concurrency=%s',
 			max,
@@ -87,6 +88,8 @@ class Pool:
 				self.slots.release()
 				raise
 			self.futures.add(future)
+			futures = self.futures
+			slots = self.slots
 			self.logger.debug(
 				'Task submission accepted: task=%s.%s active=%s',
 				run.__module__,
@@ -97,6 +100,8 @@ class Pool:
 			completed,
 			callback,
 			error_callback,
+			futures,
+			slots,
 		))
 		return future
 
@@ -105,10 +110,14 @@ class Pool:
 		future: Future,
 		callback: Optional[Callable[[Any], None]] = None,
 		error_callback: Optional[Callable[[BaseException], None]] = None,
+		futures: Optional[Set[Future]] = None,
+		slots: Optional[BoundedSemaphore] = None,
 	) -> None:
 		with self.lock:
-			self.futures.remove(future)
-			self.slots.release()
+			active = self.futures if futures is None else futures
+			capacity = self.slots if slots is None else slots
+			active.remove(future)
+			capacity.release()
 			self.logger.debug(
 				'Task slot released: active=%s',
 				len(self.futures),
@@ -148,12 +157,40 @@ class Pool:
 			)
 			raise TimeoutError('Pool tasks did not complete in time')
 
-	def stop(self) -> None:
+	def stop(self, *, abort: bool = False) -> None:
 		self.logger.info('Stopping Pool')
 		with self.lock:
 			self.closed = True
-		self.pool.shutdown(wait=True)
+			self.stopped = True
+		if abort:
+			if isinstance(self.pool, Executor):
+				self.pool.abort()
+			else:
+				self.logger.warning('Custom executor shutdown cannot terminate running tasks')
+				self.pool.shutdown(wait=False)
+		else:
+			self.pool.shutdown(wait=True)
 		self.logger.info('Pool shutdown completed')
+		return
+
+	def restart(self) -> None:
+		"""Replace the internal executor while preserving this Pool object."""
+		with self.lock:
+			if self.closed:
+				raise RuntimeError('Pool is closed')
+			previous = self.pool
+			if not isinstance(previous, Executor):
+				raise TypeError('Pool recovery requires a DefStream Executor')
+			self.closed = True
+		previous.abort()
+		with self.lock:
+			if self.stopped:
+				return
+			self.pool = previous.replacement()
+			self.futures = set()
+			self.slots = BoundedSemaphore(self.max)
+			self.closed = False
+		return
 
 	def shutdown(self) -> None:
 		self.stop()

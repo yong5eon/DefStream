@@ -29,11 +29,25 @@ from pika import (
 	BasicProperties,
 	BlockingConnection,
 )
-from pika.exceptions import UnroutableError
+from pika.exceptions import (
+	AMQPConnectionError,
+	AuthenticationError,
+	ChannelClosedByBroker,
+	ConnectionClosedByBroker,
+	IncompatibleProtocolError,
+	ProbableAccessDeniedError,
+	ProbableAuthenticationError,
+	UnroutableError,
+)
 
 __all__ = (
 	'Consumer',
 )
+
+
+class ConsumptionInterrupted(RuntimeError):
+	pass
+
 
 class Consumer(BaseConsumer):
 	"""Consumer of Event Broker for RabbitMQ"""
@@ -67,7 +81,7 @@ class Consumer(BaseConsumer):
 		self.response_channel = None
 		self.queues = set()
 		self.stopped = False
-		self.callback_error = None
+		self.callback_error: Optional[BaseException] = None
 		return
 
 	def __del__(self):
@@ -233,10 +247,19 @@ class Consumer(BaseConsumer):
 
 	def run(self):
 		self.logger.debug('Starting consumption loop')
+		self.callback_error = None
+		self.timer = self.connection.call_later(0.2, self.check_channel)
 		try:
 			self.channel.start_consuming()
+			if not self.stopped:
+				raise ConsumptionInterrupted('Consumption loop ended without a stop request')
 		except Exception as error:
-			# 정산 오류는 예약 콜백에서 루프로 전파되어도 Event의 기록을 재출력하지 않는다.
+			if isinstance(error, ChannelClosedByBroker) and self.ack_timeout(error):
+				self.logger.warning(
+					'Delivery acknowledgement timed out: queues=%s reason=%s',
+					sorted(self.queues),
+					error.reply_text,
+				)
 			owned_boundaries = (
 				Event.ack.__code__,
 				Event.nack.__code__,
@@ -249,15 +272,48 @@ class Consumer(BaseConsumer):
 			while trace is not None:
 				if trace.tb_frame.f_code in owned_boundaries:
 					observed = True
+					self.callback_error = None
 					break
 				trace = trace.tb_next
 			if not observed:
 				self.logger.error('Consumption loop failed: error_type=%s', type(error).__name__)
 			raise
 		finally:
-			self.callback_error = None
+			self.connection.remove_timeout(self.timer)
 			self.logger.debug('Consumption loop ended')
 		return
+
+	def check_channel(self) -> None:
+		if not self.stopped and self.channel.is_open:
+			self.timer = self.connection.call_later(0.2, self.check_channel)
+		return
+
+	@staticmethod
+	def ack_timeout(error: ChannelClosedByBroker) -> bool:
+		return (
+			error.reply_code == 406
+			and 'acknowledgement' in error.reply_text.lower()
+			and 'timed out' in error.reply_text.lower()
+		)
+
+	def is_recoverable(self, error: BaseException) -> bool:
+		if error is self.callback_error:
+			return False
+		if isinstance(error, (
+			AuthenticationError,
+			ProbableAuthenticationError,
+			ProbableAccessDeniedError,
+			IncompatibleProtocolError,
+		)):
+			return False
+		if isinstance(error, ChannelClosedByBroker):
+			return self.ack_timeout(error) or error.reply_code in (320, 541)
+		if isinstance(error, ConnectionClosedByBroker):
+			return error.reply_code in (320, 541)
+		return isinstance(error, (
+			AMQPConnectionError,
+			ConsumptionInterrupted,
+		))
 
 	def stop(self):
 		if not self.stopped:

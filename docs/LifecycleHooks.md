@@ -20,6 +20,8 @@ DefStream의 훅은 작업, 실행 풀의 각 스레드·프로세스, Worker의
 
 작업 훅은 `Run` 클래스 정의에 `setups=`, `completes=`, `errors=`로 지정합니다. 풀 생성자는 `setups=`, `cleanups=`를 받고, Worker 생성자도 같은 옵션 이름을 사용합니다.
 
+RabbitMQ 소비 장애 복구에서는 Pool 객체를 유지하고 내부 실행기를 교체합니다. 새 실행 단위가 시작될 때 `PoolSetup`이 다시 실행됩니다. 이전 ThreadPool의 `PoolCleanup`은 실행 중 작업이 끝난 뒤 실행되지만, 강제 종료한 ProcessPool 프로세스의 작업·풀 cleanup은 보장하지 않습니다. `WorkerSetup`은 최초 시작 때만, `WorkerCleanup`은 최종 종료 때만 실행하며 복구마다 반복하지 않습니다. 자세한 제한은 [소비 장애 복구](./RabbitMQ.md#worker-소비-장애-복구)를 참고하세요.
+
 ```python
 from signal import SIGINT, signal
 

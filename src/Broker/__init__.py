@@ -18,6 +18,7 @@ from .Protocol import (
 	Callable,
 	Poppable,
 	Readable,
+	Recoverable,
 )
 from .Errors import RemoteError
 from .Consumer import Consumer
@@ -45,6 +46,7 @@ __all__ = (
 	'RemoteError',
 	'Poppable',
 	'Readable',
+	'Recoverable',
 	'Consumer',
 	'EventHandler',
 	'Event',

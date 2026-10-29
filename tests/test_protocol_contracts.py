@@ -21,6 +21,7 @@ from DefStream.Broker import (
 	GetStream,
 	Declarable,
 	Requestable,
+	Recoverable,
 )
 from DefStream.Broker import __all__ as broker_exports
 from DefStream.Broker.Connection import __all__ as connection_exports
@@ -33,6 +34,7 @@ from DefStream.Broker.Event import (
 )
 from DefStream.Broker.Implements.RabbitMQ import (
 	Configuration as RabbitConfiguration,
+	Consumer as RabbitConsumer,
 	Connection as RabbitConnection,
 	Event as RabbitEvent,
 	Queue as RabbitQueue,
@@ -42,6 +44,7 @@ from DefStream.Broker.Implements.RabbitMQ import (
 from DefStream.Broker.Implements.RabbitMQ.Consumer import FailedRequest
 from DefStream.Broker.Implements.Redis import (
 	Configuration as RedisConfiguration,
+	Consumer as RedisConsumer,
 	Connection as RedisConnection,
 	Event as RedisEvent,
 	Queue as RedisQueue,
@@ -86,6 +89,22 @@ class StructuralConnection:
 
 
 class ProtocolContractTests(TestCase):
+	def test_recovery_capability_is_structural_and_opt_in(self):
+		class StructuralRecovery:
+			def is_recoverable(self, error: BaseException) -> bool:
+				return isinstance(error, ConnectionError)
+
+		recovery: Recoverable = StructuralRecovery()
+		self.assertIsInstance(recovery, Recoverable)
+		self.assertTrue(recovery.is_recoverable(ConnectionError()))
+		self.assertFalse(recovery.is_recoverable(ValueError()))
+		self.assertTrue(issubclass(RabbitConsumer, Recoverable))
+		self.assertFalse(issubclass(Consumer, Recoverable))
+		self.assertFalse(issubclass(RedisConsumer, Recoverable))
+		self.assertNotIsInstance(object(), Recoverable)
+		self.assertIn('Recoverable', broker_exports)
+		return
+
 	def test_broker_factory_contract_and_play_annotation(self):
 		from DefStream.Broker.Connection import BrokerFactory as FactoryContract
 

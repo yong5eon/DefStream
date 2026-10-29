@@ -1,10 +1,11 @@
 from concurrent.futures import (
 	Executor as PyExecutor,
 	Future,
-	ProcessPoolExecutor,
 	ThreadPoolExecutor,
 )
 from multiprocessing import get_context
+from multiprocessing.process import BaseProcess
+from multiprocessing.synchronize import Event as ProcessEvent
 from logging import getLogger
 from multiprocessing.managers import SyncManager
 from pickle import (
@@ -21,6 +22,7 @@ from signal import (
 	signal,
 )
 from threading import (
+	Event,
 	Lock,
 	Thread,
 )
@@ -32,7 +34,9 @@ from typing import (
 	List,
 	Optional,
 	Sequence,
+	Set,
 	TypeVar,
+	Union,
 )
 
 __all__ = (
@@ -56,7 +60,11 @@ def execute_loop(
 	setups: Sequence[Callable[[], None]],
 	cleanups: Sequence[Callable[[], None]],
 	serialized: bool,
+	stopping: Union[Event, ProcessEvent],
+	draining: Optional[ProcessEvent] = None,
 ) -> None:
+	if serialized:
+		initialize_process()
 	logger = Executor.logger
 	ready = False
 	try:
@@ -77,7 +85,9 @@ def execute_loop(
 		)
 		while True:
 			item = incoming.get()
-			if item is None:
+			if item is None or stopping.is_set():
+				if draining is not None:
+					draining.set()
 				return
 			key, payload = item
 			logger.debug(
@@ -155,6 +165,56 @@ def run_cleanups(
 		raise failure
 
 
+def execute_process(
+	incoming: Any,
+	outgoing: Any,
+	setups: Sequence[Callable[[], None]],
+	cleanups: Sequence[Callable[[], None]],
+	serialized: bool,
+	stopping: Union[Event, ProcessEvent],
+	draining: ProcessEvent,
+	completed: ProcessEvent,
+) -> None:
+	try:
+		execute_loop(
+			incoming,
+			outgoing,
+			setups,
+			cleanups,
+			serialized,
+			stopping,
+			draining,
+		)
+	except BaseException as error:
+		traceback = format_exc()
+		try:
+			outcome = dumps((
+				False,
+				(
+					error,
+					draining.is_set(),
+				),
+				traceback,
+			))
+		except Exception:
+			Executor.logger.exception('Execution environment error serialization failed')
+			outcome = dumps((
+				False,
+				(
+					RuntimeError('Cannot serialize execution environment error'),
+					draining.is_set(),
+				),
+				traceback,
+			))
+		outgoing.put((
+			None,
+			outcome,
+		))
+	finally:
+		completed.set()
+	return
+
+
 class Executor(PyExecutor):
 	logger = getLogger('Worker.Executor')
 
@@ -172,6 +232,11 @@ class Executor(PyExecutor):
 		self.lock = Lock()
 		self.pending: Dict[int, Future[Any]] = {}
 		self.workers: List[Future] = []
+		self.processes: List[BaseProcess] = []
+		self.draining: Dict[int, ProcessEvent] = {}
+		self.completed: Dict[int, ProcessEvent] = {}
+		self.process_lock = Lock()
+		self.stopping: Union[Event, ProcessEvent] = Event()
 		self.closed = False
 		self.failure: Optional[BaseException] = None
 		self.manager: Optional[SyncManager] = None
@@ -188,30 +253,49 @@ class Executor(PyExecutor):
 			self.process,
 		)
 		try:
+			context = get_context('spawn')
 			if self.process:
-				context = get_context('spawn')
+				self.stopping = context.Event()
 				self.manager = context.Manager()
 				self.incoming = self.manager.Queue()
 				self.outgoing = self.manager.Queue()
-				executor: PyExecutor = ProcessPoolExecutor(
-					self.size,
-					mp_context=context,
-					initializer=initialize_process,
-				)
 			else:
 				self.incoming = Queue()
 				self.outgoing = Queue()
-				executor = ThreadPoolExecutor(self.size)
-			self.executor = executor
-			for index in range(self.size):
-				self.workers.append(executor.submit(
-					execute_loop,
+				self.executor = ThreadPoolExecutor(self.size)
+			for _ in range(self.size):
+				parameters = (
 					self.incoming,
 					self.outgoing,
 					self.setups,
 					self.cleanups,
 					self.process,
-				))
+					self.stopping,
+				)
+				if self.process:
+					draining = context.Event()
+					completed = context.Event()
+					process = context.Process(
+						target=execute_process,
+						args=parameters + (
+							draining,
+							completed,
+						),
+					)
+					process.start()
+					self.processes.append(process)
+					if process.pid is None:
+						raise RuntimeError('Started process has no PID')
+					# Keep named semaphores alive until spawned children have exited.
+					self.draining[process.pid] = draining
+					self.completed[process.pid] = completed
+				else:
+					if self.executor is None:
+						raise RuntimeError('Thread executor is not initialized')
+					self.workers.append(self.executor.submit(
+						execute_loop,
+						*parameters,
+					))
 			monitor = Thread(target=self.collect)
 			monitor.start()
 			self.monitor = monitor
@@ -220,12 +304,15 @@ class Executor(PyExecutor):
 			self.logger.exception('Executor startup failed')
 			self.closed = True
 			try:
-				for worker in self.workers:
+				for _ in self.workers:
 					self.incoming.put(None)
 			finally:
 				try:
 					if self.executor is not None:
 						self.executor.shutdown(wait=True)
+					for process in self.processes:
+						process.terminate()
+						process.join()
 				finally:
 					if self.manager is not None:
 						self.manager.shutdown()
@@ -250,7 +337,7 @@ class Executor(PyExecutor):
 				raise RuntimeError('Pool is closed')
 			if self.failure is not None:
 				raise RuntimeError('Pool execution environment failed') from self.failure
-			if self.executor is None:
+			if self.monitor is None:
 				self.start()
 			key = self.sequence
 			self.sequence += 1
@@ -281,13 +368,18 @@ class Executor(PyExecutor):
 	def fail(
 		self,
 		error: BaseException,
+		*,
+		report: bool = True,
 	) -> None:
 		with self.lock:
 			first_failure = self.failure is None
 			self.failure = error
 			pending = tuple(self.pending.values())
 			self.pending.clear()
-		if first_failure:
+		if self.process:
+			self.stopping.set()
+			self.stop_processes()
+		if report and (first_failure or self.stopping.is_set()):
 			self.logger.error(
 				'Executor execution environment failed: pending=%s',
 				len(pending),
@@ -301,13 +393,30 @@ class Executor(PyExecutor):
 			future.set_exception(error)
 
 	def collect_results(self) -> None:
+		observed: Set[Future] = set()
 		while True:
+			no_outcome = False
 			try:
 				key, outcome = self.outgoing.get(timeout=0.05)
 			except Empty:
-				pass
+				no_outcome = True
 			else:
 				success, value, traceback = loads(outcome) if self.process else outcome
+				if key is None:
+					error, draining = value
+					if traceback is not None:
+						error.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
+					if draining and self.closed and not self.stopping.is_set():
+						with self.lock:
+							self.failure = error
+						self.logger.error('Execution environment cleanup failed', exc_info=(
+							type(error),
+							error,
+							error.__traceback__,
+						))
+					else:
+						self.fail(error)
+					continue
 				self.logger.debug(
 					'Execution result collected: key=%s success=%s',
 					key,
@@ -325,18 +434,26 @@ class Executor(PyExecutor):
 						if traceback is not None:
 							value.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
 						future.set_exception(value)
-			failure = next(
-				(
-					worker.exception()
-					for worker in self.workers
-					if worker.done() and worker.exception() is not None
-				),
-				None,
-			)
-			if failure is not None:
-				self.fail(failure)
+			for worker in self.workers:
+				if worker.done() and worker not in observed:
+					observed.add(worker)
+					failure: Optional[BaseException] = worker.exception()
+					if failure is not None:
+						self.fail(failure)
+			if not self.stopping.is_set() and any(
+				process.pid is not None and process.exitcode is not None and (
+					process.exitcode != 0 or not self.completed[process.pid].is_set()
+				)
+				for process in self.processes
+			):
+				self.fail(RuntimeError('Pool execution process failed'))
 			with self.lock:
-				finished = not self.pending and all(worker.done() for worker in self.workers)
+				finished = (
+					not self.pending
+					and all(worker.done() for worker in self.workers)
+					and all(not process.is_alive() for process in self.processes)
+					and (not self.process or no_outcome)
+				)
 			if finished:
 				return
 
@@ -353,15 +470,18 @@ class Executor(PyExecutor):
 		with self.lock:
 			if not self.closed:
 				self.closed = True
-				if self.executor is not None:
-					for worker in self.workers:
+				if self.monitor is not None:
+					for _ in range(self.size):
 						self.incoming.put(None)
 			executor = self.executor
-		if executor is None:
+		if self.monitor is None:
 			self.logger.debug('Closing an unstarted Executor')
 			return
-		executor.shutdown(wait=wait)
+		if executor is not None:
+			executor.shutdown(wait=wait)
 		if wait:
+			for process in self.processes:
+				process.join()
 			if self.monitor is not None:
 				self.monitor.join()
 			if self.manager is not None:
@@ -369,3 +489,37 @@ class Executor(PyExecutor):
 			if self.failure is not None:
 				raise RuntimeError('Pool execution environment failed') from self.failure
 			self.logger.info('Executor shutdown completed')
+		return
+
+	def replacement(self) -> 'Executor':
+		return Executor(
+			self.size,
+			self.setups,
+			self.cleanups,
+			process=self.process,
+		)
+
+	def stop_processes(self) -> None:
+		"""Reap surviving processes before publishing failures for their tasks."""
+		with self.process_lock:
+			for process in self.processes:
+				if process.is_alive():
+					process.kill()
+			for process in self.processes:
+				process.join()
+		return
+
+	def abort(self) -> None:
+		"""Discard this execution generation without waiting for running threads."""
+		self.stopping.set()
+		if self.process:
+			self.stop_processes()
+		self.logger.warning('Discarding execution generation: pending=%s', len(self.pending))
+		self.fail(RuntimeError('Execution generation discarded'), report=False)
+		self.shutdown(wait=False)
+		if self.process:
+			if self.monitor is not None:
+				self.monitor.join()
+			if self.manager is not None:
+				self.manager.shutdown()
+		return
