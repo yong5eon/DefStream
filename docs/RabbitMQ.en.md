@@ -44,6 +44,8 @@ Recoverable connection errors while cleaning up the previous Consumer or connect
 
 Unexpected ProcessPool worker exits are detected even during graceful shutdown. Surviving task processes are terminated and reaped before unfinished tasks are reported as failed. Custom executors remain unsupported for recovery, but consumption failure requests `shutdown(wait=False)` so the original failure can propagate. This request does not forcibly terminate running tasks in a custom executor.
 
+A `PoolCleanup` failure during graceful shutdown is distinguished from a process crash. Other processes may finish their running tasks before the cleanup error propagates from shutdown. Unexpected exits are checked even while results keep arriving, and normal-exit classification does not depend on result-queue notification order. An explicit Pool stop during restart remains effective after restart finishes.
+
 The broker may redeliver unacknowledged messages from the closed channel. Previous threads may overlap with redelivered tasks, and effects such as completed database updates are not undone; message-processing idempotency remains the caller's responsibility. A thread whose task never finishes can retain resources and delay Python process exit. Exhaustion propagates Worker failure without waiting for previous tasks, but does not guarantee forced process termination.
 
 ## RabbitMQ usage

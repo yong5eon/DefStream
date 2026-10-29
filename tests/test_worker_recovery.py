@@ -1,8 +1,13 @@
 from contextlib import nullcontext
+from concurrent.futures import Future
 from importlib import import_module
 from os import _exit as exit_process
 from pathlib import Path
-from queue import Queue
+from pickle import dumps
+from queue import (
+	Empty,
+	Queue,
+)
 from tempfile import TemporaryDirectory
 from threading import (
 	Event,
@@ -42,6 +47,7 @@ from DefStream.Broker.Implements.RabbitMQ import (
 )
 from DefStream.Worker import (
 	Pool,
+	PoolCleanup,
 	PoolSetup,
 	ProcessPool,
 	Run,
@@ -87,6 +93,27 @@ class CrashRun(Run):
 class ValueRun(Run):
 	def run(self):
 		return 'new generation'
+
+
+class FileWaitRun(Run):
+	def run(self, started: str, release: str) -> str:
+		Path(started).write_text('started', encoding='utf-8')
+		deadline = monotonic() + 10
+		while not Path(release).exists():
+			if monotonic() >= deadline:
+				raise TimeoutError('Task release was not provided')
+			sleep(0.01)
+		return 'drained'
+
+
+class FailingCleanup(PoolCleanup):
+	def __init__(self, path: str) -> None:
+		self.path = path
+		return
+
+	def __call__(self) -> None:
+		Path(self.path).write_text('cleanup failed', encoding='utf-8')
+		raise ValueError('cleanup failed')
 
 
 class CaptureThread(PoolSetup):
@@ -503,6 +530,125 @@ class RecoveryTests(TestCase):
 			pool.restart()
 		self.assertIs(pool.pool, executor)
 		self.assertFalse(pool.closed)
+
+	def test_stop_during_restart_is_not_undone(self):
+		pool = ThreadPool(1)
+		previous = require_instance(pool.pool, Executor)
+		retired = Event()
+		release = Event()
+		errors: Queue[BaseException] = Queue()
+		abort = previous.abort
+
+		def pause_abort() -> None:
+			abort()
+			retired.set()
+			if not release.wait(5):
+				raise TimeoutError('Restart was not released')
+			return
+
+		def restart() -> None:
+			try:
+				pool.restart()
+			except BaseException as error:
+				errors.put(error)
+			return
+
+		with patch.object(previous, 'abort', side_effect=pause_abort):
+			thread = Thread(target=restart)
+			thread.start()
+			try:
+				self.assertTrue(retired.wait(5))
+				pool.stop()
+			finally:
+				release.set()
+				thread.join(5)
+		self.assertFalse(thread.is_alive())
+		self.assertTrue(errors.empty())
+		self.assertTrue(pool.closed)
+		self.assertIs(pool.pool, previous)
+		with self.assertRaisesRegex(RuntimeError, 'closed'):
+			pool.submit(ValueRun, {})
+
+	def test_exit_detection_is_independent_of_queue_timeout_and_exit_reports(self):
+		for busy, completed, code in (
+			(True, False, 7),
+			(True, False, 0),
+			(False, True, 0),
+		):
+			with self.subTest(busy=busy, completed=completed, code=code):
+				executor = Executor(1, (), (), process=True)
+				process = Mock(pid=1, exitcode=code)
+				process.is_alive.return_value = False
+				executor.processes = [process]
+				marker = Mock()
+				marker.is_set.return_value = False
+				executor.completed[1] = marker
+				future: Future = Future()
+				executor.pending[0] = future
+				outgoing = Mock()
+				executor.outgoing = outgoing
+
+				def receive(timeout: float):
+					marker.is_set.return_value = completed
+					if busy:
+						return (99, dumps((True, 'another result', None)))
+					raise Empty
+
+				class ProbeEnd(Exception):
+					pass
+
+				calls = 0
+
+				def next_result(timeout: float):
+					nonlocal calls
+					calls += 1
+					if calls > 1:
+						raise ProbeEnd()
+					return receive(timeout)
+
+				outgoing.get.side_effect = next_result
+				with self.assertRaises(ProbeEnd):
+					executor.collect_results()
+				self.assertEqual(future.done(), not completed)
+				if not completed:
+					self.assertIsInstance(future.exception(), RuntimeError)
+					process.join.assert_called_once()
+				else:
+					self.assertIsNone(executor.failure)
+					process.kill.assert_not_called()
+
+	def test_cleanup_failure_preserves_other_process_graceful_drain(self):
+		with TemporaryDirectory() as directory:
+			started = Path(directory) / 'started'
+			release = Path(directory) / 'release'
+			cleanup = Path(directory) / 'cleanup'
+			pool = ProcessPool(2, cleanups=FailingCleanup(str(cleanup)))
+			executor = require_instance(pool.pool, Executor)
+			try:
+				future = pool.submit(FileWaitRun, {
+					'started': str(started),
+					'release': str(release),
+				})
+				deadline = monotonic() + 10
+				while not started.exists():
+					self.assertLess(monotonic(), deadline)
+					sleep(0.01)
+				executor.shutdown(wait=False)
+				while executor.failure is None:
+					self.assertLess(monotonic(), deadline)
+					sleep(0.01)
+				self.assertTrue(cleanup.exists())
+				self.assertFalse(future.done())
+				self.assertTrue(any(process.is_alive() for process in executor.processes))
+				release.write_text('release', encoding='utf-8')
+				self.assertEqual(future.result(5), 'drained')
+				with self.assertRaisesRegex(RuntimeError, 'environment failed') as caught:
+					pool.stop()
+				self.assertIsInstance(caught.exception.__cause__, ValueError)
+				self.assertFalse(require_value(executor.monitor).is_alive())
+			finally:
+				release.write_text('release', encoding='utf-8')
+				executor.abort()
 
 	def test_process_pool_terminates_old_processes_and_releases_manager(self):
 		pool = ProcessPool(1)

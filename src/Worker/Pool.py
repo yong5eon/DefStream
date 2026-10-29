@@ -56,6 +56,7 @@ class Pool:
 		self.lock = Lock()
 		self.futures: Set[Future] = set()
 		self.closed = False
+		self.stopped = False
 		self.logger.info(
 			'Pool configured: concurrency=%s',
 			max,
@@ -160,6 +161,7 @@ class Pool:
 		self.logger.info('Stopping Pool')
 		with self.lock:
 			self.closed = True
+			self.stopped = True
 		if abort:
 			if isinstance(self.pool, Executor):
 				self.pool.abort()
@@ -182,6 +184,8 @@ class Pool:
 			self.closed = True
 		previous.abort()
 		with self.lock:
+			if self.stopped:
+				return
 			self.pool = previous.replacement()
 			self.futures = set()
 			self.slots = BoundedSemaphore(self.max)

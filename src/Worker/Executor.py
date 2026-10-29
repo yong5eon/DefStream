@@ -8,7 +8,6 @@ from multiprocessing.process import BaseProcess
 from multiprocessing.synchronize import Event as ProcessEvent
 from logging import getLogger
 from multiprocessing.managers import SyncManager
-from os import getpid
 from pickle import (
 	dumps,
 	loads,
@@ -35,7 +34,6 @@ from typing import (
 	List,
 	Optional,
 	Sequence,
-	Set,
 	TypeVar,
 	Union,
 )
@@ -62,6 +60,7 @@ def execute_loop(
 	cleanups: Sequence[Callable[[], None]],
 	serialized: bool,
 	stopping: Union[Event, ProcessEvent],
+	draining: Optional[ProcessEvent] = None,
 ) -> None:
 	if serialized:
 		initialize_process()
@@ -86,6 +85,8 @@ def execute_loop(
 		while True:
 			item = incoming.get()
 			if item is None or stopping.is_set():
+				if draining is not None:
+					draining.set()
 				return
 			key, payload = item
 			logger.debug(
@@ -170,6 +171,8 @@ def execute_process(
 	cleanups: Sequence[Callable[[], None]],
 	serialized: bool,
 	stopping: Union[Event, ProcessEvent],
+	draining: ProcessEvent,
+	completed: ProcessEvent,
 ) -> None:
 	try:
 		execute_loop(
@@ -179,35 +182,35 @@ def execute_process(
 			cleanups,
 			serialized,
 			stopping,
+			draining,
 		)
 	except BaseException as error:
 		traceback = format_exc()
 		try:
 			outcome = dumps((
 				False,
-				error,
+				(
+					error,
+					draining.is_set(),
+				),
 				traceback,
 			))
 		except Exception:
 			Executor.logger.exception('Execution environment error serialization failed')
 			outcome = dumps((
 				False,
-				RuntimeError('Cannot serialize execution environment error'),
+				(
+					RuntimeError('Cannot serialize execution environment error'),
+					draining.is_set(),
+				),
 				traceback,
 			))
 		outgoing.put((
 			None,
 			outcome,
 		))
-	else:
-		outgoing.put((
-			None,
-			dumps((
-				True,
-				getpid(),
-				None,
-			)),
-		))
+	finally:
+		completed.set()
 	return
 
 
@@ -229,7 +232,7 @@ class Executor(PyExecutor):
 		self.pending: Dict[int, Future[Any]] = {}
 		self.workers: List[Future] = []
 		self.processes: List[BaseProcess] = []
-		self.exited: Set[int] = set()
+		self.completed: Dict[int, ProcessEvent] = {}
 		self.process_lock = Lock()
 		self.stopping: Union[Event, ProcessEvent] = Event()
 		self.closed = False
@@ -268,12 +271,20 @@ class Executor(PyExecutor):
 					self.stopping,
 				)
 				if self.process:
+					draining = context.Event()
+					completed = context.Event()
 					process = context.Process(
 						target=execute_process,
-						args=parameters,
+						args=parameters + (
+							draining,
+							completed,
+						),
 					)
 					process.start()
 					self.processes.append(process)
+					if process.pid is None:
+						raise RuntimeError('Started process has no PID')
+					self.completed[process.pid] = completed
 				else:
 					if self.executor is None:
 						raise RuntimeError('Thread executor is not initialized')
@@ -362,6 +373,7 @@ class Executor(PyExecutor):
 			pending = tuple(self.pending.values())
 			self.pending.clear()
 		if self.process:
+			self.stopping.set()
 			self.stop_processes()
 		if report and (first_failure or self.stopping.is_set()):
 			self.logger.error(
@@ -386,12 +398,19 @@ class Executor(PyExecutor):
 			else:
 				success, value, traceback = loads(outcome) if self.process else outcome
 				if key is None:
-					if success:
-						self.exited.add(value)
+					error, draining = value
+					if traceback is not None:
+						error.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
+					if draining and self.closed and not self.stopping.is_set():
+						with self.lock:
+							self.failure = error
+						self.logger.error('Execution environment cleanup failed', exc_info=(
+							type(error),
+							error,
+							error.__traceback__,
+						))
 					else:
-						if traceback is not None:
-							value.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
-						self.fail(value)
+						self.fail(error)
 					continue
 				self.logger.debug(
 					'Execution result collected: key=%s success=%s',
@@ -420,9 +439,9 @@ class Executor(PyExecutor):
 			)
 			if failure is not None:
 				self.fail(failure)
-			if no_outcome and self.failure is None and not self.stopping.is_set() and any(
-				process.exitcode is not None and (
-					process.exitcode != 0 or process.pid not in self.exited
+			if not self.stopping.is_set() and any(
+				process.pid is not None and process.exitcode is not None and (
+					process.exitcode != 0 or not self.completed[process.pid].is_set()
 				)
 				for process in self.processes
 			):
