@@ -225,7 +225,7 @@ flowchart TD
 - `delete_queue()` and `delete_stream()` delete the stream key itself.
   Do not remove shared streams/groups in cleanup code without ownership.
 - Connection, decoding, and handler failures propagate; there is no automatic reconnection.
-- Exchanges and RPC are not supported. Do not use `request()` or console RPC.
+- Exchanges and RPC are not supported. Do not use `request()` or Play RPC.
 - Redis Cluster is implemented, but current integration tests cover standalone Redis.
 - The Worker's connection and pool belong to one run. `worker.stop()` waits for tasks and closes resources.
 

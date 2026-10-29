@@ -16,6 +16,30 @@ from _support import require_value
 
 
 class BrokerPackagingTests(TestCase):
+	def test_distribution_contains_play_extension_and_template(self):
+		package = distribution('DefStream')
+		files = {
+			str(path).replace('\\', '/')
+			for path in require_value(package.files)
+		}
+		for name in (
+			'Play.py',
+			'Play.html',
+		):
+			self.assertIn(
+				'DefStream/Inspector/Extensions/' + name,
+				files,
+			)
+		for name in (
+			'Console.py',
+			'Console.html',
+		):
+			self.assertNotIn(
+				'DefStream/Inspector/Extensions/' + name,
+				files,
+			)
+		return
+
 	def test_distribution_contains_both_brokers(self):
 		package = distribution('DefStream')
 		files = {

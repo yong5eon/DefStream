@@ -4,7 +4,7 @@
 
 Inspector tools, logging, and broker selection.
 
-## Health checks and task console
+## Health checks and Play
 
 Inspector is optional and uses a Python standard-library HTTP server.
 Configure it before starting the Worker and pass `Worker(..., inspector=inspector)`.
@@ -13,7 +13,7 @@ This snippet reuses the `Connection` and `Configuration` imports from `worker.py
 ```python
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-  Console,
+  Play,
   Metrics,
   Ping,
   Specifications,
@@ -38,8 +38,8 @@ inspector = Inspector(
     Metrics('/metrics'),
     Status('/status'),
     Specifications('/asyncapi.json'),
-    Console(
-      '/console',
+    Play(
+      '/play',
       broker=create_connection,
       title='DefStream',
     ),
@@ -53,7 +53,7 @@ inspector = Inspector(
 | `/metrics` | Prometheus metrics with the `defstream_` prefix |
 | `/status` | Successes, failures, throughput, and duration; register with exactly one `Metrics` |
 | `/asyncapi.json` | Registered task request/reply contracts as AsyncAPI JSON |
-| `/console` | Browse tasks and schemas, send JSON messages, and execute RPC on supported brokers |
+| `/play` | Browse tasks and schemas, send JSON messages, and execute RPC on supported brokers |
 
 There are no default routes. Metrics describe one Worker and reset on restart.
 Execution counts include retries and hooks, not unique messages or ACKs.
@@ -67,22 +67,26 @@ flowchart LR
   I --> M[Prometheus metrics]
   I --> S[Status endpoint]
   I --> A[AsyncAPI document]
-  I --> C[Task console]
+  I --> C[Play task execution]
   C --> F[BrokerFactory]
   F --> B[New broker connection per use]
 ```
 
-**Restrict access.** The console example above publishes real tasks without
+The `Console` extension has been renamed to `Play`. Update existing imports and
+class usages to `Play`. The example above uses `/play`, but you can keep your
+configured URL path. The extension logger is now `Worker.Inspector.Play`.
+
+**Restrict access.** The Play example above publishes real tasks without
 authentication. For authentication, pass a random token of at least 16 characters
-using `Console(token=...)` and enter it in the browser. Load the token from an
+using `Play(token=...)` and enter it in the browser. Load the token from an
 environment variable or secret store. Other built-in endpoints remain
 unauthenticated: bind to loopback or a trusted management network, and use an
 HTTPS reverse proxy with additional access control for remote access.
 Inspector has no built-in TLS and is not a public web server.
-The console's connection factory must return a new connection on every call,
+Play's connection factory must return a new connection on every call,
 never the Worker's connection.
 
-Console's `broker` parameter uses the `DefStream.Broker.BrokerFactory` contract.
+Play's `broker` parameter uses the `DefStream.Broker.BrokerFactory` contract.
 Its `__call__() -> Connection` takes no arguments and returns a new connection.
 Functions such as `create_connection` above and lambdas remain valid without changes.
 For a class-based factory, you can inherit `BrokerFactory` and implement `__call__`.

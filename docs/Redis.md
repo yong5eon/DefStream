@@ -220,7 +220,7 @@ flowchart TD
 - `delete_queue()`와 `delete_stream()`은 스트림 키 자체를 삭제합니다.
   공유 스트림·그룹을 정리 코드에서 무단 삭제하지 마세요.
 - 연결·디코딩·핸들러 오류는 호출자에게 전파하며 자동 재연결하지 않습니다.
-- Exchange와 RPC는 지원하지 않습니다. `request()`와 콘솔 RPC를 사용할 수 없습니다.
+- Exchange와 RPC는 지원하지 않습니다. `request()`와 Play의 RPC를 사용할 수 없습니다.
 - Redis Cluster 구성은 지원하지만 현재 통합 테스트 대상은 standalone Redis입니다.
 - Worker의 연결과 풀은 한 번의 실행 전용입니다. `worker.stop()`은 작업을 기다린 뒤 자원을 닫습니다.
 

@@ -171,5 +171,5 @@ Validation exceptions are task failures and follow error hooks and the `on_error
 policy. The example's `Reject()` avoids endlessly retrying invalid inputs.
 To preserve failures in a DLQ, also configure `Subscription(error=...)` and
 provision it through `declare()`. Schemas and examples appear in Inspector's
-AsyncAPI and console; custom Validator patterns are not automatically
+AsyncAPI and Play; custom Validator patterns are not automatically
 reverse-engineered into JSON Schema.

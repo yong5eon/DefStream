@@ -24,7 +24,7 @@ from DefStream.Broker import (
 )
 from DefStream.Broker import __all__ as broker_exports
 from DefStream.Broker.Connection import __all__ as connection_exports
-from DefStream.Inspector.Extensions import Console
+from DefStream.Inspector.Extensions import Play
 from DefStream.Broker.Implements.RabbitMQ import __all__ as rabbit_exports
 from DefStream.Broker.Implements.Redis import __all__ as redis_exports
 from DefStream.Broker.Event import (
@@ -86,7 +86,7 @@ class StructuralConnection:
 
 
 class ProtocolContractTests(TestCase):
-	def test_broker_factory_contract_and_console_annotation(self):
+	def test_broker_factory_contract_and_play_annotation(self):
 		from DefStream.Broker.Connection import BrokerFactory as FactoryContract
 
 		self.assertIs(
@@ -98,7 +98,7 @@ class ProtocolContractTests(TestCase):
 			connection_exports,
 		)
 		self.assertIs(
-			get_type_hints(Console.__init__)['broker'],
+			get_type_hints(Play.__init__)['broker'],
 			BrokerFactory,
 		)
 		self.assertIs(
@@ -132,12 +132,12 @@ class ProtocolContractTests(TestCase):
 		)
 		for factory in factories:
 			with self.subTest(factory=factory):
-				console = Console(
-					'/console',
+				play = Play(
+					'/play',
 					broker=factory,
 				)
-				first = console.broker()
-				second = console.broker()
+				first = play.broker()
+				second = play.broker()
 				self.assertIsInstance(
 					first,
 					StructuralConnection,

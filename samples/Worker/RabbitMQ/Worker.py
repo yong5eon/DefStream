@@ -21,7 +21,7 @@ from DefStream.Inspector.Extensions import (
 	Metrics,
 	Ping,
 	Specifications,
-	Console,
+	Play,
 	Status,
 )
 from DefStream.Worker import (
@@ -105,8 +105,8 @@ if __name__ == '__main__':
 					description='A sample DefStream worker using RabbitMQ as the broker',
 				),
 				Specifications('/spec'),
-				Console(
-					'/console',
+				Play(
+					'/play',
 					broker=lambda: Connection(Configuration(
 						host='127.0.0.1',
 						port=5672,

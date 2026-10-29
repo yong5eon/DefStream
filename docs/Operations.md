@@ -4,7 +4,7 @@
 
 Inspector, 로깅 및 브로커 선택 시 고려사항입니다.
 
-## 상태 확인과 작업 콘솔
+## 상태 확인과 Play
 
 선택 기능인 Inspector는 Python 표준 라이브러리 HTTP 서버를 사용합니다.
 다음 코드를 Worker 실행 전에 구성하고 `Worker(..., inspector=inspector)`로 전달하세요.
@@ -13,7 +13,7 @@ Inspector, 로깅 및 브로커 선택 시 고려사항입니다.
 ```python
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
-  Console,
+  Play,
   Metrics,
   Ping,
   Specifications,
@@ -38,8 +38,8 @@ inspector = Inspector(
     Metrics('/metrics'),
     Status('/status'),
     Specifications('/asyncapi.json'),
-    Console(
-      '/console',
+    Play(
+      '/play',
       broker=create_connection,
       title='DefStream',
     ),
@@ -53,7 +53,7 @@ inspector = Inspector(
 | `/metrics` | `defstream_` 접두사의 Prometheus 지표 |
 | `/status` | 처리 성공·실패·처리량·소요 시간. `Metrics` 하나와 함께 등록 |
 | `/asyncapi.json` | 등록 작업의 요청·응답 계약을 AsyncAPI JSON으로 제공 |
-| `/console` | 작업 목록·스키마 조회, JSON 메시지 발행, 지원 브로커의 RPC 실행 |
+| `/play` | 작업 목록·스키마 조회, JSON 메시지 발행, 지원 브로커의 RPC 실행 |
 
 기본으로 등록되는 경로는 없습니다. 지표는 한 Worker 기준이며 재시작 시 초기화됩니다.
 처리 횟수는 재시도와 훅을 포함한 실행 시도 기준이지 고유 메시지 수나 ACK 수가 아닙니다.
@@ -67,20 +67,24 @@ flowchart LR
   I --> M[Prometheus 지표]
   I --> S[상태 경로]
   I --> A[AsyncAPI 문서]
-  I --> C[작업 콘솔]
+  I --> C[Play 작업 실행]
   C --> F[BrokerFactory]
   F --> B[사용할 때마다 새 브로커 연결]
 ```
 
-**접근을 제한하세요.** 위 콘솔 예제는 인증 없이 실제 작업을 발행합니다.
-인증이 필요하면 `Console`에 `token=`으로 무작위 16자 이상 토큰을 전달하고,
+`Console` 확장은 `Play`로 이름이 변경되었습니다. 기존 import와 클래스 사용을
+`Play`로 변경하세요. 위 예제는 `/play`를 사용하지만 직접 지정한 URL 경로는 유지할 수 있습니다.
+확장 로거 이름은 `Worker.Inspector.Play`입니다.
+
+**접근을 제한하세요.** 위 Play 예제는 인증 없이 실제 작업을 발행합니다.
+인증이 필요하면 `Play`에 `token=`으로 무작위 16자 이상 토큰을 전달하고,
 브라우저에서 입력하세요. 토큰은 환경변수나 비밀 저장소에서 읽으세요.
 다른 기본 엔드포인트는 인증되지 않으므로 신뢰할 수 있는 관리망이나 루프백에만 바인딩하고,
 원격 접근은 HTTPS 역방향 프록시 및 별도 접근 제어를 사용하세요.
 Inspector 자체는 TLS를 제공하지 않으며 공개 웹 서버가 아닙니다.
-콘솔의 연결 팩터리는 호출마다 새 연결을 반환해야 하고 Worker 연결을 공유하면 안 됩니다.
+Play의 연결 팩터리는 호출마다 새 연결을 반환해야 하고 Worker 연결을 공유하면 안 됩니다.
 
-Console의 `broker` 인자는 `DefStream.Broker.BrokerFactory` 계약을 사용합니다.
+Play의 `broker` 인자는 `DefStream.Broker.BrokerFactory` 계약을 사용합니다.
 이 계약의 `__call__() -> Connection`은 인자 없이 새 연결을 반환합니다.
 위의 `create_connection` 같은 함수나 람다도 그대로 전달할 수 있으며,
 클래스로 구현할 때는 `BrokerFactory`를 상속하고 `__call__`을 구현할 수 있습니다.

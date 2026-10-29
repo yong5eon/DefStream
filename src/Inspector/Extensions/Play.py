@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 	from ..Inspector import Inspector
 
 __all__ = (
-	'Console',
+	'Play',
 )
 
 def json_response(
@@ -59,8 +59,8 @@ def json_response(
 	)
 
 
-class Console(Extension):
-	logger = getLogger('Worker.Inspector.Console')
+class Play(Extension):
+	logger = getLogger('Worker.Inspector.Play')
 
 	methods = (
 		'GET',
@@ -80,28 +80,28 @@ class Console(Extension):
 	):
 		super().__init__(path)
 		if not callable(broker):
-			raise TypeError('Console broker must be a factory creating a new producer connection')
+			raise TypeError('Play broker must be a factory creating a new producer connection')
 		if token is not None and (not isinstance(
 			token,
 			str,
 		) or len(token) < 16):
-			raise ValueError('Console token must contain at least 16 characters')
+			raise ValueError('Play token must contain at least 16 characters')
 		if isinstance(
 			timeout,
 			bool,
 		) or not isfinite(timeout) or timeout <= 0:
-			raise ValueError('Console RPC timeout must be finite and positive')
+			raise ValueError('Play RPC timeout must be finite and positive')
 		self.broker = broker
 		if not isinstance(
 			title,
 			str,
 		) or not title:
-			raise ValueError('Console title must be a nonempty string')
+			raise ValueError('Play title must be a nonempty string')
 		if description is not None and not isinstance(
 			description,
 			str,
 		):
-			raise TypeError('Console description must be a string or None')
+			raise TypeError('Play description must be a string or None')
 		self.title = title
 		self.description = description
 		self.token_digest = sha256(token.encode('utf-8')).digest() if token is not None else None
@@ -112,14 +112,14 @@ class Console(Extension):
 		self,
 		inspector: 'Inspector',
 	) -> Response:
-		self.logger.debug('Building Inspector Console HTML response')
-		page = files(__package__).joinpath('Console.html').read_bytes()
+		self.logger.debug('Building Inspector Play HTML response')
+		page = files(__package__).joinpath('Play.html').read_bytes()
 		values = {
 			'title': escape(self.title),
 			'description': escape(self.description) if self.description is not None else '',
 		}
 		page = sub(
-			r'\{\{console_(title|description)\}\}',
+			r'\{\{play_(title|description)\}\}',
 			lambda match: values[match[1]],
 			page.decode('utf-8'),
 		).encode('utf-8')
@@ -167,7 +167,7 @@ class Console(Extension):
 			sha256(authorization[7:].encode('utf-8')).digest(),
 			self.token_digest,
 		)):
-			self.logger.warning('Inspector Console rejected an unauthorized request')
+			self.logger.warning('Inspector Play rejected an unauthorized request')
 			return json_response(
 				'401 Unauthorized',
 				{'error': 'A valid Bearer token is required'},
@@ -183,20 +183,20 @@ class Console(Extension):
 			except ValueError:
 				valid_origin = False
 			if not valid_origin:
-				self.logger.warning('Inspector Console rejected a cross-origin request')
+				self.logger.warning('Inspector Play rejected a cross-origin request')
 				return json_response(
 					'403 Forbidden',
 					{'error': 'Cross-origin requests are not allowed'},
 				)
 		if not self.slots.acquire(blocking=False):
-			self.logger.warning('Inspector Console concurrent request limit exceeded')
+			self.logger.warning('Inspector Play concurrent request limit exceeded')
 			return json_response(
 				'429 Too Many Requests',
-				{'error': 'Too many concurrent console requests'},
+				{'error': 'Too many concurrent Play requests'},
 			)
 		try:
 			self.logger.debug(
-				'Handling Inspector Console request: method=%s',
+				'Handling Inspector Play request: method=%s',
 				method,
 			)
 			if method in (
@@ -210,12 +210,12 @@ class Console(Extension):
 			)
 		except Exception as error:
 			self.logger.error(
-				'Inspector Console request failed: error=%s',
+				'Inspector Play request failed: error=%s',
 				type(error).__name__,
 			)
 			return json_response(
 				'500 Internal Server Error',
-				{'error': 'Inspector console failed; consult the worker logs'},
+				{'error': 'Inspector Play failed; consult the worker logs'},
 			)
 		finally:
 			self.slots.release()
@@ -224,11 +224,11 @@ class Console(Extension):
 		self,
 		inspector: 'Inspector',
 	) -> Response:
-		self.logger.debug('Building Inspector Console task catalog')
+		self.logger.debug('Building Inspector Play task catalog')
 		producer = self.broker()
 		try:
 			if inspector.worker is not None and producer is inspector.worker.broker:
-				raise ValueError('Console requires a separate producer, not the Worker connection')
+				raise ValueError('Play requires a separate producer, not the Worker connection')
 			rpc = isinstance(
 				producer,
 				Requestable,
@@ -247,7 +247,7 @@ class Console(Extension):
 				specifications = Specifications(self.path)
 			document = specifications.document(inspector)
 			self.logger.debug(
-				'Inspector Console task catalog built: tasks=%d rpc=%s',
+				'Inspector Play task catalog built: tasks=%d rpc=%s',
 				len(document['operations']),
 				rpc,
 			)
@@ -295,7 +295,7 @@ class Console(Extension):
 		if size > 65536:
 			return json_response(
 				'413 Payload Too Large',
-				{'error': 'Console requests must not exceed 64 KiB'},
+				{'error': 'Play requests must not exceed 64 KiB'},
 			)
 		raw = environ['wsgi.input'].read(size)
 		try:
@@ -337,7 +337,7 @@ class Console(Extension):
 			UnicodeDecodeError,
 		) as error:
 			self.logger.warning(
-				'Inspector Console rejected invalid input: error=%s message=%s',
+				'Inspector Play rejected invalid input: error=%s message=%s',
 				type(error).__name__,
 				error,
 			)
@@ -347,19 +347,19 @@ class Console(Extension):
 			)
 		started = monotonic()
 		self.logger.debug(
-			'Inspector Console task request validated: task=%s mode=%s',
+			'Inspector Play task request validated: task=%s mode=%s',
 			task.__module__ + '.' + task.__qualname__,
 			payload['mode'],
 		)
 		producer = self.broker()
 		if producer is worker.broker:
-			raise ValueError('Console requires a separate producer, not the Worker connection')
+			raise ValueError('Play requires a separate producer, not the Worker connection')
 		try:
 			if payload['mode'] == 'request' and not isinstance(
 				producer,
 				Requestable,
 			):
-				self.logger.debug('Inspector Console request rejected: broker does not support RPC')
+				self.logger.debug('Inspector Play request rejected: broker does not support RPC')
 				return json_response(
 					'501 Not Implemented',
 					{'error': 'This broker does not support RPC'},
@@ -380,14 +380,14 @@ class Console(Extension):
 						broker=producer,
 					)
 			except TimeoutError:
-				self.logger.warning('Inspector Console RPC timed out')
+				self.logger.warning('Inspector Play RPC timed out')
 				return json_response(
 					'504 Gateway Timeout',
 					{'error': 'RPC timed out; delivered work is not cancelled'},
 				)
 			except RemoteError as error:
 				self.logger.warning(
-					'Inspector Console received a remote task error: code=%s',
+					'Inspector Play received a remote task error: code=%s',
 					error.code,
 				)
 				return json_response(
@@ -398,7 +398,7 @@ class Console(Extension):
 					},
 				)
 			self.logger.debug(
-				'Inspector Console task request completed: task=%s mode=%s elapsed=%.6f',
+				'Inspector Play task request completed: task=%s mode=%s elapsed=%.6f',
 				task.__module__ + '.' + task.__qualname__,
 				payload['mode'],
 				monotonic() - started,

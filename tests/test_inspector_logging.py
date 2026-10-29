@@ -17,7 +17,7 @@ from unittest.mock import Mock
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extension import Extension
 from DefStream.Inspector.Extensions import (
-	Console,
+	Play,
 	Metrics,
 	Ping,
 	Specifications,
@@ -79,7 +79,7 @@ class InspectorLoggingTests(TestCase):
 			self.assertEqual(cls.logger.name, 'Worker.Inspector')
 			self.assertTrue(cls.logger.propagate)
 		for cls in (
-			Console,
+			Play,
 			Status,
 			Ping,
 			Metrics,
@@ -144,14 +144,14 @@ class InspectorLoggingTests(TestCase):
 			handler.finish_response()
 		request_handler.log_request.assert_not_called()
 
-	def test_console_handled_failure_retains_error_type_not_private_message(self):
-		console = Console(
-			'/console',
+	def test_play_handled_failure_retains_error_type_not_private_message(self):
+		play = Play(
+			'/play',
 			broker=Mock(),
 		)
-		console.catalog = Mock(side_effect=ValueError('private-exception-message'))
-		with self.assertLogs(console.logger, level=ERROR) as logs:
-			response = console.handle(
+		play.catalog = Mock(side_effect=ValueError('private-exception-message'))
+		with self.assertLogs(play.logger, level=ERROR) as logs:
+			response = play.handle(
 				Mock(),
 				{
 					'REQUEST_METHOD': 'GET',

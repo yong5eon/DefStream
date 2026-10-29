@@ -22,7 +22,7 @@ from DefStream.Inspector.Extensions import (
 	Metrics,
 	Ping,
 	Specifications,
-	Console,
+	Play,
 	Status,
 )
 from DefStream.Worker import (
@@ -166,8 +166,8 @@ def main() -> None:
 					description='A sample DefStream worker using Redis as the broker',
 				),
 				Specifications('/spec'),
-				Console(
-					'/console',
+				Play(
+					'/play',
 					broker=lambda: Connection(Configuration()),
 					title='DefStream using Redis Sample',
 					description='A sample DefStream worker using Redis as the broker',
