@@ -14,7 +14,6 @@ from DefStream.Broker import (
 	BrokerFactory,
 	Consumer,
 	Event,
-	EventError,
 	Emittable,
 	GetConsumer,
 	GetExchange,
@@ -23,16 +22,22 @@ from DefStream.Broker import (
 	Declarable,
 	Requestable,
 )
+from DefStream.Broker import __all__ as broker_exports
 from DefStream.Broker.Connection import __all__ as connection_exports
 from DefStream.Inspector.Extensions import Console
 from DefStream.Broker.Implements.RabbitMQ import __all__ as rabbit_exports
 from DefStream.Broker.Implements.Redis import __all__ as redis_exports
-from DefStream.Broker.Event import EventHandler
+from DefStream.Broker.Event import (
+	EventErrorPolicy,
+	EventHandler,
+)
 from DefStream.Broker.Implements.RabbitMQ import (
 	Configuration as RabbitConfiguration,
 	Connection as RabbitConnection,
 	Event as RabbitEvent,
 	Queue as RabbitQueue,
+	Reject as RabbitReject,
+	Requeue as RabbitRequeue,
 )
 from DefStream.Broker.Implements.RabbitMQ.Consumer import FailedRequest
 from DefStream.Broker.Implements.Redis import (
@@ -40,16 +45,14 @@ from DefStream.Broker.Implements.Redis import (
 	Connection as RedisConnection,
 	Event as RedisEvent,
 	Queue as RedisQueue,
+	Reject as RedisReject,
+	Requeue as RedisRequeue,
 )
 from DefStream.Broker.Implements.Redis.Serializer import (
 	Decoder,
 	Encoder,
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
-)
-from DefStream.Broker.Policies import (
-	Reject,
-	Requeue,
 )
 from DefStream.Worker import (
 	Run,
@@ -385,12 +388,20 @@ class ProtocolContractTests(TestCase):
 				Event,
 			),
 			(
-				Requeue,
-				EventError,
+				RabbitRequeue,
+				EventErrorPolicy,
 			),
 			(
-				Reject,
-				EventError,
+				RabbitReject,
+				EventErrorPolicy,
+			),
+			(
+				RedisRequeue,
+				EventErrorPolicy,
+			),
+			(
+				RedisReject,
+				EventErrorPolicy,
 			),
 			(
 				JavaScriptObjectNotationEncoder,
@@ -406,6 +417,14 @@ class ProtocolContractTests(TestCase):
 					contract,
 					implementation.__bases__,
 				)
+		self.assertNotIn('EventError', broker_exports)
+		self.assertIn('EventErrorPolicy', broker_exports)
+		self.assertNotIn('Requeue', broker_exports)
+		self.assertNotIn('Reject', broker_exports)
+		self.assertIn('Requeue', rabbit_exports)
+		self.assertIn('Reject', rabbit_exports)
+		self.assertIn('Requeue', redis_exports)
+		self.assertIn('Reject', redis_exports)
 
 	def test_redis_event_body_is_readable_after_protocol_inheritance(self):
 		body = {'value': 1}

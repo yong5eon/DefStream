@@ -26,7 +26,6 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 from DefStream.Broker import RemoteError
-from DefStream.Broker.Policies import Reject
 from DefStream.Descriptor import (
 	AllOf,
 	Array,
@@ -945,6 +944,7 @@ class SpecificationRPCTests(TestCase):
 		from DefStream.Broker.Implements.RabbitMQ import (
 			Connection,
 			Configuration,
+			Reject,
 		)
 
 		class Checked(

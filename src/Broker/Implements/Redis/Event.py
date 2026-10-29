@@ -8,10 +8,15 @@ from typing import (
 from redis import Redis
 from redis.cluster import RedisCluster
 
-from DefStream.Broker import Event as BaseEvent
+from DefStream.Broker.Event import (
+	Event as BaseEvent,
+	EventErrorPolicy,
+)
 
 __all__ = (
 	'Event',
+	'Requeue',
+	'Reject',
 )
 
 
@@ -189,3 +194,19 @@ class Event(BaseEvent):
 			self.id,
 		)
 		self.ack()
+
+
+class Requeue(EventErrorPolicy):
+	def __call__(
+		self,
+		event: BaseEvent,
+	) -> None:
+		event.nack()
+
+
+class Reject(EventErrorPolicy):
+	def __call__(
+		self,
+		event: BaseEvent,
+	) -> None:
+		event.reject()

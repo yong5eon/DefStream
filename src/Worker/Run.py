@@ -16,7 +16,7 @@ from typing import (
 	Union,
 )
 
-from ..Broker.Event import EventError
+from ..Broker.Event import EventErrorPolicy
 from ..Broker.Priority import validate_priority
 from .Specification import Specification
 
@@ -111,7 +111,7 @@ class Run(ABC, metaclass=RunMeta):
 	parameters: Any = None
 	name: str = __module__ + '.' + __qualname__
 	description: Optional[str] = None
-	on_error: Optional[EventError] = None
+	on_error: Optional[EventErrorPolicy] = None
 	setups: Tuple[RunSetup, ...] = ()
 	completes: Tuple[RunComplete, ...] = ()
 	errors: Tuple[RunError, ...] = ()
@@ -124,7 +124,7 @@ class Run(ABC, metaclass=RunMeta):
 		run_name: Optional[str] = None,
 		description: Optional[str] = None,
 		parameters: Any = None,
-		on_error: Optional[EventError] = None,
+		on_error: Optional[EventErrorPolicy] = None,
 		setups: Optional[Union[RunSetup, Sequence[RunSetup]]] = None,
 		completes: Optional[Union[RunComplete, Sequence[RunComplete]]] = None,
 		errors: Optional[Union[RunError, Sequence[RunError]]] = None,
@@ -208,7 +208,7 @@ class Run(ABC, metaclass=RunMeta):
 				)
 		if on_error is not None:
 			if not callable(on_error):
-				raise TypeError('on_error must be a callable event error policy')
+				raise TypeError('on_error must be a callable failure policy')
 			cls.on_error = on_error
 		if setups is not None:
 			cls.setups = tuple(setups) if isinstance(

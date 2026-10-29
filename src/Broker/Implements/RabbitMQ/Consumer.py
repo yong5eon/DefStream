@@ -4,7 +4,6 @@ from DefStream.Broker import (
 	Consumer as BaseConsumer,
 	EventHandler,
 	Event as BaseEvent,
-	EventError,
 )
 
 from .Serializer import (
@@ -14,9 +13,12 @@ from .Serializer import (
 )
 from logging import getLogger
 
-from .Event import Event
-from .Policies import Requeue
+from .Event import (
+	Event,
+	Requeue,
+)
 from .Subscription import Subscription
+from DefStream.Broker.Event import EventErrorPolicy
 from typing import (
 	Any,
 	Callable,
@@ -133,7 +135,7 @@ class Consumer(BaseConsumer):
 	def fail(
 		self,
 		event: BaseEvent,
-		policy: Optional[EventError] = None,
+		policy: Optional[EventErrorPolicy] = None,
 	) -> None:
 		self.logger.debug('Task failure policy selected: policy=%s', type(policy).__name__ if policy is not None else 'Requeue')
 		if isinstance(

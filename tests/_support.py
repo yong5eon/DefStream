@@ -4,6 +4,11 @@ from typing import (
 	TypeVar,
 )
 
+from DefStream.Broker.Event import (
+	Event,
+	EventErrorPolicy,
+)
+
 T = TypeVar('T')
 
 
@@ -33,3 +38,11 @@ def require_instance(
 			'Expected an instance of {}'.format(expected_type.__name__),
 		)
 	return value
+
+
+class RejectPolicy(EventErrorPolicy):
+	def __call__(
+		self,
+		event: Event,
+	) -> None:
+		event.reject()

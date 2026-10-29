@@ -26,7 +26,6 @@ from unittest import (
 from unittest.mock import Mock
 from uuid import uuid4
 
-from DefStream.Broker.Policies import Reject
 from DefStream.Inspector import (
 	Extension,
 	Inspector,
@@ -45,6 +44,7 @@ from DefStream.Worker import (
 	WorkerSetup,
 )
 from tests._support import (
+	RejectPolicy,
 	require_instance,
 	require_value,
 )
@@ -65,7 +65,7 @@ class Add(
 class Divide(
 	Run,
 	parameters={'queue': 'divide'},
-	on_error=Reject(),
+	on_error=RejectPolicy(),
 ):
 	def run(
 		self,

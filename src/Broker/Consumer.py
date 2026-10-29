@@ -13,7 +13,7 @@ from typing import (
 from .Event import (
 	Event,
 	EventHandler,
-	EventError,
+	EventErrorPolicy,
 )
 
 __all__ = (
@@ -37,7 +37,7 @@ class Consumer(metaclass=ABCMeta):
 	def fail(
 		self,
 		event: Event,
-		policy: Optional[EventError] = None,
+		policy: Optional[EventErrorPolicy] = None,
 	) -> None:
 		raise NotImplementedError('Consumer must implement failure policies')
 

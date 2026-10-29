@@ -4,6 +4,7 @@ from DefStream.Broker import (
 	Event as BaseEvent,
 	EventHandler as BaseEventHandler,
 )
+from DefStream.Broker.Event import EventErrorPolicy
 
 from abc import abstractmethod
 from logging import getLogger
@@ -11,6 +12,8 @@ from logging import getLogger
 __all__ = (
 	'Event',
 	'EventHandler',
+	'Requeue',
+	'Reject',
 )
 
 
@@ -125,3 +128,19 @@ class EventHandler(BaseEventHandler):
 		event: Event,
 	):
 		raise NotImplementedError('{} must be implemented __call__'.format(self.__class__.__name__))
+
+
+class Requeue(EventErrorPolicy):
+	def __call__(
+		self,
+		event: BaseEvent,
+	) -> None:
+		event.nack()
+
+
+class Reject(EventErrorPolicy):
+	def __call__(
+		self,
+		event: BaseEvent,
+	) -> None:
+		event.reject()

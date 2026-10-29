@@ -21,17 +21,19 @@ from redis.cluster import RedisCluster
 from DefStream.Broker import (
 	Consumer as BaseConsumer,
 	Event as BaseEvent,
-	EventError,
 	EventHandler,
+)
+from .Event import (
+	Event,
 	Requeue,
 )
-from .Event import Event
 from .Queue import Queue
 from .Serializer import (
 	Decoder,
 	Encoder,
 )
 from .Subscription import Subscription
+from DefStream.Broker.Event import EventErrorPolicy
 
 __all__ = (
 	'Consumer',
@@ -140,7 +142,7 @@ class Consumer(BaseConsumer):
 	def fail(
 		self,
 		event: BaseEvent,
-		policy: Optional[EventError] = None,
+		policy: Optional[EventErrorPolicy] = None,
 	) -> None:
 		self.logger.debug(
 			'Applying message failure policy: consumer=%s policy=%s',

@@ -24,7 +24,6 @@ from unittest.mock import (
 from uuid import uuid4
 
 from DefStream.Broker.Errors import RemoteError
-from DefStream.Broker.Policies import Reject
 from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
 	Console,
@@ -37,7 +36,10 @@ from DefStream.Worker import (
 	Worker,
 	WorkerSetup,
 )
-from tests._support import require_value
+from tests._support import (
+	RejectPolicy,
+	require_value,
+)
 
 TOKEN = 'test-token-at-least-32-characters!'
 
@@ -50,7 +52,7 @@ class Task(
 		'b': 2,
 	}),
 	response=Specification(),
-	on_error=Reject(),
+	on_error=RejectPolicy(),
 ):
 	def run(
 		self,
