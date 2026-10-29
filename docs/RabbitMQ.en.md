@@ -170,11 +170,53 @@ the selected failure policy on error. Omitting `on_error` defaults to `Requeue()
 - `max_priority`: maximum priority for a classic task queue; an integer in `1..255` or `None`.
 - `priority`: default message priority; an integer in `0..max_priority` or `None`.
   Setting only this value sets `max_priority` to `255`.
+- `timeout`: per-queue ACK waiting limit; a positive `int` in milliseconds,
+  a positive `datetime.timedelta` with whole-millisecond precision, or `None`.
+  Omitting it leaves the broker's existing settings in effect.
 
 Constructing a `Subscription` or calling `consumer.subs()` does not declare queues.
 Task `declare()` provisions ordinary durable queues and an optional DLQ,
-not stream queues or Exchange bindings. Incompatible existing queue options
-fail explicitly; queues are not automatically deleted and recreated.
+not stream queues or Exchange bindings. Declaration errors caused by incompatible
+queue options propagate; queues are not automatically deleted and recreated.
+
+### ACK waiting limits for long-running tasks
+
+On RabbitMQ 3.12 or later, setting `Subscription.timeout` makes task `declare()`
+pass `x-consumer-timeout` to the task queue as integer milliseconds, not to the error queue.
+In the preceding Worker example, define this task and replace `worker.add(Add)`
+with `worker.add(LongRunningAdd)`. The existing `Prepare` declares the queue.
+
+```python
+from datetime import timedelta
+
+
+class LongRunningAdd(
+  Add,
+  parameters=Subscription(
+    queue='defstream.example.rabbitmq.long.add',
+    error='defstream.example.rabbitmq.long.add.error',
+    timeout=timedelta(hours=24),
+  ),
+):
+  pass
+```
+
+This setting passes `x-consumer-timeout=86400000`.
+Passing integer milliseconds as `timeout=86400000` is equivalent.
+`Subscription.timeout` is normalized to integer milliseconds during construction.
+A Mapping such as `Subscription.parse({'queue': 'tasks', 'timeout': timedelta(hours=24)})`
+is also supported. Omitting the value or passing `None` omits this queue argument.
+
+- `bool` and types other than `int` or `timedelta` raise `TypeError`. Zero, negative durations, or
+  sub-millisecond precision raise `ValueError`. Values are not silently rounded or truncated.
+- Constructing or subscribing does not apply the setting. Explicit task queue declaration is required.
+- This is not a task execution deadline. ACK after completion, failure policies, and prefetch
+  remain unchanged. The RPC response waiting timeout is separate.
+- Changing or recreating existing queues and applying policies are the operator's responsibility.
+
+According to the [RabbitMQ ACK timeout guide](https://www.rabbitmq.com/docs/3.13/consumers#acknowledgement-timeout),
+values below one minute are unsupported and values below five minutes are not recommended.
+Checks run approximately once per minute, so do not use this as a precise execution deadline.
 
 ### Worker task priorities
 
