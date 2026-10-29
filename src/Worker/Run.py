@@ -107,7 +107,7 @@ class RunMeta(ABCMeta):
 
 
 class Run(ABC, metaclass=RunMeta):
-	logger = getLogger('Worker.Run')
+	logger = getLogger('Task')
 	parameters: Any = None
 	name: str = __module__ + '.' + __qualname__
 	description: Optional[str] = None

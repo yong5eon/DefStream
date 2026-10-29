@@ -21,7 +21,7 @@ __all__ = (
 
 
 class Status(Extension):
-	logger = getLogger('Worker.Inspector.Extensions.Status')
+	logger = getLogger('Worker.Inspector.Status')
 
 	def __init__(
 		self,

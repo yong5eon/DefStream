@@ -70,7 +70,7 @@ def worker_hooks(
 
 
 class Worker:
-	logger = getLogger('Worker.Worker')
+	logger = getLogger('Worker')
 
 	def __init__(
 		self,
