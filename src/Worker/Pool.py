@@ -161,9 +161,11 @@ class Pool:
 		with self.lock:
 			self.closed = True
 		if abort:
-			if not isinstance(self.pool, Executor):
-				raise TypeError('Pool recovery requires a DefStream Executor')
-			self.pool.abort()
+			if isinstance(self.pool, Executor):
+				self.pool.abort()
+			else:
+				self.logger.warning('Custom executor shutdown cannot terminate running tasks')
+				self.pool.shutdown(wait=False)
 		else:
 			self.pool.shutdown(wait=True)
 		self.logger.info('Pool shutdown completed')

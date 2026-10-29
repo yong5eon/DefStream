@@ -1,4 +1,6 @@
+from contextlib import nullcontext
 from importlib import import_module
+from os import _exit as exit_process
 from pathlib import Path
 from queue import Queue
 from tempfile import TemporaryDirectory
@@ -10,6 +12,10 @@ from threading import (
 from time import (
 	monotonic,
 	sleep,
+)
+from typing import (
+	Dict,
+	Optional,
 )
 from unittest import (
 	TestCase,
@@ -26,8 +32,11 @@ from pika.exceptions import (
 	ProbableAuthenticationError,
 	StreamLostError,
 )
+from pika import BlockingConnection
+from pika.adapters.blocking_connection import BlockingChannel
 
 from DefStream.Broker.Implements.RabbitMQ import (
+	Configuration,
 	Connection,
 	Consumer,
 )
@@ -64,6 +73,17 @@ class ProcessRecoveryRun(Run):
 		return 'done'
 
 
+class CrashRun(Run):
+	def run(self, started: str, trigger: str, code: int) -> None:
+		Path(started).write_text('started', encoding='utf-8')
+		deadline = monotonic() + 10
+		while not Path(trigger).exists():
+			if monotonic() >= deadline:
+				raise TimeoutError('Process crash trigger was not released')
+			sleep(0.01)
+		exit_process(code)
+
+
 class ValueRun(Run):
 	def run(self):
 		return 'new generation'
@@ -80,6 +100,12 @@ class CaptureThread(PoolSetup):
 
 class OtherRecoveryRun(RecoveryRun, parameters={'queue': 'other', 'qos': 3}):
 	pass
+
+
+class WaitingChannel(BlockingChannel):
+	# Pika's stubs omit the runtime state used by its real consumption loop.
+	_consumer_infos: Dict[str, Mock]
+	_closing_reason: Optional[BaseException]
 
 
 class RecoveryTests(TestCase):
@@ -157,6 +183,95 @@ class RecoveryTests(TestCase):
 			self.run_worker(worker)
 		wait.assert_called_once_with(7)
 		self.assertEqual(self.channel(partial).close.call_count, 1)
+
+	def test_recoverable_cleanup_failures_do_not_spend_reconnection_attempt(self):
+		for boundary in ('consumer', 'broker'):
+			with self.subTest(boundary=boundary):
+				first = self.consumer()
+				second = self.consumer()
+				first.run = Mock(side_effect=StreamLostError())
+				worker = self.worker([first, second], recovery_attempts=1)
+				second.run = Mock(side_effect=worker.stopping.set)
+				close = Mock(side_effect=[StreamLostError(), None])
+				if boundary == 'consumer':
+					first.close = close
+					self.addCleanup(setattr, close, 'side_effect', None)
+				else:
+					self.broker(worker).close = close
+				self.run_worker(worker)
+				self.assertEqual(self.broker(worker).connect.call_count, 2)
+				self.assertEqual(self.broker(worker).consumer.call_count, 2)
+				self.assertEqual(self.broker(worker).close.call_count, 2)
+
+	def test_nonrecoverable_cleanup_failure_is_propagated(self):
+		first = self.consumer()
+		first.run = Mock(side_effect=StreamLostError())
+		first.close = Mock(side_effect=[ValueError('cleanup failed'), None, None])
+		self.addCleanup(setattr, first.close, 'side_effect', None)
+		worker = self.worker([first], recovery_attempts=1)
+		with self.assertRaisesRegex(ValueError, 'cleanup failed'):
+			self.run_worker(worker)
+		self.assertEqual(self.broker(worker).connect.call_count, 1)
+
+	def test_broker_close_failure_retires_old_connection_and_publisher(self):
+		broker = Connection(Configuration('localhost', 5672, 'guest', 'guest'))
+		previous = Mock(spec=BlockingConnection)
+		previous.is_open = True
+		previous.close.side_effect = StreamLostError()
+		broker.connection = previous
+		broker.publisher = Mock()
+		replacement = Mock(spec=BlockingConnection)
+		with self.assertRaises(StreamLostError):
+			broker.close()
+		self.assertIsNone(broker.connection)
+		self.assertIsNone(broker.publisher)
+		with patch.object(
+			import_module('DefStream.Broker.Implements.RabbitMQ.Connection'),
+			'BlockingConnection',
+			return_value=replacement,
+		) as connect:
+			broker.connect()
+		connect.assert_called_once()
+		self.assertIs(broker.connection, replacement)
+		broker.close()
+
+	def test_stop_before_publishing_running_state_does_not_enter_consumption(self):
+		consumer = self.consumer()
+		worker = Worker(Mock(), ThreadPool(1))
+		worker.consumer = consumer
+		consumer.run = Mock()
+		publish = worker.running.set
+
+		def request_stop() -> None:
+			worker.stop()
+			publish()
+			return
+
+		with patch.object(worker.running, 'set', side_effect=request_stop):
+			worker.consume()
+		consumer.run.assert_not_called()
+		self.connection(consumer).add_callback_threadsafe.assert_not_called()
+		self.assertFalse(worker.running.is_set())
+		worker.pool.stop()
+
+	def test_custom_executor_shutdown_preserves_original_consumption_failure(self):
+		for error, attempts in (
+			(ValueError('fatal consumption failure'), 5),
+			(StreamLostError(), 0),
+			(StreamLostError(), 1),
+		):
+			with self.subTest(error=type(error), attempts=attempts):
+				consumer = self.consumer()
+				consumer.run = Mock(side_effect=error)
+				worker = self.worker([consumer], recovery_attempts=attempts)
+				executor = Mock()
+				worker.pool = Pool(executor, 1)
+				expected = TypeError if attempts == 1 else type(error)
+				with self.assertRaises(expected) as caught:
+					self.run_worker(worker)
+				if expected is not TypeError:
+					self.assertIs(caught.exception, error)
+				executor.shutdown.assert_called_once_with(wait=False)
 
 	def test_every_subscription_and_qos_are_restored_on_a_new_connection(self):
 		first = self.consumer()
@@ -409,13 +524,97 @@ class RecoveryTests(TestCase):
 		finally:
 			pool.stop()
 
+	def test_process_crash_reaps_survivors_before_callbacks_even_during_shutdown(self):
+		for shutting_down, code in (
+			(False, 7),
+			(True, 7),
+			(True, 0),
+		):
+			with self.subTest(shutting_down=shutting_down, code=code), TemporaryDirectory() as directory:
+				pool = ProcessPool(2)
+				executor = require_instance(pool.pool, Executor)
+				started = Path(directory) / 'crash-started'
+				trigger = Path(directory) / 'crash-trigger'
+				survivor = Path(directory) / 'survivor-started'
+				callbacks: Queue[bool] = Queue()
+				try:
+					crash = pool.submit(CrashRun, {
+						'started': str(started),
+						'trigger': str(trigger),
+						'code': code,
+					})
+					task = pool.submit(
+						ProcessRecoveryRun,
+						{'path': str(survivor)},
+						error_callback=lambda error: callbacks.put(all(
+							not process.is_alive() for process in executor.processes
+						)),
+					)
+					deadline = monotonic() + 10
+					while not (started.exists() and survivor.exists()):
+						self.assertLess(monotonic(), deadline)
+						sleep(0.01)
+					if shutting_down:
+						executor.shutdown(wait=False)
+					trigger.write_text('crash', encoding='utf-8')
+					for future in (crash, task):
+						with self.assertRaisesRegex(RuntimeError, 'process failed'):
+							future.result(10)
+					self.assertTrue(callbacks.get(timeout=5))
+					require_value(executor.monitor).join(5)
+					self.assertFalse(require_value(executor.monitor).is_alive())
+					with self.assertRaisesRegex(RuntimeError, 'environment failed'):
+						pool.stop()
+				finally:
+					executor.abort()
+
+	def test_normal_process_shutdown_is_not_a_crash(self):
+		pool = ProcessPool(2)
+		executor = require_instance(pool.pool, Executor)
+		try:
+			self.assertEqual(pool.submit(ValueRun, {}).result(10), 'new generation')
+			pool.stop()
+			self.assertIsNone(executor.failure)
+			self.assertFalse(require_value(executor.monitor).is_alive())
+		finally:
+			executor.abort()
+
 	def test_closed_idle_channel_is_detected_without_settlement(self):
 		consumer = self.consumer()
-		self.channel(consumer).is_closed = True
-		with self.assertRaisesRegex(RuntimeError, 'without a stop request'):
+		connection = self.connection(consumer)
+		implementation = Mock()
+		implementation.is_open = True
+		implementation.is_closed = False
+		channel = WaitingChannel(implementation, connection)
+		self.addCleanup(setattr, consumer, 'channel', consumer.channel)
+		consumer.channel = channel
+		# Use Pika's actual consumption loop with a deterministic timer-driven transport.
+		channel._consumer_infos['test'] = Mock()
+		connection._acquire_event_dispatch.side_effect = lambda: nullcontext(True)
+		timers: Queue = Queue()
+		connection.call_later.side_effect = lambda interval, callback: timers.put(callback)
+		failure = ChannelClosedByBroker(406, 'delivery acknowledgement timed out')
+		ticks = 0
+
+		def process_events(time_limit=None) -> None:
+			nonlocal ticks
+			ticks += 1
+			callback = timers.get(timeout=1)
+			if ticks == 2:
+				implementation.is_open = False
+				implementation.is_closed = True
+				channel._closing_reason = failure
+			callback()
+			return
+
+		connection.process_data_events.side_effect = process_events
+		with self.assertRaises(ChannelClosedByBroker) as caught:
 			consumer.run()
-		self.channel(consumer).basic_ack.assert_not_called()
-		self.connection(consumer).remove_timeout.assert_called_once()
+		self.assertIs(caught.exception, failure)
+		self.assertEqual(ticks, 2)
+		self.assertTrue(consumer.is_recoverable(failure))
+		implementation.basic_ack.assert_not_called()
+		connection.remove_timeout.assert_called_once()
 
 	def test_ack_timeout_and_exception_classification(self):
 		consumer = self.consumer()

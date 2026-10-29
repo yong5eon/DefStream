@@ -40,6 +40,10 @@ Recovery covers connection-layer failures such as `StreamLostError`, broker conn
 
 The supplied Pool object is preserved. Previous ProcessPool task processes are forcibly terminated, so task/pool cleanup hooks are not guaranteed. Running ThreadPool tasks continue; the previous executor receives a shutdown request so its threads exit after those tasks finish. Unstarted tasks are discarded, and old success/failure callbacks cannot settle deliveries, publish RPC replies, or modify the new generation's state. A base `Pool` supplied with a custom executor does not support this recovery and raises an explicit error.
 
+Recoverable connection errors while cleaning up the previous Consumer or connection are logged without preventing a new connection attempt. Non-recoverable cleanup errors propagate. A shutdown request arriving immediately before consumption starts prevents entry into the consumption loop.
+
+Unexpected ProcessPool worker exits are detected even during graceful shutdown. Surviving task processes are terminated and reaped before unfinished tasks are reported as failed. Custom executors remain unsupported for recovery, but consumption failure requests `shutdown(wait=False)` so the original failure can propagate. This request does not forcibly terminate running tasks in a custom executor.
+
 The broker may redeliver unacknowledged messages from the closed channel. Previous threads may overlap with redelivered tasks, and effects such as completed database updates are not undone; message-processing idempotency remains the caller's responsibility. A thread whose task never finishes can retain resources and delay Python process exit. Exhaustion propagates Worker failure without waiting for previous tasks, but does not guarantee forced process termination.
 
 ## RabbitMQ usage

@@ -20,3 +20,4 @@
 - [Recoverable Protocol 전환 검증](./tasks/1793275955973.md)
 - [is_recoverable 이름 변경 검증](./tasks/1793276099601.md)
 - [Python 3.9·3.10 복구 테스트 호환성 검증](./tasks/1793276518341.md)
+- [PR 리뷰 수정 회귀 검증](./tasks/1793277424063.md)

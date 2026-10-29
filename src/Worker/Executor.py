@@ -8,6 +8,7 @@ from multiprocessing.process import BaseProcess
 from multiprocessing.synchronize import Event as ProcessEvent
 from logging import getLogger
 from multiprocessing.managers import SyncManager
+from os import getpid
 from pickle import (
 	dumps,
 	loads,
@@ -34,6 +35,7 @@ from typing import (
 	List,
 	Optional,
 	Sequence,
+	Set,
 	TypeVar,
 	Union,
 )
@@ -197,6 +199,15 @@ def execute_process(
 			None,
 			outcome,
 		))
+	else:
+		outgoing.put((
+			None,
+			dumps((
+				True,
+				getpid(),
+				None,
+			)),
+		))
 	return
 
 
@@ -218,6 +229,8 @@ class Executor(PyExecutor):
 		self.pending: Dict[int, Future[Any]] = {}
 		self.workers: List[Future] = []
 		self.processes: List[BaseProcess] = []
+		self.exited: Set[int] = set()
+		self.process_lock = Lock()
 		self.stopping: Union[Event, ProcessEvent] = Event()
 		self.closed = False
 		self.failure: Optional[BaseException] = None
@@ -348,6 +361,8 @@ class Executor(PyExecutor):
 			self.failure = error
 			pending = tuple(self.pending.values())
 			self.pending.clear()
+		if self.process:
+			self.stop_processes()
 		if report and (first_failure or self.stopping.is_set()):
 			self.logger.error(
 				'Executor execution environment failed: pending=%s',
@@ -371,9 +386,12 @@ class Executor(PyExecutor):
 			else:
 				success, value, traceback = loads(outcome) if self.process else outcome
 				if key is None:
-					if traceback is not None:
-						value.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
-					self.fail(value)
+					if success:
+						self.exited.add(value)
+					else:
+						if traceback is not None:
+							value.__cause__ = RuntimeError('Remote execution traceback:\n' + traceback)
+						self.fail(value)
 					continue
 				self.logger.debug(
 					'Execution result collected: key=%s success=%s',
@@ -402,8 +420,10 @@ class Executor(PyExecutor):
 			)
 			if failure is not None:
 				self.fail(failure)
-			if no_outcome and self.failure is None and not self.closed and not self.stopping.is_set() and any(
-				process.exitcode is not None
+			if no_outcome and self.failure is None and not self.stopping.is_set() and any(
+				process.exitcode is not None and (
+					process.exitcode != 0 or process.pid not in self.exited
+				)
 				for process in self.processes
 			):
 				self.fail(RuntimeError('Pool execution process failed'))
@@ -459,15 +479,21 @@ class Executor(PyExecutor):
 			process=self.process,
 		)
 
-	def abort(self) -> None:
-		"""Discard this execution generation without waiting for running threads."""
-		self.stopping.set()
-		if self.process:
+	def stop_processes(self) -> None:
+		"""Reap surviving processes before publishing failures for their tasks."""
+		with self.process_lock:
 			for process in self.processes:
 				if process.is_alive():
 					process.kill()
 			for process in self.processes:
 				process.join()
+		return
+
+	def abort(self) -> None:
+		"""Discard this execution generation without waiting for running threads."""
+		self.stopping.set()
+		if self.process:
+			self.stop_processes()
 		self.logger.warning('Discarding execution generation: pending=%s', len(self.pending))
 		self.fail(RuntimeError('Execution generation discarded'), report=False)
 		self.shutdown(wait=False)

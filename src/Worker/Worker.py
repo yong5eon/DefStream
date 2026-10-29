@@ -257,6 +257,9 @@ class Worker:
 			if consumer is None:
 				raise RuntimeError('Worker consumer is not initialized')
 			self.running.set()
+			if self.stopping.is_set():
+				self.running.clear()
+				return
 			self.logger.info('Worker ready to consume')
 			try:
 				consumer.run()
@@ -291,8 +294,24 @@ class Worker:
 				return
 			try:
 				if self.consumer is not None:
-					self.consumer.close()
-				self.broker.close()
+					try:
+						self.consumer.close()
+					except Exception as cleanup_error:
+						self.logger.warning(
+							'Consumer cleanup failed during recovery: error_type=%s',
+							type(cleanup_error).__name__,
+						)
+						if not previous.is_recoverable(cleanup_error):
+							raise
+				try:
+					self.broker.close()
+				except Exception as cleanup_error:
+					self.logger.warning(
+						'Broker cleanup failed during recovery: error_type=%s',
+						type(cleanup_error).__name__,
+					)
+					if not previous.is_recoverable(cleanup_error):
+						raise
 				self.broker.connect()
 				self.subscribe()
 			except Exception as failure:
