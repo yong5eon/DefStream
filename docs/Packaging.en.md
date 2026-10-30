@@ -36,7 +36,7 @@ Each run replaces the selection. For example, running with `EXTRAS=Redis` after 
 
 ### Try your changes
 
-1. Edit the code under `src/DefStream/`.
+1. Edit the code under `src/`.
 2. Start your application or tests again in the same virtual environment to check the result. Code in an already running program is not automatically reloaded.
 3. If you add files or change the installation configuration, repeat the installation command with the desired `EXTRAS`.
 
