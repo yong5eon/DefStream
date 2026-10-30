@@ -12,7 +12,9 @@ Install the client extra for the broker you use. A broker server must be availab
 python -m pip install "DefStream[RabbitMQ]"
 ```
 
-For Redis Streams, install `DefStream[Redis]`. To install both clients, use `DefStream[RabbitMQ,Redis]`. The plain `DefStream` installation includes neither broker client.
+For Redis Streams, install `DefStream[Redis]`. To install both adapters and clients, use `DefStream[RabbitMQ,Redis]`. The plain `DefStream` installation includes neither broker implementation nor client. Each extra installs a separate, same-version adapter distribution, preserving existing import paths.
+
+Before migrating an older integrated installation or historical standalone adapters, uninstall DefStream, DefStream-RabbitMQ and DefStream-Redis, then reinstall with the desired extras. Omitting an extra later does not remove an already installed adapter.
 
 ## Quick start
 

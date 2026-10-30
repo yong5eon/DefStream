@@ -24,6 +24,8 @@ python -m pip install "DefStream[Redis]"
 ```
 
 To install both adapters, use `python -m pip install "DefStream[RabbitMQ,Redis]"`. To install the core without broker clients, use `python -m pip install DefStream`.
+The base installation also excludes broker implementation code. Each extra installs a separate, same-version implementation distribution and its client.
+To modify the source code, see [installation isolation, development and distribution](./docs/Packaging.en.md).
 
 ## Quick start
 

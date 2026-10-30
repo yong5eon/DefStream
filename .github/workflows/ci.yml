@@ -76,7 +76,7 @@ jobs:
           changed = check_output(
               [
                   'git', 'diff', '--name-only', '--no-renames', base, environ['GITHUB_SHA'],
-                  '--', ':(glob)src/**/*.py', 'setup.py', 'setup.cfg', 'pyproject.toml', 'MANIFEST.in',
+                  '--', 'src/', 'setup.py', 'setup.cfg', 'pyproject.toml', 'MANIFEST.in', 'scripts/',
               ],
               text=True,
           ).strip()
@@ -212,7 +212,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-          path: packages/DefStream
           fetch-depth: 0
           persist-credentials: false
 
@@ -226,10 +225,8 @@ jobs:
           RELEASE_BUILD: ${{ needs.changes.outputs.release }}
           RELEASE_VERSION: ${{ needs.changes.outputs.version }}
         run: |
-          for package in packages/*; do
-            echo "$package: $(git -C "$package" rev-parse HEAD)"
-          done
-          echo "SOURCE_DATE_EPOCH=$(git -C "packages/$PROJECT" show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+          echo "$PROJECT: $(git rev-parse HEAD)"
+          echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
           python - <<'PY'
           from os import environ
           from pathlib import Path
@@ -252,7 +249,7 @@ jobs:
           PY
 
       - name: Install build tools
-        run: python -m pip install --upgrade build twine wheel
+        run: python -m pip install --upgrade "pip>=23" build twine wheel "setuptools>=77" "setuptools-scm>=8,<10"
 
       - name: Build source distributions and wheels
         env:
@@ -263,13 +260,13 @@ jobs:
           mkdir -p dist
           if [ "$RELEASE_BUILD" = "true" ]; then
             if [ "$NEW_VERSION" = "true" ]; then
-              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --outdir "$GITHUB_WORKSPACE/dist" packages/DefStream
+              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python scripts/build_distributions.py
             else
-              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python -m build --wheel --outdir "$GITHUB_WORKSPACE/dist" packages/DefStream
+              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python scripts/build_distributions.py --wheel
             fi
             python -m wheel tags --build "$WHEEL_BUILD" --remove dist/*.whl
           else
-            python -m build --outdir "$GITHUB_WORKSPACE/dist" packages/DefStream
+            python scripts/build_distributions.py
           fi
           python -m twine check --strict dist/*
 
@@ -301,45 +298,21 @@ jobs:
           PY
 
       - name: Verify optional client installations
-        run: |
-          python - <<'PY'
-          from os import environ
-          from pathlib import Path
-          from subprocess import run
-          from venv import EnvBuilder
-
-          wheel, = Path('dist').glob('*.whl')
-          for extra, modules in (
-              ('', ('DefStream', 'DefStream.Worker', 'DefStream.Inspector')),
-              ('RabbitMQ', ('DefStream.Broker.Implements.RabbitMQ',)),
-              ('Redis', ('DefStream.Broker.Implements.Redis',)),
-          ):
-              environment = Path(environ['RUNNER_TEMP'], 'optional-' + (extra or 'core'))
-              EnvBuilder(with_pip=True).create(environment)
-              python = environment / 'bin' / 'python'
-              package = str(wheel.resolve()) + (f'[{extra}]' if extra else '')
-              run([str(python), '-m', 'pip', 'install', package], check=True)
-              code = (
-                  'from importlib import import_module; from importlib.util import find_spec; '
-                  f'assert (find_spec("pika") is not None) == {extra == "RabbitMQ"}; '
-                  f'assert (find_spec("redis") is not None) == {extra == "Redis"}; '
-                  f'[import_module(name) for name in {modules!r}]'
-              )
-              run([str(python), '-I', '-c', code], check=True)
-              run([str(python), '-m', 'pip', 'check'], check=True)
-          PY
+        run: python scripts/check_distributions.py --editable
+      - name: Test release preparation
+        run: python -m unittest discover -s scripts/tests -t scripts -p 'test_*.py'
 
       - name: Install built wheels into a clean environment
         run: |
           python -m venv "$RUNNER_TEMP/installed"
-          "$RUNNER_TEMP/installed/bin/python" -m pip install "$(echo dist/*.whl)[RabbitMQ,Redis]"
+          "$RUNNER_TEMP/installed/bin/python" -m pip install dist/*.whl
           "$RUNNER_TEMP/installed/bin/python" -m pip check
 
       - name: Test installed package
         run: |
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/installed/bin/python" -m unittest discover \
-            -s "$GITHUB_WORKSPACE/packages/DefStream/tests" -p 'test_*.py' -v
+            -s "$GITHUB_WORKSPACE/tests" -p 'test_*.py' -v
 
       - name: Set up Node for core UI tests
         uses: actions/setup-node@v7
@@ -347,7 +320,7 @@ jobs:
           node-version: '22'
 
       - name: Test core UI
-        run: node --test packages/DefStream/tests/test_status_ui.cjs
+        run: node --test tests/test_status_ui.cjs
 
       - name: Preserve verified release distributions
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.changes.outputs.release == 'true' && matrix.python == '3.13'
@@ -399,59 +372,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.changes.outputs.version }}
           WHEEL_BUILD: ${{ needs.changes.outputs.build }}
           NEW_VERSION: ${{ needs.changes.outputs.new_version }}
-        run: |
-          python - <<'PY'
-          from email.parser import BytesParser
-          from hashlib import sha256
-          from json import load
-          from os import environ
-          from pathlib import Path
-          from shutil import copy2
-          from urllib.error import HTTPError
-          from urllib.request import urlopen
-          from zipfile import ZipFile
-
-          wheels = list(Path('dist').glob('*.whl'))
-          sources = list(Path('dist').glob('*.tar.gz'))
-          expected_sources = 1 if environ['NEW_VERSION'] == 'true' else 0
-          if len(wheels) != 1 or len(sources) != expected_sources:
-              raise ValueError('Unexpected wheel/source distribution count for the release plan')
-          if wheels[0].name.split('-')[2] != environ['WHEEL_BUILD']:
-              raise ValueError('Wheel build tag does not match the release plan')
-          with ZipFile(wheels[0]) as archive:
-              metadata_path, = (name for name in archive.namelist() if name.endswith('.dist-info/METADATA'))
-              metadata = BytesParser().parsebytes(archive.read(metadata_path))
-          project = environ['PROJECT']
-          if metadata['Name'] != project:
-              raise ValueError(f'Unexpected distribution: {metadata["Name"]}')
-          version = metadata['Version']
-          expected_version = environ['RELEASE_VERSION']
-          if version != expected_version:
-              raise ValueError(f'Expected {expected_version}, got {version}')
-          try:
-              with urlopen(f'https://pypi.org/pypi/{project}/{version}/json', timeout=30) as response:
-                  release = load(response)
-          except HTTPError as error:
-              if error.code != 404:
-                  raise
-              published = {}
-          else:
-              published = {file['filename']: file['digests']['sha256'] for file in release['urls']}
-          if environ['NEW_VERSION'] != 'true' and not published:
-              raise RuntimeError('Cannot rebuild a version that has not been published on PyPI')
-          upload = Path('upload')
-          upload.mkdir()
-          for path in [*wheels, *sources]:
-              if path.name in published:
-                  if sha256(path.read_bytes()).hexdigest() != published[path.name]:
-                      raise RuntimeError(f'Published file differs; refusing to overwrite {path.name}')
-                  print(f'Already published: {path.name}')
-              else:
-                  copy2(path, upload / path.name)
-          with Path(environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
-              output.write(f'publish={str(any(upload.iterdir())).lower()}\n')
-              output.write(f'version={version}\n')
-          PY
+        run: python release-source/scripts/prepare_upload.py
 
       - name: Record verified release tag
         env:
@@ -488,7 +409,12 @@ jobs:
             echo "::error::Configure PYPI_API_TOKEN in the pypi environment or repository Actions secrets."
             exit 1
           fi
-          python -m twine upload --non-interactive upload/*
+          if compgen -G "upload/implementations/*" > /dev/null; then
+            python -m twine upload --non-interactive upload/implementations/*
+          fi
+          if compgen -G "upload/core/*" > /dev/null; then
+            python -m twine upload --non-interactive upload/core/*
+          fi
 
       - name: Publish GitHub Release with verified distributions
         env:
