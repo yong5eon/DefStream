@@ -1,4 +1,7 @@
-from json import dumps
+from json import (
+	dumps,
+	loads,
+)
 from os import link
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,6 +19,120 @@ from editable_view import (
 
 
 class EditableViewTests(TestCase):
+	def test_ownership_write_failure_does_not_add_links(self) -> None:
+		with TemporaryDirectory() as temporary:
+			root: Path = Path(temporary)
+			view: Path = root / 'view'
+			view.mkdir()
+			source: Path = root / 'source.py'
+			source.write_text('VALUE = 1\n')
+			core: dict[str, str] = {'Example/__init__.py': str(source)}
+			refresh(
+				view,
+				'Example',
+				core,
+			)
+			selected: dict[str, str] = {
+				**core,
+				'Example/Selected/__init__.py': str(source),
+			}
+			state: bytes = (view / 'files.json').read_bytes()
+			with patch(
+				'editable_view.write_state',
+				side_effect=PermissionError('Ownership write failed'),
+			), patch('editable_view.create_link') as create, self.assertRaises(PermissionError):
+				refresh(
+					view,
+					'Example',
+					selected,
+				)
+			create.assert_not_called()
+			self.assertFalse((view / 'Example/Selected').exists())
+			self.assertEqual(
+				(view / 'files.json').read_bytes(),
+				state,
+			)
+		return
+
+	def test_partial_addition_failure_remains_recoverable(self) -> None:
+		for initial_core in (
+			False,
+			True,
+		):
+			for retry_selection in (
+				False,
+				True,
+			):
+				with self.subTest(
+					initial_core=initial_core,
+					retry_selection=retry_selection,
+				), TemporaryDirectory() as temporary:
+					root: Path = Path(temporary)
+					view: Path = root / 'view'
+					view.mkdir()
+					source: Path = root / 'source.py'
+					source.write_text('VALUE = 1\n')
+					core: dict[str, str] = {'Example/__init__.py': str(source)}
+					if initial_core:
+						refresh(
+							view,
+							'Example',
+							core,
+						)
+					selected: dict[str, str] = {
+						**core,
+						'Example/Selected/__init__.py': str(source),
+						'Example/Selected/adapter.py': str(source),
+					}
+
+					def fail_later(
+						original: Path,
+						destination: Path,
+					) -> None:
+						if destination.name == 'adapter.py':
+							raise PermissionError('Later link failed')
+						link(
+							original,
+							destination,
+						)
+						return
+
+					with patch(
+						'editable_view.create_link',
+						side_effect=fail_later,
+					), self.assertRaises(PermissionError):
+						refresh(
+							view,
+							'Example',
+							selected,
+						)
+					partial: Path = view / 'Example/Selected/__init__.py'
+					self.assertTrue(partial.is_file())
+					ownership: dict[str, str] = loads((view / 'files.json').read_text())
+					self.assertIn(
+						'Example/Selected/__init__.py',
+						ownership,
+					)
+					refresh(
+						view,
+						'Example',
+						selected if retry_selection else core,
+					)
+					self.assertEqual(
+						partial.is_file(),
+						retry_selection,
+					)
+					self.assertEqual(
+						(view / 'Example/Selected/adapter.py').is_file(),
+						retry_selection,
+					)
+					self.assertTrue((view / 'Example/__init__.py').samefile(source))
+					self.assertEqual(
+						loads((view / 'files.json').read_text()),
+						selected if retry_selection else core,
+					)
+		return
+
 	def test_hardlink_refresh_keeps_existing_files_until_atomic_replacement(self) -> None:
 		with TemporaryDirectory() as temporary:
 			root: Path = Path(temporary)

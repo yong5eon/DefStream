@@ -112,6 +112,22 @@ def create_link(
 	return
 
 
+def write_state(
+	state: Path,
+	files: dict[str, str],
+) -> None:
+	temporary: Path = state.with_suffix('.new')
+	temporary.write_text(
+		dumps(
+			files,
+			sort_keys=True,
+		),
+		encoding='utf-8',
+	)
+	temporary.replace(state)
+	return
+
+
 def refresh(
 	view: Path,
 	project: str,
@@ -132,6 +148,16 @@ def refresh(
 		)
 	touched: set[Path] = set()
 	directories: set[Path] = set()
+	# Record ownership before adding links so interrupted refreshes remain recoverable.
+	ownership: dict[str, str] = {
+		**previous,
+		**files,
+	}
+	if ownership != previous:
+		write_state(
+			state,
+			ownership,
+		)
 	for relative, source in files.items():
 		path: Path = paths[relative]
 		if path.is_file() and path.samefile(source):
@@ -175,15 +201,10 @@ def refresh(
 					EEXIST,
 				):
 					raise
-	temporary: Path = state.with_suffix('.new')
-	temporary.write_text(
-		dumps(
-			files,
-			sort_keys=True,
-		),
-		encoding='utf-8',
+	write_state(
+		state,
+		files,
 	)
-	temporary.replace(state)
 	return
 
 
