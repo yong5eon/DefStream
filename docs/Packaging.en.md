@@ -15,54 +15,42 @@ flowchart LR
   C --> D["redis client"]
 ```
 
-## Migrate an existing environment
+## When you want to modify the source code
 
-An integrated version or historical standalone adapter can own files at the same import paths. Prefer a new virtual environment. Otherwise remove all old distributions before selecting the extras you use:
+To fix or add features, use a development installation. An **editable installation** connects Python to your local source code so it can use that code directly.
 
-```shell
-python -m pip uninstall DefStream DefStream-RabbitMQ DefStream-Redis
-python -m pip install "DefStream[RabbitMQ,Redis]"
-python -m pip check
-```
-
-The new implementation distributions share the core's repository and version. To roll back, remove the new distributions first, then reinstall the explicit version previously used.
-
-## Local editable development
-
-Run from the repository root in a development virtual environment. No manually created junctions or symbolic links are needed. Every invocation refreshes metadata and links from the current local sources.
+Download the repository, activate a development virtual environment, and run the following command from the top-level folder containing `setup.py`. Here, `.` means the current folder and `-e` means an editable installation. You need pip 23 or later.
 
 ```shell
 python -m pip install -e .
 ```
 
-Omitting the option clears the previous selection and leaves only the core. Select implementations with `EXTRAS`; the commands are identical on Windows and POSIX shells:
+This connects only the common code. To also work on the RabbitMQ or Redis implementations, list their names in `EXTRAS`. The following commands are separate examples: the first selects Redis only, and the second selects both implementations.
 
 ```shell
 python -m pip install -e . --config-settings EXTRAS=Redis
 python -m pip install -e . --config-settings EXTRAS=RabbitMQ,Redis
 ```
 
-Each command replaces, rather than accumulates, the selection. Names are case-insensitive; unknown names fail. Editable installs ignore a leftover `DEF_BUILD_TARGET`. They do not fetch remote source changes, force dependency upgrades, or uninstall external libraries removed from the selection.
+Each run replaces the selection. For example, running with `EXTRAS=Redis` after selecting both implementations removes the RabbitMQ code from the development environment. Running without `EXTRAS` leaves only the common code. Names are case-insensitive; unknown names produce an error. Required external libraries are installed, but libraries for deselected implementations are not automatically removed.
 
-When switching from an older split editable or regular installation, remove the old distributions once before reinstalling. The new editable core distribution owns all selected code and must not coexist with standalone implementation distributions:
+### Try your changes
 
-```shell
-python -m pip uninstall DefStream DefStream-RabbitMQ DefStream-Redis
-python -m pip install -e . --config-settings EXTRAS=RabbitMQ,Redis
-python -m pip check
-```
+1. Edit the code under `src/DefStream/`.
+2. Start your application or tests again in the same virtual environment to check the result. Code in an already running program is not automatically reloaded.
+3. If you add files or change the installation configuration, repeat the installation command with the desired `EXTRAS`.
 
-Editable installs link only core and installed implementation files under the environment's `site-packages/__editable_defstream_view/` and expose that directory through a path-based `.pth`. IDEs can traverse the same tree without import hooks. Python checks installed metadata and link state at startup and updates the tree when necessary. Different environments sharing one source tree keep independent selections.
+The command connects the sources already on your computer. It does not fetch remote changes or force upgrades of external libraries. To select source code, use `--config-settings EXTRAS=Redis` as shown above, not `pip install -e ".[Redis]"`.
 
-No separate core-first installation is needed. After adding files or changing package configuration, repeat the command with the desired `EXTRAS`. The managed link tree no longer depends on `build/`. Windows uses file symlinks when permitted and hard links otherwise; hard links require the sources and environment to be on the same volume.
+### How the development connection works
 
-Standard extras in `pip install -e ".[Redis]"` select external dependencies only. Use `--config-settings EXTRAS=Redis` to select implementation code. Regular `pip install "DefStream[Redis]"` still installs a separate implementation wheel.
+Only selected code is connected to the environment, and your IDE can find it too. Connections are managed automatically; you do not need to create links or add IDE search paths. Restart the language server if the IDE does not find the installed code right away. Multiple environments sharing the same sources keep their selections separate.
 
-Restart the language server after migration. No IDE-specific search paths or diagnostic suppression are needed. Regular wheels do not contain the link-management code. The local backend declared in `pyproject.toml` handles `EXTRAS` in editable hooks without invoking pip recursively or directly modifying the environment.
+Refresh keeps unchanged file connections and atomically replaces each changed connection. It removes only deselected managed files and preserves other files such as `.DS_Store`. Switching all files simultaneously is not guaranteed.
+
+On Windows, hard links are used if symbolic-link permissions are unavailable. In that case, keep the sources and virtual environment on the same drive. This connection management applies only to development installations, not regular wheel installations.
 
 ## Build and validate
-
-One `src` and one `setup.py` serve every distribution. `DEF_BUILD_TARGET` accepts `core` (default), `RabbitMQ` and `Redis`; invalid values fail.
 
 Build and validate from the repository root:
 

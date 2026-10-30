@@ -1,10 +1,12 @@
 from json import dumps
+from os import link
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import (
 	TestCase,
 	main,
 )
+from unittest.mock import patch
 
 from editable_view import (
 	collect_files,
@@ -14,6 +16,87 @@ from editable_view import (
 
 
 class EditableViewTests(TestCase):
+	def test_hardlink_refresh_keeps_existing_files_until_atomic_replacement(self) -> None:
+		with TemporaryDirectory() as temporary:
+			root: Path = Path(temporary)
+			view: Path = root / 'view'
+			view.mkdir()
+			core: Path = root / 'core.py'
+			changed: Path = root / 'changed.py'
+			core.write_text('CORE = 1\n')
+			changed.write_text('VALUE = 1\n')
+			files: dict[str, str] = {
+				'Example/__init__.py': str(core),
+				'Example/changed.py': str(changed),
+			}
+			with patch('editable_view.create_link', side_effect=link):
+				refresh(view, 'Example', files)
+			core_link: Path = view / 'Example/__init__.py'
+			changed_link: Path = view / 'Example/changed.py'
+			core_inode: int = core_link.stat().st_ino
+			replacement: Path = root / 'replacement.py'
+			replacement.write_text('VALUE = 2\n')
+			replacement.replace(changed)
+
+			def observe(
+				source: Path,
+				destination: Path,
+			) -> None:
+				self.assertEqual(core_link.stat().st_ino, core_inode)
+				self.assertEqual(changed_link.read_text(), 'VALUE = 1\n')
+				link(source, destination)
+				return
+
+			with patch('editable_view.create_link', side_effect=observe) as create:
+				refresh(view, 'Example', files)
+			self.assertEqual(create.call_count, 1)
+			self.assertEqual(core_link.stat().st_ino, core_inode)
+			self.assertTrue(changed_link.samefile(changed))
+		return
+
+	def test_selection_change_preserves_unmanaged_files_and_unchanged_core(self) -> None:
+		with TemporaryDirectory() as temporary:
+			root: Path = Path(temporary)
+			view: Path = root / 'view'
+			view.mkdir()
+			source: Path = root / 'source.py'
+			source.write_text('VALUE = 1\n')
+			files: dict[str, str] = {
+				'Example/__init__.py': str(source),
+				'Example/Selected/__init__.py': str(source),
+			}
+			refresh(view, 'Example', files)
+			unmanaged: Path = view / 'Example/Selected/.DS_Store'
+			unmanaged.write_text('unmanaged')
+			with patch('editable_view.create_link', side_effect=AssertionError('Unchanged link recreated')):
+				refresh(view, 'Example', {'Example/__init__.py': str(source)})
+			self.assertEqual(unmanaged.read_text(), 'unmanaged')
+			self.assertTrue((view / 'Example/__init__.py').samefile(source))
+			self.assertFalse((view / 'Example/Selected/__init__.py').exists())
+		return
+
+	def test_failed_replacement_preserves_old_link_and_state(self) -> None:
+		with TemporaryDirectory() as temporary:
+			root: Path = Path(temporary)
+			view: Path = root / 'view'
+			view.mkdir()
+			source: Path = root / 'source.py'
+			source.write_text('VALUE = 1\n')
+			files: dict[str, str] = {'Example/__init__.py': str(source)}
+			with patch('editable_view.create_link', side_effect=link):
+				refresh(view, 'Example', files)
+			state: bytes = (view / 'files.json').read_bytes()
+			replacement: Path = root / 'replacement.py'
+			replacement.write_text('VALUE = 2\n')
+			replacement.replace(source)
+			with patch('editable_view.create_link', side_effect=PermissionError('link failed')):
+				with self.assertRaises(PermissionError):
+					refresh(view, 'Example', files)
+			self.assertEqual((view / 'Example/__init__.py').read_text(), 'VALUE = 1\n')
+			self.assertEqual((view / 'files.json').read_bytes(), state)
+			self.assertEqual(sorted(path.name for path in (view / 'Example').iterdir()), ['__init__.py'])
+		return
+
 	def test_single_editable_rejects_legacy_implementation_distributions(self) -> None:
 		with TemporaryDirectory() as temporary:
 			site: Path = Path(temporary)

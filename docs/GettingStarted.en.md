@@ -31,8 +31,7 @@ the `Redis` extra installs the same-version `DefStream-Redis` and `redis>=5.1.1`
 | `DefStream[Redis]` | `DefStream.Broker.Implements.Redis` | [Redis usage](./Redis.en.md#redis-usage) |
 
 The core and implementations share one repository and version but install as separate distributions.
-Uninstall an older integrated version or historical standalone adapters before migrating to avoid overlapping file ownership.
-See [installation isolation, development and distribution](./Packaging.en.md) for migration and editable development.
+To modify the source code, see [installation isolation, development and distribution](./Packaging.en.md).
 
 
 ## Quick start

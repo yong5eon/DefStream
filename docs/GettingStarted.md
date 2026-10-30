@@ -31,8 +31,7 @@ python -m pip install "DefStream[RabbitMQ,Redis]"
 | `DefStream[Redis]` | `DefStream.Broker.Implements.Redis` | [Redis 사용 방법](./Redis.md#redis-사용-방법) |
 
 코어와 구현체는 같은 저장소에서 함께 빌드·버전 관리하지만 별도 배포물로 설치됩니다.
-기존 통합 버전이나 과거 별도 어댑터를 전환할 때는 먼저 기존 패키지를 제거하여 파일 소유권 충돌을 피하세요.
-절차와 editable 개발 설치는 [설치 격리와 개발·배포](./Packaging.md)를 참고하세요.
+소스 코드를 수정하고 싶다면 [설치 격리와 개발·배포](./Packaging.md)를 참고하세요.
 
 
 ## 빠르게 시작하기

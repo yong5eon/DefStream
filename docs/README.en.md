@@ -29,7 +29,7 @@ Messages published by a producer pass through the broker to a Worker Consumer, a
 
 ## Browse the guides
 
-- [Installation isolation, development and distribution](./Packaging.en.md): optional implementation files, migration, editable installation and multi-distribution builds
+- [Installation isolation, development and distribution](./Packaging.en.md): selecting implementations, modifying source code and building distributions
 - [Installation and quick start](./GettingStarted.en.md): installation, broker prerequisites, and a first Worker
 - [Task processing and execution](./Tasks.en.md): task APIs, delivery policies, and execution pools
 - [Lifecycle hooks](./LifecycleHooks.en.md): hook order and resource management across Workers, pools, and tasks

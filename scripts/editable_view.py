@@ -1,6 +1,8 @@
 from errno import (
 	EACCES,
 	EAGAIN,
+	EEXIST,
+	ENOTEMPTY,
 	EPERM,
 )
 from importlib.metadata import distributions
@@ -14,6 +16,7 @@ from os import (
 )
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 from time import (
 	monotonic,
 	sleep,
@@ -121,42 +124,57 @@ def refresh(
 		for relative, source in files.items()
 	):
 		return
-	directories: set[Path] = set()
+	paths: dict[str, Path] = {}
 	for relative in previous.keys() | files.keys():
-		path: Path = view / relative_path(
+		paths[relative] = view / relative_path(
 			relative,
 			project,
 		)
+	touched: set[Path] = set()
+	directories: set[Path] = set()
+	for relative, source in files.items():
+		path: Path = paths[relative]
+		if path.is_file() and path.samefile(source):
+			continue
+		path.parent.mkdir(
+			parents=True,
+			exist_ok=True,
+		)
+		with TemporaryDirectory(dir=path.parent) as staging:
+			replacement: Path = Path(staging) / path.name
+			create_link(
+				Path(source),
+				replacement,
+			)
+			replacement.replace(path)
+		touched.add(path)
+	for relative in previous.keys() - files.keys():
+		path = paths[relative]
 		if path.exists() or path.is_symlink():
 			path.unlink()
+		touched.add(path)
+		directories.update(parent for parent in path.parents if parent != view and view in parent.parents)
+	for path in touched:
 		if path.suffix == '.py':
 			cache: Path = path.parent / '__pycache__'
 			if cache.is_dir():
 				for bytecode in cache.glob(path.stem + '.*.pyc'):
 					bytecode.unlink()
-				if not any(cache.iterdir()):
-					cache.rmdir()
-		directories.update(parent for parent in path.parents if parent != view and view in parent.parents)
+				directories.add(cache)
 	for directory in sorted(
 		directories,
 		key=lambda path: len(path.parts),
 		reverse=True,
 	):
 		if directory.exists():
-			directory.rmdir()
-	for relative, source in files.items():
-		destination: Path = view / relative_path(
-			relative,
-			project,
-		)
-		destination.parent.mkdir(
-			parents=True,
-			exist_ok=True,
-		)
-		create_link(
-			Path(source),
-			destination,
-		)
+			try:
+				directory.rmdir()
+			except OSError as error:
+				if error.errno not in (
+					ENOTEMPTY,
+					EEXIST,
+				):
+					raise
 	temporary: Path = state.with_suffix('.new')
 	temporary.write_text(
 		dumps(
