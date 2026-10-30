@@ -171,12 +171,15 @@ jobs:
   test:
     name: Test Python ${{ matrix.python }}
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        include:
+          - python: '3.9'
+            os: ubuntu-24.04
     env:
       PROJECT: DefStream
       DEFSTREAM_RABBITMQ_TESTS: '1'
