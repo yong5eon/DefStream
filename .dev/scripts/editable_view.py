@@ -128,6 +128,15 @@ def write_state(
 	return
 
 
+def invalidate_bytecode(path: Path) -> None:
+	if path.suffix == '.py':
+		cache: Path = path.parent / '__pycache__'
+		if cache.is_dir():
+			for bytecode in cache.glob(path.stem + '.*.pyc'):
+				bytecode.unlink()
+	return
+
+
 def refresh(
 	view: Path,
 	project: str,
@@ -172,8 +181,10 @@ def refresh(
 				Path(source),
 				replacement,
 			)
+			invalidate_bytecode(path)
 			replacement.replace(path)
-		touched.add(path)
+		if path.suffix == '.py' and (path.parent / '__pycache__').is_dir():
+			directories.add(path.parent / '__pycache__')
 	for relative in previous.keys() - files.keys():
 		path = paths[relative]
 		if path.exists() or path.is_symlink():
@@ -181,11 +192,10 @@ def refresh(
 		touched.add(path)
 		directories.update(parent for parent in path.parents if parent != view and view in parent.parents)
 	for path in touched:
+		invalidate_bytecode(path)
 		if path.suffix == '.py':
 			cache: Path = path.parent / '__pycache__'
 			if cache.is_dir():
-				for bytecode in cache.glob(path.stem + '.*.pyc'):
-					bytecode.unlink()
 				directories.add(cache)
 	for directory in sorted(
 		directories,

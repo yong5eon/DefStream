@@ -50,9 +50,13 @@ Refresh keeps unchanged file connections and atomically replaces each changed co
 
 If creating a connection fails, resolve the cause and repeat the installation command with the desired `EXTRAS`. The next refresh also reconciles files added before the failure with your selection.
 
+Each file's old bytecode cache is removed before replacing its connection. If a later connection fails, retrying therefore does not leave an already replaced file using stale cached code.
+
 On Windows, hard links are used if symbolic-link permissions are unavailable. In that case, keep the sources and virtual environment on the same drive. This connection management applies only to development installations, not regular wheel installations.
 
 ## Build and validate
+
+Installation checks explicitly select the locally built core and implementation wheels. Same-version files from PyPI cannot replace those validation artifacts; external dependencies still come from the package index.
 
 Build and validate from the repository root:
 

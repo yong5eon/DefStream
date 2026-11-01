@@ -126,6 +126,17 @@ def verify_install(
 	return
 
 
+def local_requirements(
+	wheels: dict[str, Path],
+	selected: tuple[str, ...],
+) -> list[str]:
+	extras: str = '[' + ','.join(selected) + ']' if selected else ''
+	return [
+		f'{PROJECT}{extras} @ {wheels[PROJECT.lower()].resolve().as_uri()}',
+		*(str(wheels[f'{PROJECT}-{target}'.lower()].resolve()) for target in selected),
+	]
+
+
 def main() -> None:
 	parser = ArgumentParser(description='Verify distribution ownership, rebuilds and installation isolation.')
 	parser.add_argument(
@@ -153,6 +164,7 @@ def main() -> None:
 		*(f'{PROJECT}-{target}'.lower() for target in IMPLEMENTATIONS),
 	}
 	contents: dict[str, dict[str, bytes]] = {}
+	local_wheels: dict[str, Path] = {}
 	version = ''
 	owned: set[str] = set()
 	for wheel in wheels:
@@ -176,6 +188,7 @@ def main() -> None:
 			assert not (owned & payload.keys()), name
 			owned.update(payload)
 			contents[name] = payload
+			local_wheels[name] = wheel
 			for target, path in IMPLEMENTATIONS.items():
 				prefix = PROJECT + '/' + path.replace(
 					'.',
@@ -239,16 +252,16 @@ def main() -> None:
 				count,
 			):
 				python = python_in(directory / ('installed-' + '-'.join(selected)))
-				extras = '[' + ','.join(selected) + ']' if selected else ''
 				check(
 					[
 						python,
 						'-m',
 						'pip',
 						'install',
-						'--find-links',
-						str(dist),
-						f'{PROJECT}{extras}=={version}',
+						*local_requirements(
+							local_wheels,
+							selected,
+						),
 					],
 					directory,
 					environment,
@@ -267,9 +280,10 @@ def main() -> None:
 								'-m',
 								'pip',
 								'install',
-								'--find-links',
-								str(dist),
-								f'{PROJECT}[{target}]=={version}',
+								*local_requirements(
+									local_wheels,
+									(target,),
+								),
 							],
 							directory,
 							environment,

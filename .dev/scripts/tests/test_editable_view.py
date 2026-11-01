@@ -2,8 +2,15 @@ from json import (
 	dumps,
 	loads,
 )
-from os import link
+from os import (
+	link,
+	stat_result,
+	utime,
+)
 from pathlib import Path
+from py_compile import compile as compile_source
+from subprocess import check_output
+from sys import executable
 from tempfile import TemporaryDirectory
 from unittest import (
 	TestCase,
@@ -19,6 +26,62 @@ from editable_view import (
 
 
 class EditableViewTests(TestCase):
+	def test_failed_hardlink_refresh_retry_does_not_execute_stale_bytecode(self) -> None:
+		with TemporaryDirectory() as temporary:
+			root: Path = Path(temporary)
+			view: Path = root / 'view'
+			view.mkdir()
+			source: Path = root / 'source.py'
+			source.write_text('VALUE = 1\n')
+			files: dict[str, str] = {'Example/__init__.py': str(source)}
+			with patch('editable_view.create_link', side_effect=link):
+				refresh(view, 'Example', files)
+			destination: Path = view / 'Example/__init__.py'
+			cache: Path = Path(compile_source(str(destination), doraise=True))
+			original: stat_result = source.stat()
+			replacement: Path = root / 'replacement.py'
+			replacement.write_text('VALUE = 2\n')
+			utime(
+				replacement,
+				ns=(
+					original.st_atime_ns,
+					original.st_mtime_ns,
+				),
+			)
+			replacement.replace(source)
+			selected: dict[str, str] = {
+				**files,
+				'Example/later.py': str(source),
+			}
+
+			def fail_later(
+				original: Path,
+				target: Path,
+			) -> None:
+				if target.name == 'later.py':
+					raise PermissionError('Later link failed')
+				link(original, target)
+				return
+
+			with patch('editable_view.create_link', side_effect=fail_later), self.assertRaises(PermissionError):
+				refresh(view, 'Example', selected)
+			self.assertTrue(destination.samefile(source))
+			self.assertFalse(cache.exists())
+			with patch('editable_view.create_link', side_effect=link):
+				refresh(view, 'Example', selected)
+			value: str = check_output(
+				[
+					executable,
+					'-I',
+					'-c',
+					'import sys; sys.path.insert(0, {!r}); import Example; print(Example.VALUE)'.format(str(view)),
+				],
+				text=True,
+			)
+			self.assertEqual(value.strip(), '2')
+			self.assertTrue(cache.is_file())
+		return
+
 	def test_ownership_write_failure_does_not_add_links(self) -> None:
 		with TemporaryDirectory() as temporary:
 			root: Path = Path(temporary)
