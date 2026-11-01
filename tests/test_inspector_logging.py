@@ -178,7 +178,7 @@ class InspectorLoggingTests(TestCase):
 			handler.run(application)
 		self.assertEqual(len(logs.records), 1)
 		self.assertEqual(logs.records[0].levelno, 30)
-		self.assertIn('Timeout', logs.records[0].getMessage())
+		self.assertIn('error_type={}'.format(SocketTimeout.__name__), logs.records[0].getMessage())
 
 	def test_play_handled_failure_retains_error_type_not_private_message(self):
 		play = Play(

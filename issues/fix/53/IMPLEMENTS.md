@@ -1,5 +1,7 @@
 # 구현 결과
 
+후속 Python 3.9 CI 실패는 테스트가 예외 이름을 대문자 `Timeout`으로 고정한 문제였다. 실제 `SocketTimeout.__name__`의 `error_type`을 검사하도록 수정하고 제품 로그와 WARNING 계약은 유지했다. [수정 기록](./implements/1793517548589.md).
+
 ## 설치 파일의 배포 경계
 
 `setup.py`는 단일 `src`에서 `DEF_BUILD_TARGET`에 따라 코어, `DefStream-RabbitMQ`, `DefStream-Redis`를 만든다. 코어는 두 브로커 구현체를 제외한다. 각 구현체는 기존 import 경로의 자기 하위 파일만 소유하며 공통 부모의 `__init__.py`는 코어만 소유한다.
@@ -42,3 +44,4 @@ CI의 checkout과 후속 실행 경로를 저장소 루트 기준으로 함께 �
 10. [부분 갱신 실패 후 관리 파일 복구](./implements/1793329241422.md)
 11. [워크플로 스크립트와 테스트 위치 정리](./implements/1793516005517.md)
 12. [개발용 설치 코드와 테스트 숨김 경로 이동](./implements/1793516879583.md)
+13. [Python 3.9 소켓 타임아웃 로그 검증 수정](./implements/1793517548589.md)
