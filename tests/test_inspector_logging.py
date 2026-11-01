@@ -7,7 +7,9 @@ from logging import (
 	DEBUG,
 	ERROR,
 	INFO,
+	getLogger,
 )
+from socket import timeout as SocketTimeout
 from unittest import (
 	TestCase,
 	main,
@@ -143,6 +145,40 @@ class InspectorLoggingTests(TestCase):
 		with self.assertRaises(ConnectionResetError):
 			handler.finish_response()
 		request_handler.log_request.assert_not_called()
+
+	def test_transport_failures_are_logged_as_warnings(self):
+		for error in (TimeoutError(), SocketTimeout(), ConnectionResetError()):
+			server = Server.__new__(Server)
+			with self.subTest(error=type(error).__name__):
+				with self.assertLogs('Worker.Inspector', level='WARNING') as logs:
+					try:
+						raise error
+					except Exception:
+						server.handle_error(None, None)
+				self.assertEqual(len(logs.records), 1)
+				self.assertEqual(logs.records[0].levelno, 30)
+
+	def test_response_write_timeout_through_run_is_logged_as_warning(self):
+		class FailingWriter(StringIO):
+			def write(self, value):
+				raise SocketTimeout()
+
+		handler = InspectorServerHandler(
+			StringIO(),
+			FailingWriter(),
+			StringIO(),
+			{},
+		)
+		handler.request_handler = Mock(logger=getLogger('Worker.Inspector'))
+		handler.setup_environ = Mock(side_effect=lambda: setattr(handler, 'environ', {'SERVER_PROTOCOL': 'HTTP/1.0'}))
+		with self.assertLogs('Worker.Inspector', level='WARNING') as logs:
+			def application(environ, start_response):
+				start_response('200 OK', [])
+				return [b'response']
+			handler.run(application)
+		self.assertEqual(len(logs.records), 1)
+		self.assertEqual(logs.records[0].levelno, 30)
+		self.assertIn('Timeout', logs.records[0].getMessage())
 
 	def test_play_handled_failure_retains_error_type_not_private_message(self):
 		play = Play(

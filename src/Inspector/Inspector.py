@@ -1,4 +1,5 @@
 from logging import getLogger
+from socket import timeout as SocketTimeout
 from socketserver import ThreadingMixIn
 from sys import exc_info
 from threading import Thread
@@ -53,7 +54,8 @@ class Server(
 		client_address,
 	) -> None:
 		_, error, traceback = exc_info()
-		self.logger.error(
+		log = self.logger.warning if isinstance(error, (TimeoutError, SocketTimeout, ConnectionError)) else self.logger.error
+		log(
 			'HTTP connection handling failed: error_type=%s\n%s',
 			type(error).__name__,
 			''.join(
@@ -72,7 +74,8 @@ class InspectorServerHandler(ServerHandler):
 		exc_info,
 	) -> None:
 		_, error, traceback = exc_info
-		self.request_handler.logger.error(
+		log = self.request_handler.logger.warning if isinstance(error, (TimeoutError, SocketTimeout, ConnectionError)) else self.request_handler.logger.error
+		log(
 			'WSGI request handling failed: error_type=%s\n%s',
 			type(error).__name__,
 			''.join(
