@@ -76,7 +76,7 @@ jobs:
           changed = check_output(
               [
                   'git', 'diff', '--name-only', '--no-renames', base, environ['GITHUB_SHA'],
-                  '--', 'src/', 'setup.py', 'setup.cfg', 'pyproject.toml', 'MANIFEST.in', 'scripts/',
+                  '--', 'src/', 'setup.py', 'setup.cfg', 'pyproject.toml', 'MANIFEST.in', '.dev/scripts/', '.github/scripts/*.py',
               ],
               text=True,
           ).strip()
@@ -260,13 +260,13 @@ jobs:
           mkdir -p dist
           if [ "$RELEASE_BUILD" = "true" ]; then
             if [ "$NEW_VERSION" = "true" ]; then
-              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python scripts/build_distributions.py
+              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python .github/scripts/build_distributions.py
             else
-              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python scripts/build_distributions.py --wheel
+              SETUPTOOLS_SCM_PRETEND_VERSION="$RELEASE_VERSION" python .github/scripts/build_distributions.py --wheel
             fi
             python -m wheel tags --build "$WHEEL_BUILD" --remove dist/*.whl
           else
-            python scripts/build_distributions.py
+            python .github/scripts/build_distributions.py
           fi
           python -m twine check --strict dist/*
 
@@ -298,9 +298,11 @@ jobs:
           PY
 
       - name: Verify optional client installations
-        run: python scripts/check_distributions.py --editable
+        run: python .github/scripts/check_distributions.py --editable
       - name: Test release preparation
-        run: python -m unittest discover -s scripts/tests -t scripts -p 'test_*.py'
+        run: |
+          python -m unittest discover -s .dev/scripts/tests -t .dev/scripts -p 'test_*.py'
+          python -m unittest discover -s .github/scripts/tests -t .github/scripts -p 'test_*.py'
 
       - name: Install built wheels into a clean environment
         run: |
@@ -372,7 +374,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.changes.outputs.version }}
           WHEEL_BUILD: ${{ needs.changes.outputs.build }}
           NEW_VERSION: ${{ needs.changes.outputs.new_version }}
-        run: python release-source/scripts/prepare_upload.py
+        run: python release-source/.github/scripts/prepare_upload.py
 
       - name: Record verified release tag
         env:

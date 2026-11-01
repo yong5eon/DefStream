@@ -199,9 +199,9 @@ def main() -> None:
 			with open_tar(source) as archive:
 				root = archive.getnames()[0].split('/')[0]
 				for filename in (
-					'scripts/editable_view.py',
-					'scripts/build_backend.py',
-					'scripts/build_distributions.py',
+					'.dev/scripts/editable_view.py',
+					'.github/scripts/build_backend.py',
+					'.github/scripts/build_distributions.py',
 				):
 					assert archive.getmember(root + '/' + filename).isfile(), filename
 			rebuilt = directory / f'rebuilt-{index}'
@@ -330,15 +330,19 @@ def main() -> None:
 					ROOT / filename,
 					source / filename,
 				)
-			(source / 'scripts').mkdir()
+			(source / '.dev' / 'scripts').mkdir(parents=True)
+			copy2(
+				ROOT / '.dev' / 'scripts' / 'editable_view.py',
+				source / '.dev' / 'scripts' / 'editable_view.py',
+			)
+			(source / '.github' / 'scripts').mkdir(parents=True)
 			for filename in (
-				'editable_view.py',
 				'build_backend.py',
 				'build_distributions.py',
 			):
 				copy2(
-					ROOT / 'scripts' / filename,
-					source / 'scripts' / filename,
+					ROOT / '.github' / 'scripts' / filename,
+					source / '.github' / 'scripts' / filename,
 				)
 			copytree(
 				ROOT / 'src',

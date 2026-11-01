@@ -2,6 +2,10 @@
 
 ## 로컬 검증
 
+후속 `.dev/scripts/` 이동은 최소 Python·Linux 단위 각 12개, 타입·구문·경로·wheel 파일 불변 및 독립 sdist 재빌드·설치·editable 통합 검증을 통과했다. [검증 기록](./tasks/1793516879584.md).
+
+워크플로 빌드·백엔드·테스트를 새 위치로 옮긴 뒤 최소 Python과 Linux의 두 테스트 진입점(각 12개), 타입·구문 및 새 wheel/sdist·독립 재빌드·설치 조합·editable 통합 검증을 통과했다. [검증 기록](./tasks/1793516005518.md).
+
 후속 부분 실패 수정은 최소 Python 3.9 단위 24개·Linux 링크 12개·타입·구문 검사를 통과했다. 새 Python 프로세스에서 코어로 복구한 뒤 잔여 구현체의 import 불가도 확인했다. [검증 기록](./tasks/1793329241423.md).
 
 후속 요청으로 한영 사용자 문서의 기존 환경 전환 안내를 제거하고 개발용 설치를 자체 소스 수정 목적부터 설명하도록 정리했다. 코드·설치 동작은 변경하지 않았다. [문서 작업 기록](./tasks/1793327685707.md).
@@ -29,7 +33,7 @@
 
 첫 제품 테스트의 cp949 출력 실패는 기존 Unicode 배너에 의한 것이며 `PYTHONUTF8=1`로 재실행해 통과했다. 제품 코드는 이를 이유로 수정하지 않았다.
 
-검증용 버전은 환경변수로만 지정했다. 릴리즈 준비 검사는 PyPI 응답 모킹을 사용했으며 실제 게시하지 않았다. 주요 재현 진입점은 저장소 루트에서 `python scripts/build_distributions.py --no-isolation`, `python scripts/check_distributions.py --editable` 및 `python -m unittest discover -s scripts/tests -t scripts -p test_release.py`이다. 필요한 빌드 도구는 [매뉴얼](../../../docs/Packaging.md)에 있다.
+검증용 버전은 환경변수로만 지정했다. 릴리즈 준비 검사는 PyPI 응답 모킹을 사용했으며 실제 게시하지 않았다. 현재 재현 진입점은 저장소 루트에서 `python .github/scripts/build_distributions.py --no-isolation`, `python .github/scripts/check_distributions.py --editable` 및 `python -m unittest discover -s .github/scripts/tests -t .github/scripts -p test_release.py`이다. 필요한 빌드 도구는 [매뉴얼](../../../docs/Packaging.md)에 있다.
 
 ## 남은 검증과 상태
 
@@ -51,3 +55,5 @@ Windows에서 Python 3.9·3.13을 검증했다. 실제 RabbitMQ/Redis 서버 연
 10. [전환 안내 제거와 개발 설치 설명 정리](./tasks/1793327685707.md)
 11. [반복 수식어와 임시 빌드 설정 설명 제거](./tasks/1793328011412.md)
 12. [부분 추가 실패의 재현과 복구 검증](./tasks/1793329241423.md)
+13. [이동 경로와 빌드 연결 검증](./tasks/1793516005518.md)
+14. [개발용 설치 코드 이동 검증](./tasks/1793516879584.md)

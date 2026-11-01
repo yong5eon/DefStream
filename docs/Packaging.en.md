@@ -58,8 +58,8 @@ Build and validate from the repository root:
 
 ```shell
 python -m pip install "pip>=23" build "setuptools>=77" "setuptools-scm>=8,<10" wheel twine
-python scripts/build_distributions.py
-python scripts/check_distributions.py --editable
+python .github/scripts/build_distributions.py
+python .github/scripts/check_distributions.py --editable
 python -m twine check --strict dist/*
 ```
 

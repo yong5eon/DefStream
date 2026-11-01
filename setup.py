@@ -103,9 +103,9 @@ class TargetEggInfo(egg_info):
 	def find_sources(self) -> None:
 		super().find_sources()
 		self.filelist.extend([
-			'scripts/editable_view.py',
-			'scripts/build_backend.py',
-			'scripts/build_distributions.py',
+			'.dev/scripts/editable_view.py',
+			'.github/scripts/build_backend.py',
+			'.github/scripts/build_distributions.py',
 		])
 		self.filelist.sort()
 		self.filelist.remove_duplicates()
@@ -185,7 +185,7 @@ class EditableView:
 		))
 		wheel.writestr(
 			helper + '.py',
-			Path('scripts/editable_view.py').read_bytes(),
+			Path('.dev/scripts/editable_view.py').read_bytes(),
 		)
 		wheel.writestr(
 			self.name + '.dist-info/editable-files.json',
