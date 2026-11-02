@@ -354,10 +354,10 @@ jobs:
       - name: Verify RabbitMQ plugins
         run: |
           enabled_plugins="$(
-            docker compose -f "$BROKER_COMPOSE_FILE" exec -T rabbitmq rabbitmq-plugins list --enabled
+            docker compose -f "$BROKER_COMPOSE_FILE" exec -T rabbitmq rabbitmq-plugins list --enabled --minimal
           )"
           for plugin in rabbitmq_management rabbitmq_prometheus rabbitmq_shovel rabbitmq_shovel_management; do
-            if [[ "$enabled_plugins" != *"$plugin"* ]]; then
+            if ! grep -Fxq "$plugin" <<< "$enabled_plugins"; then
               echo "RabbitMQ plugin is not enabled: $plugin" >&2
               exit 1
             fi

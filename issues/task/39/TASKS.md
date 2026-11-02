@@ -25,7 +25,7 @@
 
 ## 다음 단계
 
-버전 조사 결론은 Compose·CI 구성에 반영했고, 로컬 Docker에서 네 브로커와 16개 브로커 × Python 조합을 검증했다. Actions 실행에서 확인된 브로커별 테스트의 교차 import는 수정했으며, 수정 후 매트릭스 재실행을 기다리고 있다.
+버전 조사 결론은 Compose·CI 구성에 반영했고, 로컬 Docker에서 네 브로커와 16개 브로커 × Python 조합을 검증했다. 교차 import를 수정한 뒤 Actions 실행 #41461742854에서 코어와 브로커 매트릭스 24개 job이 모두 통과했다. PR 리뷰 지적 두 건을 추가로 수정했으며, 해당 수정 후 CI 재실행을 기다리고 있다.
 
 ## 검증 작업
 
@@ -41,6 +41,7 @@
 - CI와 같은 외부 작업 디렉터리에서 UTF-8 출력 설정과 프로젝트 top-level 경로를 지정해 전체 310개 테스트를 실행했으며, 15개를 건너뛰고 통과했다. RabbitMQ 71개(7개 건너뜀)와 Redis 32개(8개 건너뜀) 테스트도 각각 통과했다.
 - 이 단계에서는 GitHub Actions YAML 파싱과 `git diff --check`를 통과했지만 Docker 엔진이 없어 컨테이너 통합 테스트는 실행하지 못했다. 이후 실행한 로컬 브로커 통합 테스트 결과는 [Docker 기반 브로커 × Python 통합 테스트 기록](./tasks/1793628366252.md)에 정리했다.
 - 이후 GitHub Actions 실행 #41459408504에서는 코어 job이 통과하고 브로커 매트릭스 24개 job이 공통 `tests.test_task_messages`를 통한 RabbitMQ·Redis 교차 import로 실패했다. 공통 fixture를 broker-free 모듈로 분리하고 adapter별 API 검증을 각 suite로 옮긴 뒤, 공통 메시지 테스트 8개와 브로커별 import 격리 테스트를 통과시켰다. 수정 후 Actions 재실행은 대기 중이다. 상세 결과는 [브로커별 메시지 테스트 import 격리 검증](./tasks/1793629199998.md)에 기록했다.
+- PR 리뷰에서 RabbitMQ 플러그인 부분 문자열 검사로 인한 오탐 가능성과 미사용 import 두 건을 지적받아 수정했다. Inspector Play 테스트 21개와 정확한 전체 줄 비교 동작을 검증했다. 변경 후 CI 결과는 아직 없으며 [PR 리뷰 수정 검증](./tasks/1793631035345.md)에 정리했다.
 
 ## 단계별 기록
 
@@ -56,6 +57,7 @@
 - [CI 브로커 job 이름 단순화](./tasks/1793627590185.md)
 - [Docker 기반 브로커 × Python 통합 테스트](./tasks/1793628366252.md)
 - [브로커별 메시지 테스트 import 격리 검증](./tasks/1793629199998.md)
+- [PR 리뷰 수정 검증](./tasks/1793631035345.md)
 
 ## Redis 참고 자료
 

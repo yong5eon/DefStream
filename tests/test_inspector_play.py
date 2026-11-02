@@ -7,7 +7,6 @@ from unittest import (
 	main,
 )
 from unittest.mock import (
-	Mock,
 	patch,
 )
 from DefStream.Broker.Errors import RemoteError
@@ -20,7 +19,6 @@ from tests._support_inspector_play import (
 	PlayExtensionSupport,
 	Producer,
 	RPCProducer,
-	Task,
 	TOKEN,
 )
 

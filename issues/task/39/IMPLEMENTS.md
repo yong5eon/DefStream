@@ -18,7 +18,7 @@ CI 테스트를 코어·RabbitMQ·Redis job으로 나누고 RabbitMQ 3.13·4.4, 
 
 브로커별 CI job이 선택한 adapter만 설치하는 점에 맞춰 공통 메시지 fixture에서 RabbitMQ 전용 `Reject`와 Redis 연결 import를 제거했다. RabbitMQ와 Redis connection API 검증도 각 전용 suite로 옮겨 다른 adapter가 설치되지 않은 환경에서 테스트를 import할 수 있게 했다. 상세 변경은 [브로커별 메시지 테스트 의존성 분리](./implements/1793629199999.md)에 기록했다.
 
-로컬 Docker에서 네 브로커의 health check와 RabbitMQ 플러그인 상태를 확인하고 Python 3.9·3.10·3.12·3.14 조합 16개를 통과했다. Actions 실행 #41459408504에서는 코어 job은 통과했지만 RabbitMQ·Redis 24개 job이 교차 import로 실패했다. 해당 import 문제는 수정했으며 수정 후 CI 재실행은 아직 확인하지 않았다. 실패 원인과 로컬 검증은 [브로커별 메시지 테스트 import 격리 검증](./tasks/1793629199998.md)에 정리했다.
+로컬 Docker에서 네 브로커의 health check와 RabbitMQ 플러그인 상태를 확인하고 Python 3.9·3.10·3.12·3.14 조합 16개를 통과했다. Actions 실행 #41459408504에서는 브로커 24개 job이 교차 import로 실패했으나 이를 분리한 뒤 실행 #41461742854에서 코어와 브로커 24개 job이 모두 통과했다. 이후 PR 리뷰에서 발견한 플러그인 이름의 부분 문자열 검사와 미사용 import를 수정했으며, 수정 내용은 [PR 리뷰 지적 수정](./implements/1793631035346.md)에 기록했다. 후속 CI 실행은 대기 중이다.
 
 Compose 설정과 이전 정적 검증은 [기존 작업 기록](./tasks/1793623390265.md)에, 테스트 분리와 검증은 [테스트 분리 작업 기록](./tasks/1793625269565.md)에 정리했다.
 
@@ -30,3 +30,4 @@ Compose 설정과 이전 정적 검증은 [기존 작업 기록](./tasks/1793623
 - [브로커 테스트 환경 변수 이름 변경](./implements/1793626820522.md)
 - [CI 테스트 job 분리와 버전 매트릭스](./implements/1793627348502.md)
 - [브로커별 메시지 테스트 의존성 분리](./implements/1793629199999.md)
+- [PR 리뷰 지적 수정](./implements/1793631035346.md)

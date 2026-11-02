@@ -9,7 +9,7 @@
 | 원본 이슈 | [#39](https://github.com/yong5eon/DefStream/issues/39) |
 | 상태 | Open |
 | 유형·레이블 | 작업 (`task`, 원본 이슈에 적용됨) |
-| 로컬 진행 상태 | 네 브로커 버전과 Python 3.9·3.10·3.12·3.14의 16개 조합 통과; Actions 실행 #41459408504에서 코어 job은 통과하고 브로커 24개 job은 선택하지 않은 어댑터 import로 실패; import 분리를 로컬 수정했고 Actions 재실행 대기 |
+| 로컬 진행 상태 | 네 브로커 버전과 Python 3.9·3.10·3.12·3.14의 16개 조합 통과; import 분리 후 Actions 실행 #41461742854에서 코어와 브로커 24개 job 통과; PR 리뷰 지적 2건을 수정해 후속 CI 대기 |
 | 작업 브랜치 | `task/39` |
 | 분기 기준 | `master` |
 | 병합 대상 브랜치 | 미지정 |
@@ -55,7 +55,7 @@ DefStream의 RabbitMQ와 Redis 지원 범위에 맞는 Docker 설정 리소스�
 - 코어 테스트는 `tests/`, RabbitMQ 전용 테스트는 `tests/rabbitmq/`, Redis 전용 테스트는 `tests/redis/`로 분리하고 전체 discovery가 하위 테스트를 포함하도록 구성했습니다.
 - CI가 저장소 외부에서 테스트를 실행할 때도 동일하게 탐색하도록 top-level 경로를 지정했습니다.
 - 저장소 루트의 로컬 egg-info가 설치된 distribution 메타데이터를 가리는 문제를 패키징 테스트에서 해결했습니다. CI와 같은 외부 작업 디렉터리 기준 전체 310개 테스트가 통과했고 15개는 건너뛰었습니다.
-- 로컬 Docker에서 네 브로커의 health check와 RabbitMQ 플러그인을 확인하고 16개 브로커 × Python 조합을 통과했습니다. Actions 실행 #41459408504에서는 코어 job이 통과했지만 브로커 job은 공통 메시지 테스트 모듈의 교차 import로 실패했습니다. 공통 fixture와 adapter별 검증을 분리했으며 수정 후 Actions 재실행은 대기 중입니다.
+- 로컬 Docker에서 네 브로커의 health check와 RabbitMQ 플러그인을 확인하고 16개 브로커 × Python 조합을 통과했습니다. 공통 fixture의 교차 import를 분리한 뒤 Actions 실행 #41461742854에서 코어 테스트와 RabbitMQ·Redis 24개 job이 모두 통과했습니다. 이후 PR 리뷰에서 지적한 RabbitMQ 플러그인 이름의 정확 일치 검사와 미사용 import를 수정했으며, 이 변경을 포함한 CI 재실행은 대기 중입니다.
 
 ## 작업 기록
 
@@ -76,6 +76,8 @@ DefStream의 RabbitMQ와 Redis 지원 범위에 맞는 Docker 설정 리소스�
 - [RabbitMQ 4 테스트 큐 호환성 수정 기록](./implements/1793628366252.md)
 - [브로커별 메시지 테스트 import 격리 검증](./tasks/1793629199998.md)
 - [브로커별 메시지 테스트 의존성 분리](./implements/1793629199999.md)
+- [PR 리뷰 수정 검증](./tasks/1793631035345.md)
+- [PR 리뷰 지적 수정](./implements/1793631035346.md)
 - [테스트 분리·검증 작업 기록](./tasks/1793625269565.md)
 - [테스트 분리 구현 기록](./implements/1793625464717.md)
 - RabbitMQ 지원 버전 조사: [조사 결과](./TASKS.md), [단계별 기록](./tasks/1793620359610.md), [버전 범위 결정](./tasks/1793621161604.md)

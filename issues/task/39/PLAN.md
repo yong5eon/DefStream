@@ -25,7 +25,8 @@
 - [x] 통합 테스트 포트 환경변수 연결
 - [x] 코어·RabbitMQ·Redis 테스트 디렉터리 분리 및 전체 discovery 연결
 - [x] 코어·RabbitMQ·Redis CI job 분리, 브로커 버전 × Python 버전 전체 매트릭스와 플러그인 검사·정리 절차 추가
-- [ ] 교차 import 수정 후 GitHub Actions 브로커 매트릭스 24개 job 재실행 및 통과 확인
+- [x] 교차 import 수정 후 GitHub Actions 브로커 매트릭스 24개 job 재실행 및 통과 확인
+- [ ] PR 리뷰의 플러그인 정확 일치 검사·미사용 import 수정 후 CI 재실행
 - [x] 실제 컨테이너 기동·health check·플러그인 및 브로커 통합 테스트: 네 브로커와 16개 로컬 브로커 × Python 조합 검증
 - [x] 로컬 실행 문서와 작업 기록 갱신
 
@@ -47,4 +48,5 @@
 - CI에서 코어 테스트를 루트 테스트 모듈로 제한하고 RabbitMQ·Redis job을 각각 분리했다. 각 브로커 job은 두 지원 버전과 Python 3.9~3.14의 12개 조합을 실행하도록 구성했다. 전용 core runner에서 코어 테스트 207개가 통과했으며 YAML 구조상 총 6개 코어 조합과 브로커별 12개 조합이 확인됐다. Docker 엔진이 없어 매트릭스의 실제 브로커 실행은 검증하지 못했다. 자세한 내용은 [CI 테스트 매트릭스 분리 기록](./tasks/1793627348502.md)을 참고한다.
 - 브로커 job ID를 `test-rabbitmq`, `test-redis`로 단순화하고 publish 의존 관계와 이슈 기록을 갱신했다. 변경 내용은 [CI 브로커 job 이름 단순화 기록](./tasks/1793627590185.md)에 기록했다.
 - RabbitMQ 3.13·4.4와 Redis 6.2·7.4를 기동해 health check를 통과시켰고 RabbitMQ 필수 플러그인을 확인했다. 설치된 Python 3.9·3.10·3.12·3.14 각 버전에서 네 브로커 테스트를 실행해 16개 조합을 통과했다. 최초 RabbitMQ 4.4 실행에서 확인된 transient non-exclusive queue 호환성 문제는 테스트 큐를 제품 기본 계약과 일치하도록 durable하게 선언해 해결했다. 상세 결과는 [Docker 기반 통합 테스트 기록](./tasks/1793628366252.md), 수정 내용은 [구현 기록](./implements/1793628366252.md)을 참고한다.
-- GitHub Actions 실행 #41459408504에서 코어 테스트는 통과했지만 24개 브로커 job은 공통 테스트 모듈의 RabbitMQ·Redis 교차 import로 실패했다. 공통 fixture와 브로커별 API 검증을 분리했으며 수정 후 전체 Actions 매트릭스 재실행을 남겨 두었다. 원인과 로컬 import 격리 결과는 [작업 기록](./tasks/1793629199998.md)을 참고한다.
+- GitHub Actions 실행 #41459408504에서 코어 테스트는 통과했지만 24개 브로커 job은 공통 테스트 모듈의 RabbitMQ·Redis 교차 import로 실패했다. 공통 fixture와 브로커별 API 검증을 분리한 뒤 실행 #41461742854에서 코어 및 브로커 24개 job 전체가 통과했다. 원인과 로컬 import 격리 결과는 [작업 기록](./tasks/1793629199998.md)을 참고한다.
+- PR 리뷰에서 지적한 플러그인 이름 부분 문자열 비교와 미사용 import를 수정했다. `tests.test_inspector_play` 21개가 통과했고, 수정 후 CI 재실행 결과는 대기 중이다. [리뷰 수정 작업 기록](./tasks/1793631035345.md)을 참고한다.
