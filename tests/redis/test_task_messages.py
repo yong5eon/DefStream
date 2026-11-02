@@ -24,10 +24,16 @@ from DefStream.Worker import (
 	request,
 )
 from tests._support import redis_test_port
-from tests.test_task_messages import (
+from tests._support_task_messages import (
 	Declare,
 	Task,
 )
+
+
+class RedisConnectionApiTests(TestCase):
+	def test_connection_exposes_emit_without_send_alias(self):
+		self.assertTrue(hasattr(RedisConnection, 'emit'))
+		self.assertFalse(hasattr(RedisConnection, 'send'))
 
 
 @skipUnless(

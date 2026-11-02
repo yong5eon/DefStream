@@ -1,4 +1,3 @@
-from threading import Event
 from typing import get_type_hints
 from unittest import (
 	TestCase,
@@ -10,19 +9,10 @@ from unittest.mock import (
 from DefStream.Broker import (
 	Connection,
 )
-from DefStream.Broker.Implements.RabbitMQ import (
-	Connection as RabbitConnection,
-	Reject,
-)
-from DefStream.Broker.Implements.Redis import (
-	Configuration as RedisConfiguration,
-	Connection as RedisConnection,
-)
 from DefStream.Worker import (
 	declare,
 	Run,
 	Worker,
-	WorkerSetup,
 	emit,
 	request,
 )
@@ -30,38 +20,7 @@ from DefStream.Worker import __all__ as worker_exports
 from tests._support import (
 	call_with_invalid_input,
 )
-
-
-class Task(
-	Run,
-	parameters={'queue': 'task'},
-	on_error=Reject(),
-):
-	def run(
-		self,
-		a: int,
-		b: int,
-		fail: bool = False,
-	):
-		if fail:
-			raise ValueError('Task failed')
-		return a + b
-
-
-class Declare(WorkerSetup):
-	def __init__(self):
-		self.ready = Event()
-
-	def __call__(
-		self,
-		worker: Worker,
-	) -> None:
-		for task in worker.tasks:
-			declare(
-				task=task,
-				broker=worker.broker,
-			)
-		self.ready.set()
+from tests._support_task_messages import Task
 
 
 class MessageTests(TestCase):
@@ -74,18 +33,6 @@ class MessageTests(TestCase):
 			'send',
 			worker_exports,
 		)
-		for connection in (
-			RabbitConnection,
-			RedisConnection,
-		):
-			self.assertTrue(hasattr(
-				connection,
-				'emit',
-			))
-			self.assertFalse(hasattr(
-				connection,
-				'send',
-			))
 
 	def test_helpers_accept_common_connection_and_check_each_capability(self):
 		for helper in (
@@ -293,15 +240,6 @@ class MessageTests(TestCase):
 					task=task,
 					broker=Mock(),
 				)
-		with self.assertRaisesRegex(
-			NotImplementedError,
-			'RPC',
-		):
-			request(
-				{},
-				task=Task,
-				broker=RedisConnection(RedisConfiguration()),
-			)
 		with self.assertRaises(NotImplementedError):
 			call_with_invalid_input(
 				declare,

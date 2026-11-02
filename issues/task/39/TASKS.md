@@ -25,7 +25,7 @@
 
 ## 다음 단계
 
-버전 조사 결론을 Compose·CI 구성에 반영했다. 실제 브로커 실행 검증은 Docker 엔진이 준비된 환경에서 이어서 수행해야 한다.
+버전 조사 결론은 Compose·CI 구성에 반영했고, 로컬 Docker에서 네 브로커와 16개 브로커 × Python 조합을 검증했다. Actions 실행에서 확인된 브로커별 테스트의 교차 import는 수정했으며, 수정 후 매트릭스 재실행을 기다리고 있다.
 
 ## 검증 작업
 
@@ -39,7 +39,8 @@
 - 저장소 루트의 무시된 `DefStream.egg-info`가 설치된 editable distribution보다 먼저 선택되어 패키징 테스트 4개가 실패하는 원인을 확인했다. 테스트가 저장소 루트 자체의 메타데이터 항목을 제외하고 설치된 distribution을 조회하도록 수정했다.
 - CI가 저장소 밖에서 실행하는 전체 테스트 discovery에도 프로젝트 top-level 경로를 지정하도록 수정했다. 미지정 시 하위 테스트의 `tests.*` import가 깨지는 것을 재현했고, 수정 명령으로 전체 310개 테스트가 import 오류 없이 발견됨을 확인했다.
 - CI와 같은 외부 작업 디렉터리에서 UTF-8 출력 설정과 프로젝트 top-level 경로를 지정해 전체 310개 테스트를 실행했으며, 15개를 건너뛰고 통과했다. RabbitMQ 71개(7개 건너뜀)와 Redis 32개(8개 건너뜀) 테스트도 각각 통과했다.
-- GitHub Actions YAML 파싱과 `git diff --check`를 통과했다. Docker 엔진이 없어 실제 컨테이너 기반 통합 테스트는 실행하지 못했다.
+- 이 단계에서는 GitHub Actions YAML 파싱과 `git diff --check`를 통과했지만 Docker 엔진이 없어 컨테이너 통합 테스트는 실행하지 못했다. 이후 실행한 로컬 브로커 통합 테스트 결과는 [Docker 기반 브로커 × Python 통합 테스트 기록](./tasks/1793628366252.md)에 정리했다.
+- 이후 GitHub Actions 실행 #41459408504에서는 코어 job이 통과하고 브로커 매트릭스 24개 job이 공통 `tests.test_task_messages`를 통한 RabbitMQ·Redis 교차 import로 실패했다. 공통 fixture를 broker-free 모듈로 분리하고 adapter별 API 검증을 각 suite로 옮긴 뒤, 공통 메시지 테스트 8개와 브로커별 import 격리 테스트를 통과시켰다. 수정 후 Actions 재실행은 대기 중이다. 상세 결과는 [브로커별 메시지 테스트 import 격리 검증](./tasks/1793629199998.md)에 기록했다.
 
 ## 단계별 기록
 
@@ -54,6 +55,7 @@
 - [CI 테스트 job 분리 및 매트릭스 검증](./tasks/1793627348502.md)
 - [CI 브로커 job 이름 단순화](./tasks/1793627590185.md)
 - [Docker 기반 브로커 × Python 통합 테스트](./tasks/1793628366252.md)
+- [브로커별 메시지 테스트 import 격리 검증](./tasks/1793629199998.md)
 
 ## Redis 참고 자료
 

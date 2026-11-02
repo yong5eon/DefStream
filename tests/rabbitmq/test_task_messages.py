@@ -14,6 +14,7 @@ from DefStream.Broker import (
 from DefStream.Broker.Implements.RabbitMQ import (
 	Configuration as RabbitConfiguration,
 	Connection as RabbitConnection,
+	Reject,
 	Subscription as RabbitSubscription,
 )
 from DefStream.Worker import (
@@ -26,10 +27,23 @@ from tests._support import (
 	rabbitmq_test_port,
 	require_value,
 )
-from tests.test_task_messages import (
+from tests._support_task_messages import (
 	Declare,
-	Task,
 )
+from tests._support_task_messages import Task as BaseTask
+
+
+class Task(
+	BaseTask,
+	on_error=Reject(),
+):
+	pass
+
+
+class RabbitConnectionApiTests(TestCase):
+	def test_connection_exposes_emit_without_send_alias(self):
+		self.assertTrue(hasattr(RabbitConnection, 'emit'))
+		self.assertFalse(hasattr(RabbitConnection, 'send'))
 
 
 @skipUnless(
