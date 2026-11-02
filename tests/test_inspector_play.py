@@ -1,196 +1,29 @@
-from http.client import HTTPConnection
-from importlib import import_module
 from contextlib import nullcontext
+from importlib import import_module
 from io import BytesIO
-from json import (
-	dumps,
-	loads,
-)
-from os import environ
-from threading import (
-	Event,
-	Thread,
-)
-from typing import Optional
+from json import loads
 from unittest import (
 	TestCase,
 	main,
-	skipUnless,
 )
 from unittest.mock import (
-	Mock,
 	patch,
 )
-from uuid import uuid4
-
 from DefStream.Broker.Errors import RemoteError
-from DefStream.Inspector import Inspector
 from DefStream.Inspector.Extensions import (
 	Play,
 	Specifications,
 )
-from DefStream.Worker import (
-	Run,
-	Specification,
-	ThreadPool,
-	Worker,
-	WorkerSetup,
-)
-from _support import (
-	RejectPolicy,
-	require_value,
+from tests._support_inspector_play import (
+	NamedTask,
+	PlayExtensionSupport,
+	Producer,
+	RPCProducer,
+	TOKEN,
 )
 
-TOKEN = 'test-token-at-least-32-characters!'
 
-
-class Task(
-	Run,
-	parameters={'queue': 'test'},
-	request=Specification(example={
-		'a': 6,
-		'b': 2,
-	}),
-	response=Specification(),
-	on_error=RejectPolicy(),
-):
-	def run(
-		self,
-		a,
-		b,
-	):
-		return a / b
-
-
-class NamedTask(
-	Run,
-	run_name='ETL.OBS.Split',
-	parameters={'queue': 'named-task'},
-):
-	def run(
-		self,
-		a,
-		b,
-	):
-		return a / b
-
-
-class Producer:
-	def __init__(self):
-		self.connected = 0
-		self.closed = 0
-		self.sent = []
-		self.error: Optional[BaseException] = None
-
-	def connect(self):
-		self.connected += 1
-
-	def close(self):
-		self.closed += 1
-
-	def emit(
-		self,
-		body,
-		parameters,
-	):
-		self.sent.append((
-			body,
-			parameters,
-		))
-		if self.error is not None:
-			raise self.error
-		return 'message-id'
-
-
-class RPCProducer(Producer):
-	def request(
-		self,
-		body,
-		parameters,
-		timeout=5,
-	):
-		self.sent.append((
-			body,
-			parameters,
-		))
-		if self.error is not None:
-			raise self.error
-		return body['a'] / body['b']
-
-
-class PlayExtensionTests(TestCase):
-	def setUp(self):
-		self.producers = []
-
-		def factory():
-			producer = RPCProducer()
-			self.producers.append(producer)
-			return producer
-
-		self.extension = Play(
-			'/play',
-			broker=factory,
-			token=TOKEN,
-		)
-		self.broker = Mock()
-		self.worker = Worker(self.broker, ThreadPool(1))
-		self.worker.add(Task)
-		self.worker.running.set()
-		self.inspector = Inspector(
-			port=0,
-			exts=(self.extension,),
-		)
-		self.inspector.start(self.worker)
-		self.addCleanup(self.worker.pool.stop)
-		self.addCleanup(self.inspector.stop)
-
-	def fetch(
-		self,
-		method='GET',
-		payload=None,
-		token: Optional[str] = TOKEN,
-		headers=None,
-	):
-		connection = HTTPConnection(
-			'127.0.0.1',
-			require_value(self.inspector.server).server_port,
-			timeout=5,
-		)
-		request_headers = {
-			'Accept': 'application/json',
-		}
-		if token is not None:
-			request_headers['Authorization'] = 'Bearer ' + token
-		body = None
-		if payload is not None:
-			body = dumps(payload)
-			request_headers['Content-Type'] = 'application/json'
-		if headers:
-			request_headers.update(headers)
-		try:
-			connection.request(
-				method,
-				'/play',
-				body=body,
-				headers=request_headers,
-			)
-			response = connection.getresponse()
-			return response.status, response.read(), dict(response.getheaders())
-		finally:
-			connection.close()
-
-	def payload(
-		self,
-		mode='send',
-	):
-		return {
-			'task': Task.name,
-			'mode': mode,
-			'body': {
-				'a': 6,
-				'b': 2,
-			},
-		}
+class PlayExtensionTests(PlayExtensionSupport, TestCase):
 
 	def test_html_is_public_but_does_not_contain_token_or_metadata(self):
 		status, body, headers = self.fetch(headers={'Accept': 'text/html'})
@@ -778,154 +611,6 @@ class PlayExtensionTests(TestCase):
 			405,
 		)
 
-	def exercise_live(
-		self,
-		factory,
-		rpc,
-	):
-		class Live(
-			Task,
-			parameters={'queue': 'defstream-test-ui-' + uuid4().hex},
-		):
-			pass
-
-		ready = Event()
-		worker_broker = factory()
-
-		class Prepare(WorkerSetup):
-			def __call__(self, worker: Worker) -> None:
-				worker_broker.declare(Live.parameters)
-				ready.set()
-
-		extension = Play(
-			'/play',
-			broker=factory,
-			token=TOKEN,
-		)
-		inspector = Inspector(
-			port=0,
-			exts=(extension,),
-		)
-		worker = Worker(
-			worker_broker,
-			ThreadPool(2),
-			setups=Prepare(),
-			inspector=inspector,
-		)
-		worker.add(Live)
-		failures = []
-
-		def run():
-			try:
-				worker.run()
-			except BaseException as error:
-				failures.append(error)
-				ready.set()
-
-		thread = Thread(target=run)
-		thread.start()
-		producer = factory()
-		try:
-			self.assertTrue(ready.wait(5))
-			self.assertTrue(worker.running.wait(5))
-			self.inspector, previous = inspector, self.inspector
-			try:
-				self.assertEqual(
-					loads(self.fetch()[1])['rpc'],
-					rpc,
-				)
-				payload = self.payload()
-				payload['task'] = Live.name
-				self.assertEqual(
-					self.fetch(
-						'POST',
-						payload,
-					)[0],
-					200,
-				)
-				payload['mode'] = 'request'
-				if rpc:
-					status, body, headers = self.fetch(
-						'POST',
-						payload,
-					)
-					self.assertEqual(
-						(
-							status,
-							loads(body)['result'],
-						),
-						(
-							200,
-							3,
-						),
-					)
-					payload['body']['b'] = 0
-					with self.assertLogs(level='WARNING'):
-						self.assertEqual(
-							self.fetch(
-								'POST',
-								payload,
-							)[0],
-							502,
-						)
-				else:
-					self.assertEqual(
-						self.fetch(
-							'POST',
-							payload,
-						)[0],
-						501,
-					)
-			finally:
-				self.inspector = previous
-		finally:
-			worker.stop()
-			thread.join(10)
-			try:
-				self.assertFalse(thread.is_alive())
-				self.assertEqual(
-					failures,
-					[],
-				)
-				producer.connect()
-				producer.delete_queue(Live.parameters['queue'])
-			finally:
-				producer.close()
-
-	@skipUnless(
-		environ.get('DEFSTREAM_RABBITMQ_TESTS') == '1',
-		'Opt-in local RabbitMQ interactive test integration',
-	)
-	def test_live_rabbitmq_send_rpc_and_remote_error(self):
-		from DefStream.Broker.Implements.RabbitMQ import (
-			Connection,
-			Configuration,
-		)
-
-		self.exercise_live(
-			lambda: Connection(Configuration(
-				host='127.0.0.1',
-				port=5672,
-				username='guest',
-				password='guest',
-			)),
-			True,
-		)
-
-	@skipUnless(
-		environ.get('DEFSTREAM_REDIS_TESTS') == '1',
-		'Opt-in local Redis interactive test integration',
-	)
-	def test_live_redis_send_and_unsupported_rpc(self):
-		from DefStream.Broker.Implements.Redis import (
-			Connection,
-			Configuration,
-		)
-
-		self.exercise_live(
-			lambda: Connection(Configuration()),
-			False,
-		)
 
 
 if __name__ == '__main__':

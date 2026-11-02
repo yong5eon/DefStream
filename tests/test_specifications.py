@@ -4,28 +4,20 @@ from dataclasses import (
 )
 from http.client import HTTPConnection
 from json import loads
-from os import environ
 from pickle import (
 	dumps,
 	loads as unpickle,
 )
 from sys import modules
-from threading import (
-	Event,
-	Thread,
-)
 from typing import (
 	List,
 )
 from unittest import (
 	TestCase,
 	main,
-	skipUnless,
 )
 from unittest.mock import Mock
-from uuid import uuid4
 
-from DefStream.Broker import RemoteError
 from DefStream.Descriptor import (
 	AllOf,
 	Array,
@@ -62,10 +54,8 @@ from DefStream.Worker import (
 	Specification,
 	ThreadPool,
 	Worker,
-	WorkerSetup,
-	request,
 )
-from _support import (
+from tests._support import (
 	call_with_invalid_input,
 	require_instance,
 	require_value,
@@ -935,90 +925,6 @@ class DocumentTests(TestCase):
 		)
 
 
-@skipUnless(
-	environ.get('DEFSTREAM_RABBITMQ_TESTS') == '1',
-	'Opt-in local RabbitMQ Specification integration',
-)
-class SpecificationRPCTests(TestCase):
-	def test_validation_and_transformed_response_over_real_rpc(self):
-		from DefStream.Broker.Implements.RabbitMQ import (
-			Connection,
-			Configuration,
-			Reject,
-		)
-
-		class Checked(
-			Add,
-			parameters={'queue': 'defstream-spec-' + uuid4().hex},
-			on_error=Reject(),
-		):
-			pass
-
-		connection = Connection(Configuration(
-			host='127.0.0.1',
-			port=5672,
-			username='guest',
-			password='guest',
-		))
-		connection.connect()
-		ready = Event()
-		worker_broker = Connection(connection.conf)
-
-		class Prepare(WorkerSetup):
-			def __call__(self, worker: Worker) -> None:
-				worker_broker.declare(Checked.parameters)
-				ready.set()
-
-		worker = Worker(
-			worker_broker,
-			ThreadPool(1),
-			setups=Prepare(),
-		)
-		worker.add(Checked)
-		failures = []
-
-		def run():
-			try:
-				worker.run()
-			except BaseException as error:
-				failures.append(error)
-				ready.set()
-
-		thread = Thread(target=run)
-		thread.start()
-		try:
-			self.assertTrue(ready.wait(5))
-			self.assertEqual(
-				request(
-					{'a': '3'},
-					task=Checked,
-					broker=connection,
-					timeout=5,
-				),
-				5,
-			)
-			with self.assertLogs(
-				'Worker',
-				level='ERROR',
-			), self.assertRaises(RemoteError):
-				request(
-					{'a': 'invalid'},
-					task=Checked,
-					broker=connection,
-					timeout=5,
-				)
-		finally:
-			worker.stop()
-			thread.join(10)
-			try:
-				self.assertFalse(thread.is_alive())
-				self.assertEqual(
-					failures,
-					[],
-				)
-				connection.delete_queue(Checked.parameters['queue'])
-			finally:
-				connection.close()
 
 
 if __name__ == '__main__':

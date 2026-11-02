@@ -25,7 +25,10 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
-from _support import require_value
+from tests._support import (
+	redis_test_port,
+	require_value,
+)
 
 
 class RedisRunner(
@@ -55,12 +58,12 @@ class RejectRedisRunner(
 
 
 @skipUnless(
-	environ.get('DEFSTREAM_REDIS_TESTS') == '1',
+	environ.get('REDIS_TESTS') == '1',
 	'Opt-in local Redis integration',
 )
 class RedisIntegrationTests(TestCase):
 	def setUp(self):
-		self.broker = Connection(Configuration())
+		self.broker = Connection(Configuration(port=redis_test_port()))
 		self.broker.connect()
 		self.addCleanup(self.broker.close)
 		self.names = []
@@ -268,7 +271,7 @@ class RedisIntegrationTests(TestCase):
 				RedisRunner.parameters = queue.subscription
 				RejectRedisRunner.parameters = rejected.subscription
 				worker = Worker(
-					Connection(Configuration()),
+					Connection(Configuration(port=redis_test_port())),
 					pool_type(2),
 				)
 				worker.add(RedisRunner)

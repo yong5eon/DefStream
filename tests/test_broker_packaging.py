@@ -1,8 +1,7 @@
 from importlib.metadata import (
 	Distribution,
 	PackageNotFoundError,
-	distribution,
-	requires,
+	distributions,
 )
 from json import (
 	dumps,
@@ -17,7 +16,30 @@ from unittest import (
 	main,
 )
 
-from _support import require_value
+from tests._support import require_value
+
+PROJECT = Path(__file__).resolve().parents[1]
+
+
+def installed_distribution(
+	name: str,
+) -> Distribution:
+	expected: str = name.lower().replace(
+		'_',
+		'-',
+	)
+	for package in distributions():
+		actual: str = package.metadata.get(
+			'Name',
+			'',
+		).lower().replace(
+			'_',
+			'-',
+		)
+		location: Path = Path(str(package.locate_file(''))).resolve()
+		if actual == expected and location != PROJECT:
+			return package
+	raise PackageNotFoundError(name)
 
 
 def distribution_files(package: Distribution) -> set[str]:
@@ -36,7 +58,7 @@ def distribution_files(package: Distribution) -> set[str]:
 
 class BrokerPackagingTests(TestCase):
 	def test_distribution_contains_play_extension_and_template(self) -> None:
-		package = distribution('DefStream')
+		package = installed_distribution('DefStream')
 		files: set[str] = distribution_files(package)
 		for name in (
 			'Play.py',
@@ -57,7 +79,7 @@ class BrokerPackagingTests(TestCase):
 		return
 
 	def test_brokers_are_owned_by_the_selected_distribution(self) -> None:
-		package = distribution('DefStream')
+		package = installed_distribution('DefStream')
 		files: set[str] = distribution_files(package)
 		selection = package.read_text('editable-selection.json')
 		for broker in (
@@ -66,12 +88,12 @@ class BrokerPackagingTests(TestCase):
 		):
 			with self.subTest(broker=broker):
 				owner_files: set[str] = (
-					distribution_files(distribution('DefStream-' + broker))
+					distribution_files(installed_distribution('DefStream-' + broker))
 					if selection is None else files
 				)
 				if selection is not None:
 					with self.assertRaises(PackageNotFoundError):
-						distribution('DefStream-' + broker)
+						installed_distribution('DefStream-' + broker)
 				for module in (
 					'__init__',
 					'Configuration',
@@ -94,8 +116,9 @@ class BrokerPackagingTests(TestCase):
 		return
 
 	def test_dependencies_match_the_distribution_mode(self) -> None:
-		dependencies = require_value(requires('DefStream'))
-		selection = distribution('DefStream').read_text('editable-selection.json')
+		package = installed_distribution('DefStream')
+		dependencies = require_value(package.requires)
+		selection = package.read_text('editable-selection.json')
 		if selection is not None:
 			selected: list[str] = loads(selection)
 			clients: dict[str, str] = {
@@ -114,7 +137,7 @@ class BrokerPackagingTests(TestCase):
 			len(dependencies),
 			2,
 		)
-		version = distribution('DefStream').version
+		version = package.version
 		for broker in (
 			'RabbitMQ',
 			'Redis',
@@ -126,15 +149,15 @@ class BrokerPackagingTests(TestCase):
 			))
 			self.assertIn(
 				f'DefStream=={version}',
-				require_value(requires('DefStream-' + broker)),
+				require_value(installed_distribution('DefStream-' + broker).requires),
 			)
 		self.assertIn(
 			'pika>=1.3.2',
-			require_value(requires('DefStream-RabbitMQ')),
+			require_value(installed_distribution('DefStream-RabbitMQ').requires),
 		)
 		self.assertIn(
 			'redis>=5.1.1',
-			require_value(requires('DefStream-Redis')),
+			require_value(installed_distribution('DefStream-Redis').requires),
 		)
 		return
 

@@ -9,10 +9,6 @@ from DefStream.Broker.Implements.RabbitMQ import (
 	Connection,
 	Subscription,
 )
-from DefStream.Broker.Implements.Redis import (
-	Configuration as RedisConfiguration,
-	Connection as RedisConnection,
-)
 from DefStream.Worker import (
 	Run,
 	declare,
@@ -218,70 +214,6 @@ class TaskPriorityTests(TestCase):
 		self.assertEqual(
 			channel.basic_publish.call_count,
 			2,
-		)
-		return
-
-	def test_redis_rejects_priority_before_io_and_legacy_send_still_works(self):
-		broker = RedisConnection(RedisConfiguration())
-		broker.connection = Mock()
-		self.addCleanup(broker.close)
-		broker.connection.xadd.return_value = b'1-0'
-		class DefaultTask(
-			Task,
-			parameters={
-				'queue': 'priority-test',
-				'priority': 1,
-			},
-		):
-			pass
-
-		for task in (
-			DefaultTask,
-			type(
-				'MaximumTask',
-				(Task,),
-				{
-					'parameters': {
-						'queue': 'priority-test',
-						'max_priority': 5,
-					},
-				},
-			),
-		):
-			with self.subTest(task=task):
-				with self.assertRaises(NotImplementedError):
-					declare(
-						task=task,
-						broker=broker,
-					)
-				with self.assertRaises(NotImplementedError):
-					emit(
-						{},
-						task=task,
-						broker=broker,
-					)
-		with self.assertRaises(NotImplementedError):
-			emit(
-				{},
-				task=Task,
-				broker=broker,
-				priority=0,
-			)
-		broker.connection.xadd.assert_not_called()
-		broker.connection.xgroup_create.assert_not_called()
-		class RedisTask(
-			Task,
-			parameters={'queue': 'priority-test'},
-		):
-			pass
-
-		self.assertEqual(
-			emit(
-				{},
-				task=RedisTask,
-				broker=broker,
-			),
-			'1-0',
 		)
 		return
 

@@ -48,12 +48,12 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
-from _support import require_value
+from tests._support import require_value
 
 
 NAMESPACE = 'Broker.RabbitMQ'
 PACKAGE = 'DefStream.Broker.Implements.RabbitMQ'
-PROJECT = Path(__file__).resolve().parents[1]
+PROJECT = Path(__file__).resolve().parents[2]
 SECRET = '비밀본문_인증정보_헤더'
 
 

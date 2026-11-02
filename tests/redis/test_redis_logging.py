@@ -31,7 +31,7 @@ from DefStream.Broker.Implements.Redis.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
-from _support import require_value
+from tests._support import require_value
 
 
 class RedisLoggingTests(TestCase):
@@ -326,7 +326,7 @@ class RedisLoggingTests(TestCase):
 		self.assertNotIn('Traceback', output)
 
 	def test_sample_filters_allow_only_named_hierarchies(self):
-		sample_dir = Path(__file__).resolve().parent.parent / 'samples' / 'Broker' / 'Redis'
+		sample_dir = Path(__file__).resolve().parents[2] / 'samples' / 'Broker' / 'Redis'
 		root_logger = getLogger()
 		root_level = root_logger.level
 		root_handlers = tuple(root_logger.handlers)

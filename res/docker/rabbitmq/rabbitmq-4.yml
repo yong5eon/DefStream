@@ -1,0 +1,22 @@
+name: rabbitmq-4
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.4-management
+    container_name: RabbitMQ-4
+    ports:
+      - "127.0.0.1:55640:5672"
+      - "127.0.0.1:55641:15672"
+      - "127.0.0.1:55642:15692"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit loopback_users []"
+    volumes:
+      - ./enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s

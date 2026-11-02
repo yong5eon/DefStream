@@ -28,6 +28,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
+from tests._support import rabbitmq_test_port
 
 
 class IntegrationRunner(Run, parameters=Subscription(queue='integration')):
@@ -48,13 +49,14 @@ class RejectIntegrationRunner(
 	pass
 
 
-@skipUnless(os.environ.get('DEFSTREAM_RABBITMQ_TESTS') == '1', 'Opt-in local RabbitMQ integration')
+@skipUnless(os.environ.get('RABBITMQ_TESTS') == '1', 'Opt-in local RabbitMQ integration')
 class RabbitMQIntegrationTests(TestCase):
 	def test_real_consumption_requeue_reject_and_shutdown(self):
 		for pool_cls in (ThreadPool, ProcessPool):
 			with self.subTest(pool=pool_cls), TemporaryDirectory() as directory:
 				connection = pika.BlockingConnection(pika.ConnectionParameters(
 					host='127.0.0.1',
+					port=rabbitmq_test_port(),
 					credentials=pika.PlainCredentials('guest', 'guest'),
 				))
 				channel = connection.channel()
@@ -68,6 +70,7 @@ class RabbitMQIntegrationTests(TestCase):
 					for name in (queue, dead, rejected):
 						channel.queue_declare(
 							name,
+							durable=True,
 							arguments={
 								'x-expires': 60000,
 								**({
@@ -82,7 +85,12 @@ class RabbitMQIntegrationTests(TestCase):
 					IntegrationRunner.parameters = Subscription(queue)
 					RejectIntegrationRunner.parameters = Subscription(rejected)
 					active_worker = Worker(
-						Connection(Configuration('127.0.0.1', 5672, 'guest', 'guest')),
+						Connection(Configuration(
+							'127.0.0.1',
+							rabbitmq_test_port(),
+							'guest',
+							'guest',
+						)),
 						pool_cls(2),
 					)
 					worker = active_worker

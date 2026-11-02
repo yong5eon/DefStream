@@ -18,7 +18,7 @@ from DefStream.Worker import (
 	Run,
 	declare,
 )
-from _support import require_instance
+from tests._support import require_instance
 
 
 class TimeoutTests(TestCase):

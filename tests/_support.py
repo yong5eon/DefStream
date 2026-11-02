@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from os import environ
 from typing import (
 	Optional,
 	TypeVar,
@@ -10,6 +11,14 @@ from DefStream.Broker.Event import (
 )
 
 T = TypeVar('T')
+
+
+def rabbitmq_test_port() -> int:
+	return int(environ.get('RABBITMQ_PORT', '5672'))
+
+
+def redis_test_port() -> int:
+	return int(environ.get('REDIS_PORT', '6379'))
 
 
 def call_with_invalid_input(
