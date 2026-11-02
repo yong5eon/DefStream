@@ -27,7 +27,10 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
-from _support import require_value
+from tests._support import (
+	rabbitmq_test_port,
+	require_value,
+)
 
 
 class RpcRun(Run):
@@ -58,7 +61,7 @@ class RejectRun(
 
 
 @skipUnless(
-	environ.get('DEFSTREAM_RABBITMQ_TESTS') == '1',
+	environ.get('RABBITMQ_TESTS') == '1',
 	'Opt-in local RabbitMQ integration',
 )
 class RpcIntegrationTests(TestCase):
@@ -72,7 +75,7 @@ class RpcIntegrationTests(TestCase):
 			with self.subTest(pool=pool_class), TemporaryDirectory() as directory:
 				client = Connection(Configuration(
 					host='127.0.0.1',
-					port=5672,
+					port=rabbitmq_test_port(),
 					username='guest',
 					password='guest',
 				))
@@ -101,6 +104,7 @@ class RpcIntegrationTests(TestCase):
 					for name in names:
 						channel.queue_declare(
 							name,
+							durable=True,
 							arguments={'x-expires': 60000},
 						)
 					client.create_exchange(

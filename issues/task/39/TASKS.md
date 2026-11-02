@@ -25,7 +25,21 @@
 
 ## 다음 단계
 
-RabbitMQ와 Redis의 범위 결정이 끝났습니다. 확정한 버전 범위와 플러그인 요구사항을 `REQUIREMENTS.md`와 `PLAN.md`에 정리한 뒤 Docker 리소스와 CI 매트릭스에 반영합니다.
+버전 조사 결론을 Compose·CI 구성에 반영했다. 실제 브로커 실행 검증은 Docker 엔진이 준비된 환경에서 이어서 수행해야 한다.
+
+## 검증 작업
+
+- Compose 설정, CI YAML, Python 문법 및 이전 테스트 실행 결과는 [Compose 구성 검증 기록](./tasks/1793623390265.md)에 정리했다.
+- 코어·브로커별 테스트 재구성과 최신 테스트 결과는 [테스트 분리·검증 기록](./tasks/1793625269565.md)에 정리했다.
+
+## 테스트 분리·검증 결과
+
+- 코어 테스트는 `tests/` 루트에 유지하고 RabbitMQ·Redis 전용 테스트를 각각 `tests/rabbitmq/`, `tests/redis/`로 분리했다. `tests/__init__.py`와 `tests.*` import 경로를 사용하여 전체 discovery에서 외부 `redis` 라이브러리와 이름이 충돌하지 않게 했다.
+- RabbitMQ 전용 discovery는 71개 테스트 중 7개, Redis 전용 discovery는 32개 중 8개를 브로커 미설정으로 건너뛰고 통과했다. 변경된 코어 테스트와 명세·메시지 테스트도 통과했다.
+- 저장소 루트의 무시된 `DefStream.egg-info`가 설치된 editable distribution보다 먼저 선택되어 패키징 테스트 4개가 실패하는 원인을 확인했다. 테스트가 저장소 루트 자체의 메타데이터 항목을 제외하고 설치된 distribution을 조회하도록 수정했다.
+- CI가 저장소 밖에서 실행하는 전체 테스트 discovery에도 프로젝트 top-level 경로를 지정하도록 수정했다. 미지정 시 하위 테스트의 `tests.*` import가 깨지는 것을 재현했고, 수정 명령으로 전체 310개 테스트가 import 오류 없이 발견됨을 확인했다.
+- CI와 같은 외부 작업 디렉터리에서 UTF-8 출력 설정과 프로젝트 top-level 경로를 지정해 전체 310개 테스트를 실행했으며, 15개를 건너뛰고 통과했다. RabbitMQ 71개(7개 건너뜀)와 Redis 32개(8개 건너뜀) 테스트도 각각 통과했다.
+- GitHub Actions YAML 파싱과 `git diff --check`를 통과했다. Docker 엔진이 없어 실제 컨테이너 기반 통합 테스트는 실행하지 못했다.
 
 ## 단계별 기록
 
@@ -33,6 +47,13 @@ RabbitMQ와 Redis의 범위 결정이 끝났습니다. 확정한 버전 범위�
 - [RabbitMQ 3.x·4.x 지원 범위 결정](./tasks/1793621161604.md)
 - [Redis Streams 최소 지원 버전 조사](./tasks/1793621502459.md)
 - [Redis 최소 버전 및 CI 검증 대상 결정](./tasks/1793621903677.md)
+- [Docker 구성 및 기존 테스트 검증](./tasks/1793623390265.md)
+- [브로커별 테스트 분리와 검증](./tasks/1793625269565.md)
+- [패키징 테스트 수정 및 전체 테스트 검증](./tasks/1793626388737.md)
+- [브로커 테스트 환경 변수 이름 변경 검증](./tasks/1793626820522.md)
+- [CI 테스트 job 분리 및 매트릭스 검증](./tasks/1793627348502.md)
+- [CI 브로커 job 이름 단순화](./tasks/1793627590185.md)
+- [Docker 기반 브로커 × Python 통합 테스트](./tasks/1793628366252.md)
 
 ## Redis 참고 자료
 

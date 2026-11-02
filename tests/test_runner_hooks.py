@@ -19,7 +19,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
-from test_worker import FakeConsumer
+from tests.test_worker import FakeConsumer
 
 
 def record(parameters, name):

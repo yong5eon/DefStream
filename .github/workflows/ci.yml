@@ -182,31 +182,6 @@ jobs:
             os: ubuntu-24.04
     env:
       PROJECT: DefStream
-      DEFSTREAM_RABBITMQ_TESTS: '1'
-      DEFSTREAM_REDIS_TESTS: '1'
-    services:
-      rabbitmq:
-        image: rabbitmq:4.1
-        ports:
-          - 5672:5672
-        env:
-          RABBITMQ_DEFAULT_USER: guest
-          RABBITMQ_DEFAULT_PASS: guest
-          RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: '-rabbit loopback_users []'
-        options: >-
-          --health-cmd "rabbitmq-diagnostics -q ping"
-          --health-interval 10s
-          --health-timeout 10s
-          --health-retries 12
-      redis:
-        image: redis:7.4
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     steps:
       - name: Check out core
         uses: actions/checkout@v7
@@ -310,11 +285,10 @@ jobs:
           "$RUNNER_TEMP/installed/bin/python" -m pip install dist/*.whl
           "$RUNNER_TEMP/installed/bin/python" -m pip check
 
-      - name: Test installed package
+      - name: Test core installed package
         run: |
           cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/installed/bin/python" -m unittest discover \
-            -s "$GITHUB_WORKSPACE/tests" -p 'test_*.py' -v
+          "$RUNNER_TEMP/installed/bin/python" "$GITHUB_WORKSPACE/.github/scripts/run_core_tests.py"
 
       - name: Set up Node for core UI tests
         uses: actions/setup-node@v7
@@ -333,10 +307,124 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  test-rabbitmq:
+    name: Test RabbitMQ ${{ matrix.broker.version }} / Python ${{ matrix.python }}
+    needs: changes
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        broker:
+          - version: '3.13'
+            compose_file: res/docker/rabbitmq/rabbitmq-3.yml
+            port: '55630'
+          - version: '4.4'
+            compose_file: res/docker/rabbitmq/rabbitmq-4.yml
+            port: '55640'
+        include:
+          - python: '3.9'
+            os: ubuntu-24.04
+    env:
+      RABBITMQ_TESTS: '1'
+      RABBITMQ_PORT: ${{ matrix.broker.port }}
+      BROKER_COMPOSE_FILE: ${{ matrix.broker.compose_file }}
+    steps:
+      - name: Check out core
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install source and RabbitMQ client
+        run: |
+          python -m pip install --upgrade "pip>=23" "setuptools>=77" "setuptools-scm>=8,<10" wheel
+          python -m pip install --editable . --config-settings EXTRAS=RabbitMQ
+
+      - name: Start RabbitMQ ${{ matrix.broker.version }}
+        run: docker compose -f "$BROKER_COMPOSE_FILE" up -d --wait
+
+      - name: Verify RabbitMQ plugins
+        run: |
+          enabled_plugins="$(
+            docker compose -f "$BROKER_COMPOSE_FILE" exec -T rabbitmq rabbitmq-plugins list --enabled
+          )"
+          for plugin in rabbitmq_management rabbitmq_prometheus rabbitmq_shovel rabbitmq_shovel_management; do
+            if [[ "$enabled_plugins" != *"$plugin"* ]]; then
+              echo "RabbitMQ plugin is not enabled: $plugin" >&2
+              exit 1
+            fi
+          done
+
+      - name: Test RabbitMQ broker and worker compatibility
+        run: python -m unittest discover -s tests/rabbitmq -t . -p 'test_*.py' -v
+
+      - name: Stop broker containers
+        if: always()
+        run: docker compose -f "$BROKER_COMPOSE_FILE" down --remove-orphans
+
+  test-redis:
+    name: Test Redis ${{ matrix.broker.version }} / Python ${{ matrix.python }}
+    needs: changes
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        broker:
+          - version: '6.2'
+            compose_file: res/docker/redis/redis-6.yml
+            port: '56376'
+          - version: '7.4'
+            compose_file: res/docker/redis/redis-7.yml
+            port: '56377'
+        include:
+          - python: '3.9'
+            os: ubuntu-24.04
+    env:
+      REDIS_TESTS: '1'
+      REDIS_PORT: ${{ matrix.broker.port }}
+      BROKER_COMPOSE_FILE: ${{ matrix.broker.compose_file }}
+    steps:
+      - name: Check out core
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install source and Redis client
+        run: |
+          python -m pip install --upgrade "pip>=23" "setuptools>=77" "setuptools-scm>=8,<10" wheel
+          python -m pip install --editable . --config-settings EXTRAS=Redis
+
+      - name: Start Redis ${{ matrix.broker.version }}
+        run: docker compose -f "$BROKER_COMPOSE_FILE" up -d --wait
+
+      - name: Test Redis broker and worker compatibility
+        run: python -m unittest discover -s tests/redis -t . -p 'test_*.py' -v
+
+      - name: Stop broker container
+        if: always()
+        run: docker compose -f "$BROKER_COMPOSE_FILE" down --remove-orphans
+
   publish:
     name: Publish PyPI
     if: github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.changes.outputs.release == 'true'
-    needs: [changes, test]
+    needs: [changes, test, test-rabbitmq, test-redis]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: pypi

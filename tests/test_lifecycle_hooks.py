@@ -26,7 +26,7 @@ from DefStream.Worker import (
 	WorkerCleanup,
 	WorkerSetup,
 )
-from _support import (
+from tests._support import (
 	call_with_invalid_input,
 	require_value,
 )

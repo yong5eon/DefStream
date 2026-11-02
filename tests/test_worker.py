@@ -26,7 +26,7 @@ from DefStream.Worker import (
 	ThreadPool,
 	Worker,
 )
-from _support import call_with_invalid_input
+from tests._support import call_with_invalid_input
 
 
 class FileRunner(Run, parameters={'queue': 'file'}):

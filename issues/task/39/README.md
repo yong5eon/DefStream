@@ -9,7 +9,7 @@
 | 원본 이슈 | [#39](https://github.com/yong5eon/DefStream/issues/39) |
 | 상태 | Open |
 | 유형·레이블 | 작업 (`task`, 원본 이슈에 적용됨) |
-| 로컬 진행 상태 | RabbitMQ `3.13.x`·`4.4.x`, Redis `6.2` 이상 결정 |
+| 로컬 진행 상태 | 네 브로커 버전의 컨테이너·health check·RabbitMQ 플러그인 확인; 설치된 Python 3.9·3.10·3.12·3.14에서 브로커 테스트 16개 조합 통과; Python 3.11·3.13의 실제 조합은 CI 검증 대기 |
 | 작업 브랜치 | `task/39` |
 | 분기 기준 | `master` |
 | 병합 대상 브랜치 | 미지정 |
@@ -47,9 +47,35 @@ DefStream의 RabbitMQ와 Redis 지원 범위에 맞는 Docker 설정 리소스�
   - `rabbitmq_shovel_management`
 - RabbitMQ는 각 메이저의 최신 마이너 계열인 `3.13.x`와 `4.4.x`를 지원 대상으로 조사·검증합니다. `3.13.x`는 RabbitMQ 자체의 커뮤니티 지원이 종료된 계열이므로, 이는 DefStream이 별도로 유지할 호환성 범위입니다.
 - Redis Streams는 Redis 5.0에서 도입되었지만, DefStream은 기본 소비 복구에 Redis 6.2에서 도입된 `XAUTOCLAIM`을 사용하므로 지원 하한은 `6.2`입니다. Redis CI는 최소 버전인 `6.2`와 현재 CI 검증 버전인 `7.4`를 대상으로 합니다.
+- Compose 파일은 `res/docker/rabbitmq/`와 `res/docker/redis/`에 두고, 컨테이너 이름은 각각 `RabbitMQ-3`, `RabbitMQ-4`, `Redis-6`, `Redis-7`로 지정합니다.
+
+## 현재 진행 상태
+
+- 네 Compose 파일, RabbitMQ 플러그인 설정, 통합 테스트 포트 연결과 CI 검증 job을 추가했습니다.
+- 코어 테스트는 `tests/`, RabbitMQ 전용 테스트는 `tests/rabbitmq/`, Redis 전용 테스트는 `tests/redis/`로 분리하고 전체 discovery가 하위 테스트를 포함하도록 구성했습니다.
+- CI가 저장소 외부에서 테스트를 실행할 때도 동일하게 탐색하도록 top-level 경로를 지정했습니다.
+- 저장소 루트의 로컬 egg-info가 설치된 distribution 메타데이터를 가리는 문제를 패키징 테스트에서 해결했습니다. CI와 같은 외부 작업 디렉터리 기준 전체 310개 테스트가 통과했고 15개는 건너뛰었습니다.
+- 로컬 Docker 엔진에 연결할 수 없어 이미지 기동, health check, 플러그인 활성화 및 실제 브로커 통합 테스트는 확인하지 못했습니다.
 
 ## 작업 기록
 
+- [요구사항 명세서](./REQUIREMENTS.md)
+- [작업 계획서](./PLAN.md)
+- [RabbitMQ 로컬 테스트 환경](../../../res/docker/rabbitmq/README.md)
+- [Redis 로컬 테스트 환경](../../../res/docker/redis/README.md)
+- [구현 종합 기록](./IMPLEMENTS.md)
+- [고객용 변경 로그](./CHANGELOG.md)
+- [최신 테스트 수정·검증 작업 기록](./tasks/1793626388737.md)
+- [최신 패키징 테스트 수정 구현 기록](./implements/1793626388737.md)
+- [브로커 환경 변수 이름 변경 작업 기록](./tasks/1793626820522.md)
+- [브로커 테스트 환경 변수 이름 변경 구현 기록](./implements/1793626820522.md)
+- [최신 CI 매트릭스 분리 작업 기록](./tasks/1793627348502.md)
+- [CI 테스트 job 분리 구현 기록](./implements/1793627348502.md)
+- [CI 브로커 job 이름 단순화 기록](./tasks/1793627590185.md)
+- [Docker 기반 브로커 × Python 통합 테스트 기록](./tasks/1793628366252.md)
+- [RabbitMQ 4 테스트 큐 호환성 수정 기록](./implements/1793628366252.md)
+- [테스트 분리·검증 작업 기록](./tasks/1793625269565.md)
+- [테스트 분리 구현 기록](./implements/1793625464717.md)
 - RabbitMQ 지원 버전 조사: [조사 결과](./TASKS.md), [단계별 기록](./tasks/1793620359610.md), [버전 범위 결정](./tasks/1793621161604.md)
 - Redis Streams 최소 버전 조사: [조사 결과](./TASKS.md), [단계별 기록](./tasks/1793621502459.md)
 - Redis 최소 버전 및 CI 검증 대상 결정: [단계별 기록](./tasks/1793621903677.md)

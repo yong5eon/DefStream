@@ -35,7 +35,7 @@ from DefStream.Broker.Implements.RabbitMQ.Serializer import (
 	JavaScriptObjectNotationDecoder,
 	JavaScriptObjectNotationEncoder,
 )
-from _support import call_with_invalid_input
+from tests._support import call_with_invalid_input
 
 
 class RpcTests(TestCase):

@@ -1,6 +1,4 @@
-from http.client import HTTPConnection
 from json import loads
-from os import environ
 from queue import (
 	Empty,
 	Queue,
@@ -14,14 +12,9 @@ from time import (
 	monotonic,
 	sleep,
 )
-from typing import (
-	Callable,
-	Protocol,
-)
 from unittest import (
 	TestCase,
 	main,
-	skipUnless,
 )
 from unittest.mock import Mock
 from uuid import uuid4
@@ -37,13 +30,16 @@ from DefStream.Inspector.Extensions import (
 )
 from DefStream.Worker import (
 	PoolFull,
-	ProcessPool,
 	Run,
 	ThreadPool,
 	Worker,
 	WorkerSetup,
 )
-from _support import (
+from tests._support_inspector import (
+	Divide,
+	InspectorIntegrationSupport,
+)
+from tests._support import (
 	RejectPolicy,
 	require_instance,
 	require_value,
@@ -60,39 +56,6 @@ class Add(
 		b: int,
 	):
 		return a + b
-
-
-class Divide(
-	Run,
-	parameters={'queue': 'divide'},
-	on_error=RejectPolicy(),
-):
-	def run(
-		self,
-		a: int,
-		b: int,
-	):
-		return a / b
-
-
-class LiveConnection(Protocol):
-	def connect(self) -> None: ...
-
-	def close(self) -> None: ...
-
-	def declare(self, parameters: object) -> None: ...
-
-	def emit(
-		self,
-		body: object,
-		parameters: object,
-	) -> object: ...
-
-	def delete_queue(
-		self,
-		name: str,
-		/,
-	) -> object: ...
 
 
 class Consumer:
@@ -144,7 +107,7 @@ class Consumer:
 		event.reject()
 
 
-class InspectorTests(TestCase):
+class InspectorTests(InspectorIntegrationSupport, TestCase):
 	def test_unregistered_monitoring_has_no_state(self):
 		inspector = Inspector(port=0)
 		worker = Worker(
@@ -273,56 +236,6 @@ class InspectorTests(TestCase):
 		worker.add(Add)
 		worker.add(Divide)
 		return worker, consumer, inspector
-
-	def launch(
-		self,
-		worker,
-	):
-		failures = []
-
-		def run():
-			try:
-				worker.run()
-			except BaseException as error:
-				failures.append(error)
-
-		thread = Thread(target=run)
-		thread.start()
-
-		def cleanup():
-			if thread.is_alive():
-				worker.stop()
-				thread.join(10)
-			self.assertFalse(thread.is_alive())
-			self.assertEqual(
-				failures,
-				[],
-			)
-
-		self.addCleanup(cleanup)
-		return thread
-
-	def fetch(
-		self,
-		inspector,
-		path,
-		method='GET',
-	):
-		server = require_value(inspector.server)
-		connection = HTTPConnection(
-			'127.0.0.1',
-			server.server_port,
-			timeout=3,
-		)
-		try:
-			connection.request(
-				method,
-				path,
-			)
-			response = connection.getresponse()
-			return response.status, response.read(), dict(response.getheaders())
-		finally:
-			connection.close()
 
 	def test_lifecycle_and_consumer_heartbeat_over_http(self):
 		preparing = Event()
@@ -774,146 +687,6 @@ class InspectorTests(TestCase):
 			)[0],
 			200,
 		)
-
-	def exercise_live_broker(
-		self,
-		connection: Callable[[], LiveConnection],
-	):
-		producer = connection()
-		producer.connect()
-		worker_broker = connection()
-		name = 'defstream-inspector-' + uuid4().hex
-		original = Divide.parameters
-		Divide.parameters = {'queue': name}
-		inspector = Inspector(
-			port=0,
-			exts=(
-				Ping('/ping'),
-				Metrics('/stats'),
-			),
-		)
-
-		class Prepare(WorkerSetup):
-			def __call__(self, worker: Worker) -> None:
-				worker_broker.declare(Divide.parameters)
-
-		worker = Worker(
-			worker_broker,
-			ProcessPool(1),
-			setups=Prepare(),
-			inspector=inspector,
-		)
-		worker.add(Divide)
-		thread = self.launch(worker)
-		try:
-			deadline = monotonic() + 10
-			while not worker.running.wait(0.01):
-				self.assertFalse(worker.finished.is_set())
-				self.assertLess(
-					monotonic(),
-					deadline,
-				)
-			self.assertEqual(
-				self.fetch(
-					inspector,
-					'/ping',
-				)[0],
-				200,
-			)
-			task = Divide.name
-			with self.assertLogs(
-				'Worker',
-				level='ERROR',
-			):
-				for divisor in (
-					2,
-					0,
-				):
-					producer.emit(
-						{
-							'a': 10,
-							'b': divisor,
-						},
-						Divide.parameters,
-					)
-				deadline = monotonic() + 15
-				metrics = require_instance(inspector.exts['/stats'], Metrics)
-				while True:
-					with metrics.lock:
-						stats = metrics.tasks[task]
-						done = stats.success == 1 and stats.failure == 1 and stats.active == 0
-					if done:
-						break
-					self.assertLess(
-						monotonic(),
-						deadline,
-					)
-					sleep(0.01)
-				settled = Event()
-				require_value(worker.consumer).call(settled.set)
-				self.assertTrue(settled.wait(5))
-			self.assertEqual(
-				self.fetch(
-					inspector,
-					'/ping',
-				)[0],
-				200,
-			)
-			status, body, headers = self.fetch(
-				inspector,
-				'/stats',
-			)
-			self.assertEqual(
-				status,
-				200,
-			)
-			self.assertIn(
-				b'outcome="success"} 1',
-				body,
-			)
-			self.assertIn(
-				b'outcome="failure"} 1',
-				body,
-			)
-		finally:
-			worker.stop()
-			thread.join(10)
-			try:
-				self.assertFalse(thread.is_alive())
-				producer.delete_queue(name)
-			finally:
-				producer.close()
-				Divide.parameters = original
-
-	@skipUnless(
-		environ.get('DEFSTREAM_REDIS_TESTS') == '1',
-		'Opt-in local Redis Inspector integration',
-	)
-	def test_live_redis_process_pool_health_and_metrics(self):
-		from DefStream.Broker.Implements.Redis import (
-			Connection,
-			Configuration,
-		)
-
-		self.exercise_live_broker(lambda: Connection(Configuration()))
-
-	@skipUnless(
-		environ.get('DEFSTREAM_RABBITMQ_TESTS') == '1',
-		'Opt-in local RabbitMQ Inspector integration',
-	)
-	def test_live_rabbitmq_process_pool_health_and_metrics(self):
-		from DefStream.Broker.Implements.RabbitMQ import (
-			Connection,
-			Configuration,
-		)
-
-		self.exercise_live_broker(lambda: Connection(Configuration(
-			host='127.0.0.1',
-			port=5672,
-			username='guest',
-			password='guest',
-		)))
-
 
 if __name__ == '__main__':
 	main()

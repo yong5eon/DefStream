@@ -28,13 +28,14 @@ from DefStream.Worker import (
 	declare,
 	emit,
 )
+from tests._support import rabbitmq_test_port
 
 
 class PriorityTests(TestCase):
 	def broker(self):
 		broker = Connection(Configuration(
 			host='127.0.0.1',
-			port=5672,
+			port=rabbitmq_test_port(),
 			username='guest',
 			password='guest',
 		))
@@ -331,14 +332,14 @@ class PriorityTests(TestCase):
 
 
 @skipUnless(
-	environ.get('DEFSTREAM_RABBITMQ_TESTS') == '1',
+	environ.get('RABBITMQ_TESTS') == '1',
 	'Opt-in local RabbitMQ integration',
 )
 class PriorityIntegrationTests(TestCase):
 	def test_delivery_order_fifo_requeue_and_declaration_conflict(self):
 		broker = Connection(Configuration(
 			host='127.0.0.1',
-			port=5672,
+			port=rabbitmq_test_port(),
 			username=environ.get(
 				'DEFSTREAM_RABBITMQ_USERNAME',
 				'guest',

@@ -1,0 +1,14 @@
+name: redis-7
+
+services:
+  redis:
+    image: redis:7.4
+    container_name: Redis-7
+    ports:
+      - "127.0.0.1:56377:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
