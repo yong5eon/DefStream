@@ -1,9 +1,13 @@
 from collections.abc import Mapping
 from inspect import isabstract
+from math import isfinite
+from time import sleep
 from typing import (
 	Any,
+	Callable,
 	Optional,
 	Type,
+	Union,
 )
 
 from ..Broker.Connection import (
@@ -78,6 +82,53 @@ def priority_parameters(
 	)
 
 
+def _retry_settings(
+	retry: Optional[int],
+	interval: Union[int, float],
+) -> int:
+	if retry is not None and (
+		isinstance(
+			retry,
+			bool,
+		) or not isinstance(
+			retry,
+			int,
+		)
+	):
+		raise TypeError('Retry count must be an integer or None')
+	if retry is not None and retry < 0:
+		raise ValueError('Retry count must not be negative')
+	if isinstance(
+		interval,
+		bool,
+	) or not isinstance(
+		interval,
+		(
+			int,
+			float,
+		),
+	):
+		raise TypeError('Interval must be a number of seconds')
+	if not isfinite(interval) or interval < 0:
+		raise ValueError('Interval must be finite and non-negative')
+	return 0 if retry is None else retry
+
+
+def _retry_call(
+	call: Callable[[], Any],
+	retry: int,
+	interval: Union[int, float],
+) -> Any:
+	while True:
+		try:
+			return call()
+		except Exception:
+			if retry == 0:
+				raise
+			retry -= 1
+			sleep(interval)
+
+
 def declare(
 	*,
 	task: Type[Run],
@@ -103,7 +154,13 @@ def emit(
 	task: Type[Run],
 	broker: Connection,
 	priority: Optional[int] = None,
+	retry: Optional[int] = None,
+	interval: Union[int, float] = 1,
 ) -> Any:
+	retries = _retry_settings(
+		retry,
+		interval,
+	)
 	parameters = task_parameters(task)
 	payload = message_body(body)
 	if not isinstance(
@@ -126,14 +183,22 @@ def emit(
 			PrioritySupport,
 		):
 			raise NotImplementedError('This connection does not support task priorities')
-		return broker.emit(
+		return _retry_call(
+			lambda: broker.emit(
+				payload,
+				parameters,
+				priority=effective,
+			),
+			retries,
+			interval,
+		)
+	return _retry_call(
+		lambda: broker.emit(
 			payload,
 			parameters,
-			priority=effective,
-		)
-	return broker.emit(
-		payload,
-		parameters,
+		),
+		retries,
+		interval,
 	)
 
 
@@ -144,7 +209,13 @@ def request(
 	broker: Connection,
 	timeout: float = 5,
 	priority: Optional[int] = None,
+	retry: Optional[int] = None,
+	interval: Union[int, float] = 1,
 ) -> Any:
+	retries = _retry_settings(
+		retry,
+		interval,
+	)
 	parameters = task_parameters(task)
 	payload = message_body(body)
 	if not isinstance(
@@ -167,14 +238,22 @@ def request(
 			PrioritySupport,
 		):
 			raise NotImplementedError('This connection does not support task priorities')
-		return broker.request(
+		return _retry_call(
+			lambda: broker.request(
+				payload,
+				parameters,
+				timeout=timeout,
+				priority=effective,
+			),
+			retries,
+			interval,
+		)
+	return _retry_call(
+		lambda: broker.request(
 			payload,
 			parameters,
 			timeout=timeout,
-			priority=effective,
-		)
-	return broker.request(
-		payload,
-		parameters,
-		timeout=timeout,
+		),
+		retries,
+		interval,
 	)
