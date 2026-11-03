@@ -11,8 +11,8 @@ Task APIs, delivery policies, pools, and lifecycle hooks.
 | Function | Purpose | Connection ownership |
 | --- | --- | --- |
 | `declare(task=..., broker=...)` | Declare task queues and subscription resources | Caller connects and closes |
-| `emit(body, task=..., broker=...)` | Publish a one-way message to a task | Caller connects and closes |
-| `request(body, task=..., broker=..., timeout=5)` | Request a task result synchronously | Caller connects and closes; RabbitMQ only |
+| `emit(body, task=..., broker=..., retry=None, interval=1)` | Publish a one-way message to a task | Caller connects and closes |
+| `request(body, task=..., broker=..., timeout=5, retry=None, interval=1)` | Request a task result synchronously | Caller connects and closes; RabbitMQ only |
 
 Import these functions from `DefStream.Worker`. They do not connect or close
 the supplied connection. Neither `emit()` nor `request()` declares destinations.
@@ -118,6 +118,43 @@ result = request(
 - Priority affects delivery of waiting messages within the same queue. It does not
   preempt delivered or running tasks or guarantee execution and completion order.
 
+### Publication and request retries
+
+`emit()` and `request()` can optionally retry a broker call that raises an exception.
+The default `retry=None` preserves the existing single-call behavior. The value
+counts additional attempts after the first call, so `retry=3` allows up to four
+calls. The default `interval` is one second; it is applied only after a failure
+when another attempt remains. `retry` must be `None` or a non-negative integer
+other than `bool`, and `interval` must be a finite non-negative number other
+than `bool`. To stay within the platform's supported wait range, `interval` is capped
+at `threading.TIMEOUT_MAX` seconds. Out-of-range values raise `ValueError` before the broker call.
+
+```python
+emit(
+  {'a': 10, 'b': 20},
+  task=Add,
+  broker=broker,
+  retry=3,
+  interval=0.5,
+)
+
+# The request timeout applies to each call independently of the retry count.
+result = request(
+  {'a': 10, 'b': 20},
+  task=Add,
+  broker=broker,
+  timeout=5,
+  retry=2,
+)
+```
+
+A successful attempt returns immediately. If every attempt fails, the final exception
+is re-raised. Exceptions raised by broker `emit()` and `request()` calls are retried,
+including `RemoteError`; therefore a request may run again even if its remote task
+already executed before returning an error. Retries do not prevent duplicate
+publication or execution, so tasks using retries should be safe to run more than once.
+Invalid inputs and unsupported broker operations are not retried.
+
 ### Success, failures, and retries
 
 - ACK follows successful execution and completion hooks. RabbitMQ RPC also publishes the reply before ACK.
@@ -125,7 +162,7 @@ result = request(
 - `Policy` is the shared broker contract. Import `Requeue` and `Reject` from the selected broker package; behavior can differ by broker.
 - Rejection is broker-specific: RabbitMQ dead-letters to a configured DLQ or discards the message;
   Redis acknowledges it for the group while preserving stream history.
-- There is no automatic retry-count limit. Choose a policy that avoids endless redelivery of permanently invalid messages.
+- Consumer message redelivery has no automatic retry-count limit. Choose a policy that avoids endless redelivery of permanently invalid messages.
 - Publication and ACK are not one transaction. **Make tasks idempotent and safe to execute more than once.**
 
 The common resource operations below apply when accessing a broker directly.
