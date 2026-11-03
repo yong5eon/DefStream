@@ -14,7 +14,7 @@ PR 리뷰 후 `interval`을 `threading.TIMEOUT_MAX` 이하로 제한하고 범�
 
 ## 검증
 
-- [메시지 API 회귀 테스트](../../../tests/test_task_messages.py): 13개 테스트 통과. 재시도 횟수·대기, 기본값·0회, 중간 성공, 최종 예외 객체 보존, `RemoteError`, priority·timeout, 입력 검증을 확인했습니다.
+- [메시지 API 회귀 테스트](../../../tests/test_task_messages.py): 15개 테스트 통과. 재시도 횟수·대기, 기본값·0회, 중간 성공, 최종 예외 객체 보존, `RemoteError`, priority·timeout, 입력 검증과 간격 경계값을 확인했습니다.
 - Pylance 함수 시그니처 호환성 검사에서 `emit()`·`request()`의 기존 호출부가 각각 호환됨을 확인했습니다.
 - Pylance 진단에서 오류가 없고, 변경한 Python 소스와 테스트의 syntax 검사도 통과했습니다.
 - 한국어·영어 작업 매뉴얼과 고객용 [변경 로그](./CHANGELOG.md)를 갱신했습니다.
