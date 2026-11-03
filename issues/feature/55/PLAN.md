@@ -64,7 +64,7 @@
 
 | 범위 | 방법 | 결과 |
 | --- | --- | --- |
-| Worker 메시지 API 회귀 | `tests.test_task_messages` 단위 테스트 | 13개 테스트 통과 |
+| Worker 메시지 API 회귀 | `tests.test_task_messages` 단위 테스트 | PR 리뷰 경계값 보완 후 15개 테스트 통과 |
 | 재시도 횟수·대기 | Mock 브로커와 Mock 대기 함수로 호출 수·대기 인자·횟수 확인 | 기본·0회, 최대 3회 추가 재시도, 중간 성공 및 대기 횟수 검증 통과 |
 | 기존 전달 계약 | Mock 호출 인자로 본문·작업 설정·priority·timeout 확인 | `emit()`·`request()` 재시도 호출에서 전달 유지 확인 |
 | 공개 시그니처·정적 검사 | Pylance 호출 호환성·진단·syntax 검사 | 기존 호출부 호환, 진단·syntax 오류 없음 |

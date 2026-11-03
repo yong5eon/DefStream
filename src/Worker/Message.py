@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from inspect import isabstract
 from math import isfinite
+from threading import TIMEOUT_MAX
 from time import sleep
 from typing import (
 	Any,
@@ -109,8 +110,8 @@ def _retry_settings(
 		),
 	):
 		raise TypeError('Interval must be a number of seconds')
-	if not isfinite(interval) or interval < 0:
-		raise ValueError('Interval must be finite and non-negative')
+	if interval < 0 or interval > TIMEOUT_MAX or not isfinite(interval):
+		raise ValueError('Interval must be finite and between 0 and threading.TIMEOUT_MAX')
 	return 0 if retry is None else retry
 
 

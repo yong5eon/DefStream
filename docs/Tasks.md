@@ -123,7 +123,8 @@ result = request(
 추가 횟수이므로 `retry=3`은 최대 네 번 호출합니다. 실패 후 다음 시도가 남았을 때만
 `interval`초를 기다리며 기본 간격은 1초입니다.
 `retry`는 `None` 또는 bool이 아닌 0 이상의 정수이고, `interval`은 bool이 아닌
-유한한 0 이상의 숫자여야 합니다. 잘못된 값은 브로커 호출 전에 거부합니다.
+유한한 0 이상의 숫자여야 합니다. 플랫폼의 대기 시간 범위를 넘지 않도록 `interval`의 상한은
+`threading.TIMEOUT_MAX`초로 제한합니다. 범위를 벗어난 값은 브로커 호출 전에 `ValueError`로 거부합니다.
 
 ```python
 emit(

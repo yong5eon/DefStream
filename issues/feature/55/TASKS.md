@@ -11,9 +11,11 @@
 - [이슈 #55 분석 및 검증 계획 작성](./tasks/1793705387888.md)
 - [Worker 재시도 구현 검증 및 문서 갱신](./tasks/1793714914194.md)
 - [재시도 API 인자 이름 변경](./tasks/1793715537355.md)
+- [PR 리뷰 경계값 회귀 검증](./tasks/1793717149426.md)
 
 ## 검증 결과와 제한사항
 
+- PR 리뷰 보완 후 15개 테스트가 통과했다. 큰 간격의 사전 거부와 허용 경계를 검증했으며, 수정 전 회귀 테스트 실패도 확인했다.
 - `tests.test_task_messages` focused suite의 13개 테스트가 통과했다. 기본 Python 명령은 editable `.pth`의 Windows symlink 권한 문제로 import에 실패했으나, workspace Python과 임시 unittest runner로 동일한 suite를 통과시켰다.
 - Pylance 함수 시그니처 호환성 검사를 통과했고, `Message.py`에 진단이 없으며 변경 Python 파일의 syntax 오류가 없다.
 - 한국어·영어 작업 매뉴얼과 고객용 변경 로그를 갱신했다.

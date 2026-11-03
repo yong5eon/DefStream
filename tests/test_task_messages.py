@@ -1,3 +1,4 @@
+from threading import TIMEOUT_MAX
 from typing import get_type_hints
 from unittest import (
 	TestCase,
@@ -346,6 +347,70 @@ class MessageTests(TestCase):
 					)
 		broker.emit.assert_not_called()
 		broker.request.assert_not_called()
+
+	def test_interval_above_timeout_max_is_rejected_before_broker_calls(self):
+		for helper in (
+			emit,
+			request,
+		):
+			for interval in (
+				10**400,
+				1e100,
+				TIMEOUT_MAX + 1,
+			):
+				broker = Mock(
+					spec=Connection,
+					emit=Mock(),
+					request=Mock(),
+				)
+				with self.subTest(helper=helper, interval=interval), patch(
+					'DefStream.Worker.Message.sleep',
+				) as wait:
+					with self.assertRaises(ValueError):
+						helper(
+							{},
+							task=Task,
+							broker=broker,
+							retry=1,
+							interval=interval,
+						)
+					broker.emit.assert_not_called()
+					broker.request.assert_not_called()
+					wait.assert_not_called()
+
+	def test_interval_boundaries_are_passed_to_retry_wait(self):
+		for helper in (
+			emit,
+			request,
+		):
+			for interval in (
+				0,
+				TIMEOUT_MAX,
+			):
+				result = object()
+				operation = Mock(side_effect=[
+					RuntimeError('broker call failed'),
+					result,
+				])
+				broker = Mock(
+					spec=Connection,
+					**{helper.__name__: operation},
+				)
+				with self.subTest(helper=helper, interval=interval), patch(
+					'DefStream.Worker.Message.sleep',
+				) as wait:
+					self.assertIs(
+						helper(
+							{},
+							task=Task,
+							broker=broker,
+							retry=1,
+							interval=interval,
+						),
+						result,
+					)
+					self.assertEqual(operation.call_count, 2)
+					wait.assert_called_once_with(interval)
 
 	def test_declare_delegates_without_owning_connection(self):
 		broker = Mock()

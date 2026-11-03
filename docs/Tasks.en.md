@@ -126,7 +126,8 @@ counts additional attempts after the first call, so `retry=3` allows up to four
 calls. The default `interval` is one second; it is applied only after a failure
 when another attempt remains. `retry` must be `None` or a non-negative integer
 other than `bool`, and `interval` must be a finite non-negative number other
-than `bool`. Invalid values are rejected before the broker call.
+than `bool`. To stay within the platform's supported wait range, `interval` is capped
+at `threading.TIMEOUT_MAX` seconds. Out-of-range values raise `ValueError` before the broker call.
 
 ```python
 emit(
