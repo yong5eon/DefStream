@@ -195,6 +195,20 @@ class ProtocolContractTests(TestCase):
 		self.assertIsInstance(recovery, Recoverable)
 		self.assertTrue(recovery.is_recoverable(ConnectionError()))
 		self.assertFalse(recovery.is_recoverable(ValueError()))
+		self.assertIn(
+			Recoverable,
+			RabbitConsumer.__bases__,
+		)
+		self.assertFalse(isabstract(RabbitConsumer))
+		consumer: RabbitConsumer = RabbitConsumer(
+			connection=Mock(),
+			decode=Mock(),
+		)
+		self.addCleanup(consumer.close)
+		self.assertIsInstance(
+			consumer,
+			Recoverable,
+		)
 		self.assertTrue(issubclass(RabbitConsumer, Recoverable))
 		self.assertFalse(issubclass(Consumer, Recoverable))
 		self.assertFalse(issubclass(RedisConsumer, Recoverable))
