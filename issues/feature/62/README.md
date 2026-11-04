@@ -10,15 +10,18 @@
 - 작업 대상: `yong5eon/DefStream`, 작업 브랜치 `feature/62`
 - 분기 기준: `origin/master`와 동일한 로컬 `master`의 `f1bf897`
 - 병합 대상: `master`
-- 로컬 진행 상태: Connection 기반 타이머 요구사항·구체 작업 계획 작성, 구현 전
+- 로컬 진행 상태: 타이머 구현·실행 샘플·사용 문서 반영, 단위·회귀 45개 통과, 실제 RabbitMQ 검증은 서버 연결 불가
 - 댓글: 없음
 
 ## 작업 문서
 
 - [요구사항 명세](./REQUIREMENTS.md)
 - [작업 계획](./PLAN.md)
+- [구현 종합](./IMPLEMENTS.md)
 - [작업 종합](./TASKS.md)
-- [최신 작업 기록](./tasks/1793777337621.md)
+- [변경 로그](./CHANGELOG.md)
+- [최신 구현 기록](./implements/1793778339166.md)
+- [최신 작업 기록](./tasks/1793778440735.md)
 
 ## 이슈 원문
 

@@ -7,6 +7,7 @@ from .Connection import (
 	Parameters,
 	All,
 	Any,
+	Timer,
 )
 from .Exchange import Exchange
 from .Queue import Queue
@@ -31,6 +32,7 @@ __all__ = (
 	'Parameters',
 	'All',
 	'Any',
+	'Timer',
 	'Exchange',
 	'Queue',
 	'Stream',

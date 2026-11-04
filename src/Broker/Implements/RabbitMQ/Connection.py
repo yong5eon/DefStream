@@ -2,6 +2,9 @@
 
 from DefStream.Broker import (
 	Connection as BaseConnection,
+	Timer as BaseTimer,
+	TimerCallback,
+	SetTimer,
 	GetExchange,
 	GetQueue,
 	GetStream,
@@ -55,7 +58,27 @@ __all__ = (
 	'Parameters',
 	'All',
 	'Any',
+	'Timer',
 )
+
+
+class Timer(BaseTimer):
+	"""
+	Timer handle bound to the Pika connection that registered it.
+	"""
+
+	def __init__(
+		self,
+		connection: BlockingConnection,
+		timeout: int,
+	) -> None:
+		self.connection = connection
+		self.timeout = timeout
+		return
+
+	def remove(self) -> None:
+		self.connection.remove_timeout(self.timeout)
+		return
 
 
 class ExchangeType(str, Enum):
@@ -108,6 +131,7 @@ class Parameters(Mapping):
 
 class Connection(
 	BaseConnection,
+	SetTimer,
 	GetExchange,
 	GetQueue,
 	GetStream,
@@ -167,6 +191,19 @@ class Connection(
 			self.logger.error('RabbitMQ connection is not open')
 			raise RuntimeError('Connect the RabbitMQ connection before use')
 		return self.connection
+
+	def set_timer(
+		self,
+		cb: TimerCallback,
+		seconds: int,
+	) -> Timer:
+		"""
+		Register a one-shot timer using Pika's owner-thread event dispatch.
+		"""
+		connection: BlockingConnection = self.connected()
+		with self.observe('Timer registration'):
+			timeout: int = connection.call_later(seconds, cb)
+		return Timer(connection, timeout)
 
 	def declare(
 		self,

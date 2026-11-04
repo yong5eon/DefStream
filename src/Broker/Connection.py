@@ -15,6 +15,9 @@ from .Protocol import Sendable
 __all__ = (
 	'Connection',
 	'BrokerFactory',
+	'Timer',
+	'TimerCallback',
+	'SetTimer',
 	'GetExchange',
 	'GetQueue',
 	'GetStream',
@@ -39,6 +42,38 @@ class BrokerFactory(Protocol):
 
 	@abstractmethod
 	def __call__(self) -> Connection: ...
+
+
+@runtime_checkable
+class Timer(Protocol):
+	"""
+	Cancelable timer handle.
+	"""
+
+	@abstractmethod
+	def remove(self) -> None: ...
+
+
+class TimerCallback(Protocol):
+	"""
+	Callback invoked when a timer expires.
+	"""
+
+	def __call__(self) -> None: ...
+
+
+@runtime_checkable
+class SetTimer(Protocol):
+	"""
+	Connection capability for registering one-shot timers.
+	"""
+
+	@abstractmethod
+	def set_timer(
+		self,
+		cb: TimerCallback,
+		seconds: int,
+	) -> Timer: ...
 
 
 @runtime_checkable

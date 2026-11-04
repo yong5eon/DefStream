@@ -35,5 +35,5 @@ Messages published by a producer pass through the broker to a Worker Consumer, a
 - [Lifecycle hooks](./LifecycleHooks.en.md): hook order and resource management across Workers, pools, and tasks
 - [Request/reply contracts and validation](./Contracts.en.md): schemas, validators, and task contracts
 - [Operations and monitoring](./Operations.en.md): Inspector, logging, and operational broker considerations
-- [RabbitMQ](./RabbitMQ.en.md): queues, exchanges, streams, RPC, and RabbitMQ workers
+- [RabbitMQ](./RabbitMQ.en.md): queues, exchanges, streams, RPC, connection timers, and RabbitMQ workers
 - [Redis Streams](./Redis.en.md): messages, consumer groups, acknowledgements, and Redis workers
