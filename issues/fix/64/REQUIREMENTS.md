@@ -6,7 +6,7 @@ RabbitMQ Consumer가 이미 제공하는 복구 가능 오류 분류 계약을 �
 
 원문과 작업 정보는 [이슈 기록](./README.md)을 기준으로 한다.
 
-## 분석 근거
+## 변경 전 분석 근거
 
 - [RabbitMQ Consumer](../../../src/Broker/Implements/RabbitMQ/Consumer.py)는 `BaseConsumer`만 상속하지만 `is_recoverable(self, error: BaseException) -> bool`을 구현한다.
 - [Recoverable](../../../src/Broker/Protocol.py)은 `@runtime_checkable`이 적용된 Protocol이다. 명시적 상속 없이도 현재 Consumer의 `issubclass`와 인스턴스의 `isinstance` 판별은 성공한다.
@@ -58,6 +58,6 @@ RabbitMQ Consumer가 이미 제공하는 복구 가능 오류 분류 계약을 �
 
 ## 현재 상태
 
-요구사항 분석과 명세 작성 단계이며 제품 코드와 테스트는 아직 변경하지 않았다. 구현 후 인수 기준을 검증해야 하며, 이전 분석의 메모리상 검증을 실제 구현 완료로 간주하지 않는다.
+구현과 인수 기준 검증을 완료했다. 실제 소스 변경 후 관련 테스트 14개가 통과했으며 이전 분석의 메모리상 검증과 구분했다. 결과와 검증 범위는 [구현 결과](./IMPLEMENTS.md) 및 [작업 결과](./TASKS.md)를 따른다.
 
 현재 요구사항 확정에 필요한 미확정 사항은 없다.

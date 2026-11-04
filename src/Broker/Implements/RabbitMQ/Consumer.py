@@ -2,6 +2,7 @@
 
 from DefStream.Broker import (
 	Consumer as BaseConsumer,
+	Recoverable,
 	EventHandler,
 	Event as BaseEvent,
 )
@@ -49,7 +50,10 @@ class ConsumptionInterrupted(RuntimeError):
 	pass
 
 
-class Consumer(BaseConsumer):
+class Consumer(
+	BaseConsumer,
+	Recoverable,
+):
 	"""Consumer of Event Broker for RabbitMQ"""
 	logger = getLogger('Broker.RabbitMQ.Consumer')
 
