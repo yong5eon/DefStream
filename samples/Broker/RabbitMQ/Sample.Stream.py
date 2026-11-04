@@ -5,8 +5,8 @@ from DefStream.Broker.Implements.RabbitMQ import (
 	Configuration,
 	Event,
 	EventHandler,
+	Timer,
 )
-from threading import Timer
 from random import randint
 from logging import (
 	DEBUG,
@@ -77,17 +77,13 @@ if __name__ == '__main__':
 			offset=0,
 		)
 	
-		def stop(timer):
-			consumer.stop()
-			return
-		
-		Timer(
-			1,
-			lambda: stop(None),
-		).start()
-	
 		consumer.subs('stream')
-		consumer.run()
+		timer: Timer = con.set_timer(consumer.stop, 1)
+		try:
+			consumer.run()
+		finally:
+			timer.remove()
+			consumer.close()
 
 	logger.info('Starting Stream read loop')
 	stream = con.stream('stream')

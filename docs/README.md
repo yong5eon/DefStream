@@ -35,5 +35,5 @@ Producer가 발행한 메시지는 브로커를 거쳐 Worker의 Consumer로 전
 - [생명주기 훅](./LifecycleHooks.md): Worker·풀·작업 훅의 실행 순서와 자원 관리
 - [요청·응답 계약과 검증](./Contracts.md): 스키마, validator와 작업 계약
 - [운영과 모니터링](./Operations.md): Inspector, 로깅, 브로커 선택과 운영 고려사항
-- [RabbitMQ](./RabbitMQ.md): 큐, Exchange, 스트림, RPC와 RabbitMQ Worker
+- [RabbitMQ](./RabbitMQ.md): 큐, Exchange, 스트림, RPC, 연결 타이머와 RabbitMQ Worker
 - [Redis Streams](./Redis.md): 메시지, consumer group, ACK와 Redis Worker

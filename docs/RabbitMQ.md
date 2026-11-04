@@ -103,6 +103,109 @@ finally:
 일반 연결의 heartbeat는 애플리케이션 작업·유휴 시간에 맞게 설정하고 처리되도록 관리하세요.
 연결과 그 리소스는 **소유 스레드에서만 사용**해야 하며, 스레드·프로세스 사이에 공유하지 마세요.
 
+### 연결 타이머
+
+RabbitMQ 연결은 선택적 `SetTimer` 프로토콜을 지원합니다.
+`set_timer(cb, seconds)`는 등록 시점부터 정수 초 단위로 일회성 콜백을 예약하고,
+취소할 수 있는 `Timer`를 반환합니다. 콜백은 인자 없이 호출되며 반환값이 없습니다.
+연결을 사용하는 코드에서 `isinstance(connection, SetTimer)`로 지원 여부를 확인할 수 있습니다.
+기본 `Connection` 계약과 Redis 연결에는 타이머 지원이 강제되지 않습니다.
+
+다음 예제는 메시지가 없는 큐를 소비하면서 5초 뒤 콜백으로 소비를 중단합니다.
+로컬 RabbitMQ가 필요하며 `defstream.example.timer` 큐는 실행 후에도 유지합니다.
+다른 생산자가 이 큐에 보낸 메시지는 출력한 뒤 ACK합니다.
+
+```python
+from DefStream.Broker import Event, SetTimer
+from DefStream.Broker.Implements.RabbitMQ import Configuration, Connection
+
+
+def receive(event: Event) -> None:
+  print(event.body)
+  event.ack()
+
+
+connection = Connection(Configuration(
+  host='127.0.0.1',
+  port=5672,
+  username='guest',
+  password='guest',
+))
+try:
+  connection.connect()
+  if not isinstance(connection, SetTimer):
+    raise TypeError('Connection does not support timers')
+  connection.create_queue('defstream.example.timer')
+  consumer = connection.consumer()
+  consumer.subs('defstream.example.timer', receive)
+
+  def expired() -> None:
+    print('Timer fired')
+    consumer.stop()
+
+  timer = connection.set_timer(cb=expired, seconds=5)
+  try:
+    consumer.run()
+  finally:
+    timer.remove()
+    consumer.close()
+finally:
+  connection.close()
+```
+
+실행 전에 `timer.remove()`를 호출하면 해당 예약을 취소합니다.
+핸들은 등록 당시 연결에 연결되며, 연결을 다시 열어도 새 연결의 타이머를 취소하지 않습니다.
+이미 실행·취소된 예약, 닫힌 연결, 음수·0초 지연의 동작과 오류는 Pika API를 그대로 따릅니다.
+`remove()`는 실행 중인 콜백을 강제로 중단하지 않습니다.
+
+반복 실행은 콜백 안에서 다음 타이머를 등록하면 됩니다.
+아래는 반복 실행용 발췌입니다. 위 예제에서 `consumer.subs(...)`까지 준비한 뒤,
+`expired` 정의와 일회성 타이머 등록·실행·소비자 정리 부분을 아래 코드로 교체합니다.
+바깥쪽 `finally`의 연결 종료는 유지합니다.
+5초 간격으로 세 번 실행하고 중단하며, 취소할 때 사용할 최신 핸들을 보관합니다.
+
+```python
+from DefStream.Broker import Consumer, SetTimer, Timer
+
+
+def run_repeated(connection: SetTimer, consumer: Consumer) -> None:
+  remaining = 3
+  timer: Timer
+
+  def tick() -> None:
+    nonlocal remaining, timer
+    print('Timer fired')
+    remaining -= 1
+    if remaining:
+      timer = connection.set_timer(tick, 5)
+    else:
+      consumer.stop()
+
+  timer = connection.set_timer(tick, 5)
+  try:
+    consumer.run()
+  finally:
+    timer.remove()
+
+
+try:
+  run_repeated(connection, consumer)
+finally:
+  consumer.close()
+```
+
+RabbitMQ 구현은 Pika의 `call_later`·`remove_timeout`에 직접 위임합니다.
+`consumer.run()`과 같은 Pika 이벤트 처리가 진행되어야 콜백이 실행됩니다.
+단순히 등록 후 `sleep()`하는 것만으로는 실행되지 않으며,
+긴 메시지 처리나 이벤트 루프 작업 때문에 실행이 늦어질 수 있습니다.
+콜백은 연결 소유 스레드에서 실행되고, 예외는 기존 이벤트 처리 경로로 전파됩니다.
+
+등록·취소는 Pika의 소유 스레드 제약을 따르며 추가 스레드 안전성을 제공하지 않습니다.
+Consumer 종료 시 연결 타이머를 자동으로 취소하지 않으므로,
+필요한 예약은 호출자가 적절한 시점에 취소해야 합니다.
+위 예제는 연결을 닫기 전에 취소하며, 닫힌 연결에서 취소가 항상 성공한다고 보장하지 않습니다.
+별도 타이머 스레드·범용 스케줄러·자동 정리 계층은 제공하지 않습니다.
+
 ### 로깅
 
 여섯 클래스는 `Broker.RabbitMQ.ClassName` 이름의 클래스 멤버
@@ -370,3 +473,16 @@ sequenceDiagram
 - [Sample.py](../samples/Broker/RabbitMQ/Sample.py)
 - [Sample.Stream.py](../samples/Broker/RabbitMQ/Sample.Stream.py)
 - [Sample.RPC.py](../samples/Broker/RabbitMQ/Sample.RPC.py)
+- [Sample.Timer.py](../samples/Broker/RabbitMQ/Sample.Timer.py): 일회성 예약 취소와 콜백 재등록에 의한 반복 실행
+
+타이머 샘플은 로컬 RabbitMQ의 `127.0.0.1:5672`와 `guest` 계정을 사용합니다.
+개발 환경에서 RabbitMQ 구현체를 사용할 수 있어야 하며, 저장소 루트에서 실행하세요.
+
+```shell
+python samples/Broker/RabbitMQ/Sample.Timer.py
+```
+
+실행마다 고유한 빈 큐를 만들고, 취소한 콜백은 실행하지 않으며,
+1초 간격으로 세 번 출력한 뒤 소비를 중단합니다.
+종료 시 최신 타이머·소비 채널·샘플 큐·연결을 정리합니다.
+Stream 샘플의 소비 중단도 별도 스레드 타이머 대신 연결의 `set_timer`를 사용합니다.

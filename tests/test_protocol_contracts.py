@@ -1,5 +1,10 @@
-from inspect import isabstract
+from inspect import (
+	Parameter,
+	isabstract,
+	signature,
+)
 from typing import (
+	Mapping,
 	Optional,
 	get_type_hints,
 )
@@ -12,6 +17,9 @@ from unittest.mock import Mock
 from DefStream.Broker import (
 	Connection,
 	BrokerFactory,
+	Timer,
+	TimerCallback,
+	SetTimer,
 	Consumer,
 	Event,
 	Emittable,
@@ -24,7 +32,12 @@ from DefStream.Broker import (
 	Recoverable,
 )
 from DefStream.Broker import __all__ as broker_exports
-from DefStream.Broker.Connection import __all__ as connection_exports
+from DefStream.Broker.Connection import (
+	Timer as ConnectionTimer,
+	TimerCallback as ConnectionTimerCallback,
+	SetTimer as ConnectionSetTimer,
+	__all__ as connection_exports,
+)
 from DefStream.Inspector.Extensions import Play
 from DefStream.Broker.Implements.RabbitMQ import __all__ as rabbit_exports
 from DefStream.Broker.Implements.Redis import __all__ as redis_exports
@@ -89,6 +102,90 @@ class StructuralConnection:
 
 
 class ProtocolContractTests(TestCase):
+	def test_timer_protocols_and_public_contracts(self) -> None:
+		for public, contract in (
+			(
+				Timer,
+				ConnectionTimer,
+			),
+			(
+				TimerCallback,
+				ConnectionTimerCallback,
+			),
+			(
+				SetTimer,
+				ConnectionSetTimer,
+			),
+		):
+			with self.subTest(contract=contract):
+				self.assertIs(public, contract)
+				self.assertIn(contract.__name__, connection_exports)
+				self.assertIn(contract.__name__, broker_exports)
+
+		parameters: Mapping[str, Parameter] = signature(SetTimer.set_timer).parameters
+		self.assertEqual(
+			tuple(parameters),
+			(
+				'self',
+				'cb',
+				'seconds',
+			),
+		)
+		for parameter in parameters.values():
+			self.assertIs(parameter.kind, Parameter.POSITIONAL_OR_KEYWORD)
+			self.assertIs(parameter.default, Parameter.empty)
+		self.assertEqual(
+			get_type_hints(SetTimer.set_timer),
+			{
+				'cb': TimerCallback,
+				'seconds': int,
+				'return': Timer,
+			},
+		)
+		self.assertEqual(get_type_hints(Timer.remove), {'return': type(None)})
+		self.assertEqual(get_type_hints(TimerCallback.__call__), {'return': type(None)})
+
+		class IncompleteTimer(Timer):
+			pass
+
+		class IncompleteProvider(SetTimer):
+			pass
+
+		for incomplete in (
+			IncompleteTimer,
+			IncompleteProvider,
+		):
+			self.assertTrue(isabstract(incomplete))
+			with self.assertRaises(TypeError):
+				call_with_invalid_input(incomplete)
+
+		class StructuralTimer:
+			def remove(self) -> None:
+				return
+
+		class StructuralProvider:
+			def set_timer(
+				self,
+				cb: TimerCallback,
+				seconds: int,
+			) -> Timer:
+				return StructuralTimer()
+
+		self.assertIsInstance(StructuralTimer(), Timer)
+		self.assertIsInstance(StructuralProvider(), SetTimer)
+		self.assertNotIsInstance(object(), Timer)
+		self.assertNotIsInstance(object(), SetTimer)
+		self.assertIn(SetTimer, RabbitConnection.__bases__)
+		self.assertTrue(issubclass(RabbitConnection, SetTimer))
+		for implementation in (
+			Connection,
+			Consumer,
+			RedisConnection,
+		):
+			self.assertFalse(issubclass(implementation, SetTimer))
+			self.assertFalse(hasattr(implementation, 'set_timer'))
+		return
+
 	def test_recovery_capability_is_structural_and_opt_in(self):
 		class StructuralRecovery:
 			def is_recoverable(self, error: BaseException) -> bool:

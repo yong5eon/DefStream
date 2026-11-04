@@ -88,6 +88,116 @@ Call `ack()` on success, `nack()` for redelivery, or `reject()` to reject.
 Rejected messages go to the broker-configured dead-letter destination or are
 discarded when none is configured.
 
+### Connection timers
+
+RabbitMQ connections support the optional `SetTimer` protocol.
+`set_timer(cb, seconds)` schedules a one-shot callback using integer seconds
+from registration and returns a cancelable `Timer`. The callback takes no
+arguments and returns no value. Code using a connection can check support
+with `isinstance(connection, SetTimer)`. Timer support is not required by
+the base `Connection` contract or Redis connections.
+
+This example consumes an empty queue and stops consumption from a callback
+after five seconds. It requires local RabbitMQ and leaves
+`defstream.example.timer` in place. Messages sent to this queue by other
+producers are printed and acknowledged.
+
+```python
+from DefStream.Broker import Event, SetTimer
+from DefStream.Broker.Implements.RabbitMQ import Configuration, Connection
+
+
+def receive(event: Event) -> None:
+  print(event.body)
+  event.ack()
+
+
+connection = Connection(Configuration(
+  host='127.0.0.1',
+  port=5672,
+  username='guest',
+  password='guest',
+))
+try:
+  connection.connect()
+  if not isinstance(connection, SetTimer):
+    raise TypeError('Connection does not support timers')
+  connection.create_queue('defstream.example.timer')
+  consumer = connection.consumer()
+  consumer.subs('defstream.example.timer', receive)
+
+  def expired() -> None:
+    print('Timer fired')
+    consumer.stop()
+
+  timer = connection.set_timer(cb=expired, seconds=5)
+  try:
+    consumer.run()
+  finally:
+    timer.remove()
+    consumer.close()
+finally:
+  connection.close()
+```
+
+Call `timer.remove()` before execution to cancel the scheduled callback.
+The handle belongs to the connection that registered it; reopening a connection
+does not redirect cancellation to the new connection.
+Already-fired or canceled timers, closed connections, and negative or zero
+delays retain Pika's behavior and errors. `remove()` does not interrupt a
+callback that is already running.
+
+For repetition, register the next timer inside the callback.
+The following excerpt replaces the `expired` definition and the one-shot
+registration, execution, and consumer cleanup above, after preparing the
+subscription through `consumer.subs(...)`. Keep the outer `finally` that
+closes the connection. It fires three times at five-second intervals, then
+stops, retaining the latest handle for cancellation.
+
+```python
+from DefStream.Broker import Consumer, SetTimer, Timer
+
+
+def run_repeated(connection: SetTimer, consumer: Consumer) -> None:
+  remaining = 3
+  timer: Timer
+
+  def tick() -> None:
+    nonlocal remaining, timer
+    print('Timer fired')
+    remaining -= 1
+    if remaining:
+      timer = connection.set_timer(tick, 5)
+    else:
+      consumer.stop()
+
+  timer = connection.set_timer(tick, 5)
+  try:
+    consumer.run()
+  finally:
+    timer.remove()
+
+
+try:
+  run_repeated(connection, consumer)
+finally:
+  consumer.close()
+```
+
+The implementation delegates directly to Pika's `call_later` and
+`remove_timeout`. Callbacks run only while Pika processes events, such as
+during `consumer.run()`. Registering a timer and calling `sleep()` alone
+does not dispatch it. Long message handlers and other event-loop work can
+delay execution. Callbacks run on the connection owner thread, and their
+exceptions propagate through the existing event-processing path.
+
+Registration and cancellation follow Pika's owner-thread restrictions;
+no additional thread safety is provided. Consumer exit does not automatically
+cancel connection timers, so callers must cancel reservations when appropriate.
+The examples cancel before closing the connection; cancellation on a closed
+connection is not guaranteed to succeed. No separate timer thread,
+general-purpose scheduler, or automatic cleanup layer is provided.
+
 ### Logging
 
 `Connection`, `Consumer`, `Queue`, `Exchange`, `Stream`, and `Event` expose a class
@@ -383,3 +493,18 @@ publishing the reply but before ACK, the task may be redelivered and run again.
 - [Sample.py](../samples/Broker/RabbitMQ/Sample.py)
 - [Sample.Stream.py](../samples/Broker/RabbitMQ/Sample.Stream.py)
 - [Sample.RPC.py](../samples/Broker/RabbitMQ/Sample.RPC.py)
+- [Sample.Timer.py](../samples/Broker/RabbitMQ/Sample.Timer.py): one-shot cancellation and repetition by re-registering callbacks
+
+The timer sample uses local RabbitMQ at `127.0.0.1:5672` with the `guest` account.
+Enable the RabbitMQ implementation in your development environment and run it
+from the repository root.
+
+```shell
+python samples/Broker/RabbitMQ/Sample.Timer.py
+```
+
+Each run creates a uniquely named empty queue, cancels one callback before
+execution, then logs three timer callbacks at one-second intervals and stops
+consumption. It cleans up the latest timer, consumer channel, sample queue,
+and connection. The Stream sample also uses the connection's `set_timer`
+instead of a separate timer thread to stop consumption.
