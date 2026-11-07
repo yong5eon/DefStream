@@ -156,7 +156,7 @@ jobs:
               if not last.startswith(('    ', '\t')) and match(marker, last.strip()):
                   entry_match = fullmatch(
                       r'- Changes: ((?:issues/(?:bug|fix|feature|task)/[A-Za-z0-9][A-Za-z0-9._-]*|tasks/[0-9]+)/CHANGELOG\.md)',
-                      last.strip(),
+                      last.rstrip(),
                   )
                   if not entry_match:
                       raise ValueError(f'Invalid Changes entry: {last.strip()}')

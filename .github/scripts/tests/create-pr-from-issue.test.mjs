@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -291,7 +291,7 @@ test('buildPullRequest accepts the exact body limit and rejects an oversized PR 
 });
 
 for (const file of ['IR.md', 'CHANGELOG.md']) {
-  test(`createPullRequest propagates non-missing read errors for ${file}`, async () => {
+  test(`createPullRequest rejects a directory in place of ${file}`, async () => {
     const rootDirectory = await makeIssueDirectory();
     const path = join(rootDirectory, 'issues', 'task', '12', file);
     try {
@@ -313,7 +313,7 @@ for (const file of ['IR.md', 'CHANGELOG.md']) {
           }
           throw new Error(`Unexpected request: ${url}`);
         },
-      }), { code: 'EISDIR' });
+      }), file === 'CHANGELOG.md' ? /Changelog must be a regular file/ : { code: 'EISDIR' });
     } finally {
       await rm(rootDirectory, { recursive: true, force: true });
     }
@@ -350,6 +350,51 @@ for (const content of [null, '', ' \n\t']) {
         },
       }), /Changelog is missing or empty: issues\/task\/12\/CHANGELOG\.md/);
       assert.equal(requests.some(({ options }) => options.method === 'POST'), false);
+    } finally {
+      await rm(rootDirectory, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const target of ['notes.md', 'missing.md']) {
+  test(`createPullRequest rejects a symlink changelog to ${target} before creating or updating a PR`, async (t) => {
+    const rootDirectory = await makeIssueDirectory();
+    const requests = [];
+    try {
+      const directory = join(rootDirectory, 'issues', 'task', '12');
+      await rm(join(directory, 'CHANGELOG.md'));
+      await writeFile(join(directory, 'notes.md'), 'notes');
+      try {
+        await symlink(target, join(directory, 'CHANGELOG.md'));
+      } catch (error) {
+        if (process.platform !== 'win32' || error.code !== 'EPERM') throw error;
+        t.skip('Windows requires permission to create symbolic links');
+        return;
+      }
+      for (const existing of [false, true]) {
+        requests.length = 0;
+        await assert.rejects(createPullRequest({
+          owner: 'example', repo: 'project', branch: 'task/12', base: 'master',
+          sha: 'abc123', token: 'test-token', rootDirectory,
+          fetchImpl: async (url, options) => {
+            requests.push({ url, options });
+            if (url.includes('/pulls?')) {
+              return jsonResponse(existing ? [{ number: 8, node_id: pullRequestNodeId }] : []);
+            }
+            if (url.includes('/compare/')) return comparisonResponse(1);
+            if (url.endsWith('/git/commits/abc123')) {
+              return jsonResponse({ tree: { sha: 'head-tree' } });
+            }
+            if (url.endsWith('/issues/12')) {
+              return jsonResponse({
+                ...sourceIssue, labels: [], assignees: [], milestone: null, node_id: issueNodeId,
+              });
+            }
+            throw new Error(`Unexpected request: ${url}`);
+          },
+        }), /Changelog must be a regular file: issues\/task\/12\/CHANGELOG\.md/);
+        assert.equal(requests.some(({ options }) => ['POST', 'PATCH'].includes(options.method)), false);
+      }
     } finally {
       await rm(rootDirectory, { recursive: true, force: true });
     }

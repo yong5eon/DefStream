@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -402,6 +402,13 @@ export async function createPullRequest({
   let metadata;
   if (!agentBranch) {
     metadata = await getIssueMetadata(encodedRepository, issueDirectory, token, fetchImpl);
+  }
+  try {
+    if (!(await lstat(join(rootDirectory, issueDirectory, 'CHANGELOG.md'))).isFile()) {
+      throw new Error(`Changelog must be a regular file: ${issueDirectory}/CHANGELOG.md`);
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
   }
   const documents = {};
   for (const fileName of ISSUE_DOCUMENTS) {

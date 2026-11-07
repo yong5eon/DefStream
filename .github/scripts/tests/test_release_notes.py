@@ -91,6 +91,9 @@ class ReleaseNotesTests(TestCase):
 			'- Changes:',
 			'- Changes tasks/123/CHANGELOG.md',
 			'- Changes=tasks/123/CHANGELOG.md',
+			'- Notes:\n  - Changes: tasks/123/CHANGELOG.md',
+			' - Changes: tasks/123/CHANGELOG.md',
+			'   - Changes: tasks/123/CHANGELOG.md',
 		):
 			with self.subTest(body=body):
 				self.check_output.reset_mock()

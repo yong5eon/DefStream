@@ -8,11 +8,13 @@
 - 작업 브랜치: `task/67`
 - 병합 대상 및 분기 기준: `master`
 - 공통 지침 원본: `yong5eon/Instructions`, 커밋 `8706862712c800682f38af3c86e74f768345d811`
-- 진행 상태: 후속 지침·PR 자동화 연동 및 로컬 검증 완료. 기존 PR #68 열림, 실제 GitHub Actions 검증 대기.
+- 진행 상태: PR 리뷰 후속 수정 및 로컬 검증 완료. 이번 수정의 실제 GitHub Actions 검증 대기.
 
 ## 후속 요청
 
 사용자가 csvd2c의 지침과 PR 자동화를 이 프로젝트에 맞게 적용하고 기존 이슈와 브랜치에서 이어서 작업·기록하도록 지정했다. 이 요청은 원문의 커밋 메시지 지침 제외와 공통 지침 위치를 변경한다.
+
+PR 리뷰 분석 후 사용자는 들여쓴 `Changes:` 처리와 변경 로그의 일반 파일 검사를 수정하고, 3,000개 파일 제한과 App 권한 구조는 유지하도록 요청했다.
 
 ## 이슈 원문
 
@@ -49,4 +51,4 @@ GitHub에서 할당된 에이전트는 이슈가 속한 저장소를 작업 대�
 - PR 문서: [IR.md](./IR.md)
 - 변경 로그: [CHANGELOG.md](./CHANGELOG.md)
 - 단계별 기록: [context/](./context/), [implements/](./implements/), [tasks/](./tasks/)
-- 최신 기록: [context/1794072954261.md](./context/1794072954261.md), [implements/1794072954261.md](./implements/1794072954261.md), [tasks/1794072954261.md](./tasks/1794072954261.md)
+- 최신 기록: [context/1794083646073.md](./context/1794083646073.md), [implements/1794083646073.md](./implements/1794083646073.md), [tasks/1794083646073.md](./tasks/1794083646073.md)
