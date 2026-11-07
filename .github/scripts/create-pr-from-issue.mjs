@@ -6,11 +6,8 @@ const API_URL = 'https://api.github.com';
 const MAX_PR_BODY_LENGTH = 65536;
 const ISSUE_TYPES = new Set(['bug', 'fix', 'feature', 'task']);
 const ISSUE_DOCUMENTS = [
-  'README.md',
-  'REQUIREMENTS.md',
   'CHANGELOG.md',
-  'IMPLEMENTS.md',
-  'TASKS.md',
+  'IR.md',
 ];
 
 export function parseIssueBranch(branch) {
@@ -32,11 +29,6 @@ async function readOptionalFile(path) {
   }
 }
 
-function sourceLink(owner, repo, sha, path) {
-  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-  return `https://github.com/${owner}/${repo}/blob/${sha}/${encodedPath}`;
-}
-
 function resolveDocumentLinks(markdown, documentPath, owner, repo, sha) {
   const destination = String.raw`<[^>\r\n]+>|[^\s()]+(?:\([^\s()]*\)[^\s()]*)*`;
   const tokens = new RegExp([
@@ -51,7 +43,7 @@ function resolveDocumentLinks(markdown, documentPath, owner, repo, sha) {
   const absolute = (target) => {
     const angled = target.startsWith('<');
     const value = angled ? target.slice(1, -1) : target;
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value)) {
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(value)) {
       return target;
     }
     const suffixIndex = value.search(/[?#]/);
@@ -95,86 +87,27 @@ function resolveDocumentLinks(markdown, documentPath, owner, repo, sha) {
   });
 }
 
-export function buildPullRequest({ template, documents, issue, issueDirectory, owner, repo, sha }) {
-  const issueType = issueDirectory.split('/')[1];
-  const documentTitle = /^#[ \t]+(.+)$/m.exec(documents['README.md'] ?? '')?.[1].trim();
-  const title = documentTitle && documentTitle.length <= 256 ? documentTitle : issue?.title?.trim();
-  if (!title || title.length > 256 || /[\r\n]/.test(title)) {
-    throw new Error('The source issue must provide a PR title of at most 256 characters');
+export function buildPullRequest({ documents, issueDirectory, owner, repo, sha }) {
+  const markdown = documents['IR.md'];
+  if (!markdown?.trim()) {
+    throw new Error(`PR body is missing or empty: ${issueDirectory}/IR.md`);
   }
-
-  const linkedDocuments = {};
-  for (const [fileName, markdown] of Object.entries(documents)) {
-    if (markdown.trim()) {
-      linkedDocuments[fileName] = resolveDocumentLinks(markdown, `${issueDirectory}/${fileName}`, owner, repo, sha);
-    }
+  const heading = /^#[ \t]+([^\r\n]+)(?:\r?\n|$)/.exec(markdown);
+  const title = heading?.[1].trim();
+  if (!title || title.length > 256) {
+    throw new Error(`PR title must be a non-empty first-line heading of at most 256 characters: ${issueDirectory}/IR.md`);
   }
-  const changeType = {
-    bug: '버그 수정 및 일반 변경, 핫픽스 처리',
-    fix: '버그 수정 및 일반 변경, 핫픽스 처리',
-    feature: '기능 추가',
-    task: '기타',
-  }[issueType];
-  if (!changeType) {
-    throw new Error(`Unsupported issue type "${issueType}"`);
+  const bodyMarkdown = markdown.slice(heading[0].length);
+  if (!bodyMarkdown.trim()) {
+    throw new Error(`PR body is missing or empty: ${issueDirectory}/IR.md`);
   }
-  const checkbox = `- [ ] ${changeType}`;
-  const issueNumber = issueDirectory.split('/')[2];
-  const issueLink = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
-  const render = (includeContent, includeTemplate = true) => {
-    const summary = [`원본 이슈: [#${issueNumber}](${issueLink})`];
-    const validation = [];
-    if (!includeContent) {
-      summary.push('PR 본문 길이 제한으로 문서와 이슈의 내용은 아래 원문 링크에서 제공합니다.');
-    }
-    if (!includeTemplate) {
-      summary.push(`PR 템플릿도 길이 제한을 초과하여 [템플릿 원문](${sourceLink(owner, repo, sha, '.github/PULL_REQUEST_TEMPLATE.md')})으로 제공합니다.`);
-    }
-    for (const [fileName, markdown] of Object.entries(linkedDocuments)) {
-      const link = sourceLink(owner, repo, sha, `${issueDirectory}/${fileName}`);
-      const record = includeContent
-        ? `<details>\n<summary>${fileName}</summary>\n\n${markdown}\n\n[원문](${link})\n\n</details>`
-        : `[${fileName}](${link})`;
-      (fileName === 'TASKS.md' ? validation : summary).push(record);
-    }
-    if (Object.keys(linkedDocuments).length === 0) {
-      summary.push('첨부된 작업 문서가 없어 원본 이슈를 기준으로 작성했습니다.');
-      if (includeContent && issue?.body) {
-        summary.push(issue.body);
-      }
-    }
-    if (validation.length === 0) {
-      validation.push('별도 작업·검증 문서가 첨부되지 않았습니다. 검증 수행 여부는 원본 이슈와 첨부 문서를 확인해 주세요.');
-    }
-    const sections = new Map([
-      ['<!-- 무엇을 왜 변경했는지 간단히 요약해 주세요. -->', {
-        heading: '## 변경 내용', content: summary.join('\n\n'),
-      }],
-      ['<!-- 실행한 테스트와 결과를 작성해 주세요. 테스트를 실행하지 않았다면 사유를 적어 주세요. -->', {
-        heading: '## 검증', content: validation.join('\n\n'),
-      }],
-    ]);
-    let body = (includeTemplate ? template : '').replace(checkbox, `- [X] ${changeType}`).replace(
-      /<!-- 무엇을 왜 변경했는지 간단히 요약해 주세요\. -->|<!-- 실행한 테스트와 결과를 작성해 주세요\. 테스트를 실행하지 않았다면 사유를 적어 주세요\. -->/g,
-      (placeholder) => {
-        const section = sections.get(placeholder);
-        section.inserted = true;
-        return section.content;
-      },
-    );
-    for (const section of sections.values()) {
-      if (!section.inserted) {
-        body += `\n\n${section.heading}\n\n${section.content}`;
-      }
-    }
-    return `${body.trim()}\n\nCloses #${issueNumber}`;
-  };
-  let body = render(true);
+  const lines = bodyMarkdown.trim().split(/\r?\n/).filter((line) => line.trim());
+  if (lines.at(-1) !== `- Changes: ${issueDirectory}/CHANGELOG.md`) {
+    throw new Error(`IR document must end with the changelog entry: ${issueDirectory}/IR.md`);
+  }
+  const body = resolveDocumentLinks(bodyMarkdown, `${issueDirectory}/IR.md`, owner, repo, sha).trim();
   if (body.length > MAX_PR_BODY_LENGTH) {
-    body = render(false);
-  }
-  if (body.length > MAX_PR_BODY_LENGTH) {
-    body = render(false, false);
+    throw new Error(`PR body exceeds the ${MAX_PR_BODY_LENGTH}-character limit`);
   }
   return { title, body };
 }
@@ -201,6 +134,36 @@ async function githubRequest(path, token, fetchImpl, options = {}) {
     throw new Error(`GitHub API request failed (${response.status}): ${result?.message ?? 'unknown error'}`);
   }
   return result;
+}
+
+async function findPullRequestIssueDirectory(repositoryPath, pullRequestNumber, token, fetchImpl) {
+  const candidates = [];
+  for (let page = 1; page <= 30; page += 1) {
+    const files = await githubRequest(
+      `${repositoryPath}/pulls/${pullRequestNumber}/files?per_page=100&page=${page}`,
+      token,
+      fetchImpl,
+    );
+    if (!Array.isArray(files)) {
+      throw new Error('GitHub API did not return the pull request file list');
+    }
+    for (const file of files) {
+      if (typeof file?.filename !== 'string' || typeof file.status !== 'string') {
+        throw new Error('GitHub API returned an invalid pull request file');
+      }
+      if (file.status !== 'removed'
+        && /^issues\/(?:bug|fix|feature|task)\/[A-Za-z0-9][A-Za-z0-9._-]*\/IR\.md$/.test(file.filename)) {
+        candidates.push(file.filename.slice(0, -'/IR.md'.length));
+      }
+    }
+    if (files.length < 100) {
+      if (candidates.length !== 1) {
+        throw new Error(`Expected exactly one changed issue IR.md, found ${candidates.length} in PR #${pullRequestNumber}`);
+      }
+      return candidates[0];
+    }
+  }
+  throw new Error(`Pull request file list reached GitHub's 3000-file limit: PR #${pullRequestNumber}`);
 }
 
 async function githubGraphqlRequest(query, variables, token, fetchImpl) {
@@ -261,7 +224,7 @@ async function getIssueMetadata(repositoryPath, issueDirectory, token, fetchImpl
     && (!Number.isSafeInteger(issue.milestone?.number) || issue.milestone.number <= 0)) {
     throw new Error(`GitHub API returned an invalid milestone for issue #${issueNumber}`);
   }
-  return { labels, assignees, milestone: issue.milestone, nodeId: issue.node_id, issue };
+  return { labels, assignees, milestone: issue.milestone, nodeId: issue.node_id };
 }
 
 async function addPullRequestLabels(repositoryPath, pullRequestNumber, labels, token, fetchImpl) {
@@ -362,7 +325,8 @@ export async function createPullRequest({
     return { status: 'default-branch' };
   }
 
-  const issueDirectory = parseIssueBranch(branch);
+  const agentBranch = /^(?:copilot|codex)\/.+$/.test(branch);
+  let issueDirectory = agentBranch ? null : parseIssueBranch(branch);
   const encodedRepository = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   const query = new URLSearchParams({
     state: 'open',
@@ -378,97 +342,104 @@ export async function createPullRequest({
   if (!Array.isArray(openPullRequests)) {
     throw new Error('GitHub API did not return the open pull request list');
   }
+  const existing = openPullRequests[0];
   if (openPullRequests.length > 0) {
-    if (!Number.isInteger(openPullRequests[0]?.number)) {
+    if (!Number.isInteger(existing?.number)) {
       throw new Error('GitHub API returned an open pull request without a number');
     }
-    if (typeof openPullRequests[0]?.node_id !== 'string' || !openPullRequests[0].node_id) {
+    if (typeof existing.node_id !== 'string' || !existing.node_id) {
       throw new Error('GitHub API did not return a node ID for the open pull request');
     }
-    const { labels, assignees, milestone, nodeId: issueNodeId } = await getIssueMetadata(
-      encodedRepository,
-      issueDirectory,
+    if (agentBranch) {
+      if (openPullRequests.length !== 1) {
+        throw new Error('GitHub API returned multiple open pull requests for the agent branch');
+      }
+      if (typeof existing.head?.sha !== 'string' || !existing.head.sha) {
+        throw new Error('GitHub API did not return the agent pull request head SHA');
+      }
+      if (existing.head.sha !== sha) {
+        return { status: 'stale-agent-push' };
+      }
+      issueDirectory = await findPullRequestIssueDirectory(
+        encodedRepository,
+        existing.number,
+        token,
+        fetchImpl,
+      );
+    }
+  } else {
+    if (agentBranch) {
+      return { status: 'no-open-agent-pull-request' };
+    }
+    const compare = await githubRequest(
+      `${encodedRepository}/compare/${encodeURIComponent(base)}...${encodeURIComponent(sha)}`,
       token,
       fetchImpl,
     );
-    await addPullRequestLabels(
-      encodedRepository,
-      openPullRequests[0].number,
-      labels,
+    if (!Number.isInteger(compare?.ahead_by) || compare.ahead_by < 0
+      || !Array.isArray(compare.files)) {
+      throw new Error('GitHub API did not return the branch comparison result');
+    }
+    if (compare.ahead_by === 0 || compare.files.length === 0) {
+      return { status: 'no-changes' };
+    }
+    const headCommit = await githubRequest(
+      `${encodedRepository}/git/commits/${encodeURIComponent(sha)}`,
       token,
       fetchImpl,
     );
-    await addPullRequestAssignees(
-      encodedRepository,
-      openPullRequests[0].number,
-      assignees,
-      token,
-      fetchImpl,
-    );
-    await setPullRequestMilestone(
-      encodedRepository,
-      openPullRequests[0].number,
-      milestone,
-      token,
-      fetchImpl,
-    );
-    await linkPullRequestToIssue(
-      issueNodeId,
-      openPullRequests[0].node_id,
-      token,
-      fetchImpl,
-    );
-    return { status: 'already-open', number: openPullRequests[0].number };
+    const baseTree = compare.base_commit?.commit?.tree?.sha;
+    const headTree = headCommit?.tree?.sha;
+    if (typeof baseTree !== 'string' || !baseTree
+      || typeof headTree !== 'string' || !headTree) {
+      throw new Error('GitHub API did not return the base and head commit tree SHAs');
+    }
+    if (baseTree === headTree) {
+      return { status: 'no-changes' };
+    }
   }
 
-  const compare = await githubRequest(
-    `${encodedRepository}/compare/${encodeURIComponent(base)}...${encodeURIComponent(sha)}`,
-    token,
-    fetchImpl,
-  );
-  if (!Number.isInteger(compare?.ahead_by) || compare.ahead_by < 0
-    || !Array.isArray(compare.files)) {
-    throw new Error('GitHub API did not return the branch comparison result');
+  let metadata;
+  if (!agentBranch) {
+    metadata = await getIssueMetadata(encodedRepository, issueDirectory, token, fetchImpl);
   }
-  if (compare.ahead_by === 0 || compare.files.length === 0) {
-    return { status: 'no-changes' };
-  }
-  const headCommit = await githubRequest(
-    `${encodedRepository}/git/commits/${encodeURIComponent(sha)}`,
-    token,
-    fetchImpl,
-  );
-  const baseTree = compare.base_commit?.commit?.tree?.sha;
-  const headTree = headCommit?.tree?.sha;
-  if (typeof baseTree !== 'string' || !baseTree
-    || typeof headTree !== 'string' || !headTree) {
-    throw new Error('GitHub API did not return the base and head commit tree SHAs');
-  }
-  if (baseTree === headTree) {
-    return { status: 'no-changes' };
-  }
-
-  const { labels, assignees, milestone, nodeId: issueNodeId, issue } = await getIssueMetadata(
-    encodedRepository,
-    issueDirectory,
-    token,
-    fetchImpl,
-  );
-  const template = await readOptionalFile(join(rootDirectory, '.github', 'PULL_REQUEST_TEMPLATE.md'));
   const documents = {};
   for (const fileName of ISSUE_DOCUMENTS) {
     documents[fileName] = await readOptionalFile(join(rootDirectory, issueDirectory, fileName));
   }
+  if (!documents['CHANGELOG.md'].trim()) {
+    throw new Error(`Changelog is missing or empty: ${issueDirectory}/CHANGELOG.md`);
+  }
   const pullRequest = buildPullRequest({
-    template,
     documents,
-    issue,
     issueDirectory,
     owner,
     repo,
     sha,
   });
 
+  if (openPullRequests.length > 0) {
+    await githubRequest(
+      `${encodedRepository}/pulls/${existing.number}`,
+      token,
+      fetchImpl,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ title: pullRequest.title, body: pullRequest.body }),
+      },
+    );
+    if (agentBranch) {
+      return { status: 'already-open', number: existing.number };
+    }
+    const { labels, assignees, milestone, nodeId: issueNodeId } = metadata;
+    await addPullRequestLabels(encodedRepository, existing.number, labels, token, fetchImpl);
+    await addPullRequestAssignees(encodedRepository, existing.number, assignees, token, fetchImpl);
+    await setPullRequestMilestone(encodedRepository, existing.number, milestone, token, fetchImpl);
+    await linkPullRequestToIssue(issueNodeId, existing.node_id, token, fetchImpl);
+    return { status: 'already-open', number: existing.number };
+  }
+
+  const { labels, assignees, milestone, nodeId: issueNodeId } = metadata;
   const created = await githubRequest(
     `${encodedRepository}/pulls`,
     token,
@@ -480,6 +451,7 @@ export async function createPullRequest({
         body: pullRequest.body,
         head: branch,
         base,
+        draft: true,
       }),
     },
   );
@@ -515,7 +487,7 @@ async function main() {
   if (result.status === 'created') {
     console.log(`Created pull request #${result.number}: ${result.url}`);
   } else if (result.status === 'already-open') {
-    console.log(`Pull request #${result.number} is already open for this branch and base`);
+    console.log(`Updated pull request #${result.number} for this branch and base`);
   } else {
     console.log(`Skipped pull request creation: ${result.status}`);
   }

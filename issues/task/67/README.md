@@ -8,7 +8,11 @@
 - 작업 브랜치: `task/67`
 - 병합 대상 및 분기 기준: `master`
 - 공통 지침 원본: `yong5eon/Instructions`, 커밋 `8706862712c800682f38af3c86e74f768345d811`
-- 진행 상태: 구현 및 로컬 파일 검증 완료, GitHub 에이전트 세션 검증 대기, 커밋·푸시·PR 미실행
+- 진행 상태: 후속 지침·PR 자동화 연동 및 로컬 검증 완료. 기존 PR #68 열림, 실제 GitHub Actions 검증 대기.
+
+## 후속 요청
+
+사용자가 csvd2c의 지침과 PR 자동화를 이 프로젝트에 맞게 적용하고 기존 이슈와 브랜치에서 이어서 작업·기록하도록 지정했다. 이 요청은 원문의 커밋 메시지 지침 제외와 공통 지침 위치를 변경한다.
 
 ## 이슈 원문
 
@@ -42,6 +46,7 @@ GitHub에서 할당된 에이전트는 이슈가 속한 저장소를 작업 대�
 - 계획과 상태: [PLAN.md](./PLAN.md)
 - 구현 종합: [IMPLEMENTS.md](./IMPLEMENTS.md)
 - 작업 종합: [TASKS.md](./TASKS.md)
+- PR 문서: [IR.md](./IR.md)
 - 변경 로그: [CHANGELOG.md](./CHANGELOG.md)
 - 단계별 기록: [context/](./context/), [implements/](./implements/), [tasks/](./tasks/)
-- 최신 기록: [context/1793888309066.md](./context/1793888309066.md), [implements/1793888309066.md](./implements/1793888309066.md), [tasks/1793888309066.md](./tasks/1793888309066.md)
+- 최신 기록: [context/1794072954261.md](./context/1794072954261.md), [implements/1794072954261.md](./implements/1794072954261.md), [tasks/1794072954261.md](./tasks/1794072954261.md)
