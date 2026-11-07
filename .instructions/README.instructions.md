@@ -10,7 +10,7 @@ applyTo: "README*.md"
 - `README.md`는 한국어로 DefStream을 소개하고 핵심 사용 정보를 안내한다.
 - `README.en.md`는 `README.md`와 주요 기능, 설치 및 빠른 시작 범위를 맞춘 영어 문서다. 공개 기능이나 사용법을 변경하면 두 문서를 함께 갱신한다.
 - `README.setup.md`는 패키지 저장소에서 독립적으로 읽을 수 있는 간결한 영어 설명이다. 프로젝트 소개, Python 요구 사항, 설치 방법과 최소 빠른 시작을 포함한다.
-- 이 지침은 루트의 세 README에만 적용한다. 상세 사용 설명과 주제별 매뉴얼은 `instructions/DOCS.instructions.md`의 지침에 따라 `docs/`에 작성한다.
+- 이 지침은 루트의 세 README에만 적용한다. 상세 사용 설명과 주제별 매뉴얼은 `.instructions/DOCS.instructions.md`의 지침에 따라 `docs/`에 작성한다.
 
 ## README에 포함할 정보
 
